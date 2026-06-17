@@ -4,10 +4,20 @@ import * as XLSX from "xlsx";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
-  navy:  "#1C2B3A", blue:  "#2E4A6B", amber: "#C8872A",
-  teal:  "#1A7A6E", white: "#FFFFFF", lgray: "#F4F5F7",
-  mgray: "#DDE1E7", dgray: "#6B7280", red:   "#C0392B",
-  green: "#1A7A6E", purple: "#6B4E8B",
+  dark:   "#0c0d0c",
+  navy:   "#20251f",
+  blue:   "#6f7730",
+  amber:  "#858c38",
+  teal:   "#4d7d57",
+  white:  "#FFFFFF",
+  lgray:  "#F3F4EF",
+  mgray:  "#D8DDD1",
+  dgray:  "#647062",
+  red:    "#B65145",
+  green:  "#4D7D57",
+  purple: "#6B5D85",
+  panel:  "#FFFFFF",
+  sage:   "#D9DDD4",
 };
 
 const CATEGORIES = [
@@ -160,26 +170,51 @@ function today() { return new Date().toISOString().slice(0,10); }
 
 // ── UI Primitives ────────────────────────────────────────────────
 const Badge = ({ label, color = C.blue }) => (
-  <span style={{ background: color, color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+  <span style={{
+    background: color === C.mgray ? "#F6F7F3" : `${color}18`,
+    color: color === C.mgray ? C.dgray : color,
+    border: `1px solid ${color === C.mgray ? "rgba(50,56,42,0.12)" : `${color}55`}`,
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 800,
+    whiteSpace: "nowrap"
+  }}>
     {label}
   </span>
 );
 
 const Btn = ({ children, onClick, variant = "primary", small, disabled }) => {
-  const bg = variant === "primary" ? C.amber : variant === "danger" ? C.red : variant === "ghost" ? "transparent" : variant === "teal" ? C.teal : variant === "purple" ? C.purple : C.lgray;
-  const fc = variant === "ghost" ? C.dgray : variant === "secondary" ? C.navy : "#fff";
+  const isPrimary = variant === "primary" || variant === "teal" || variant === "purple";
+  const isDanger = variant === "danger";
+  const bg = isPrimary ? "linear-gradient(180deg, #929A44, #747B31)" : isDanger ? "#fff7f6" : variant === "ghost" ? "transparent" : "linear-gradient(180deg, #FFFFFF, #F3F5F0)";
+  const fc = isPrimary ? "#fff" : isDanger ? C.red : C.navy;
+  const border = isPrimary ? "1px solid rgba(132,140,56,0.52)" : isDanger ? "1px solid rgba(182,81,69,0.30)" : "1px solid rgba(50,56,42,0.12)";
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: bg, color: fc, border: variant === "ghost" ? `1px solid ${C.mgray}` : "none",
-      borderRadius: 6, padding: small ? "4px 12px" : "8px 18px",
-      fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.5 : 1, transition: "opacity .15s",
+      background: bg,
+      color: fc,
+      border,
+      borderRadius: 12,
+      padding: small ? "7px 12px" : "11px 16px",
+      minHeight: small ? 34 : 42,
+      fontSize: small ? 12 : 13,
+      fontWeight: 750,
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1,
+      transition: "all .15s",
+      boxShadow: isPrimary ? "0 10px 26px rgba(132,140,56,0.20)" : "0 6px 18px rgba(28,39,24,0.05)",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      whiteSpace: "nowrap"
     }}>{children}</button>
   );
 };
 
 const inputStyle = {
-  border: `1px solid ${C.mgray}`, borderRadius: 6, padding: "7px 10px",
+  border: "1px solid rgba(50,56,42,0.13)", borderRadius: 12, padding: "10px 12px",
   fontSize: 13, color: C.navy, background: "#fff", outline: "none",
   fontFamily: "inherit", width: "100%", boxSizing: "border-box",
 };
@@ -199,17 +234,24 @@ const Input = ({ label, value, onChange, type = "text", placeholder, options, re
 );
 
 const Card = ({ children, style }) => (
-  <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 20, ...style }}>
+  <div style={{
+    background: "linear-gradient(180deg, #FFFFFF, #FAFBF8)",
+    border: "1px solid rgba(50,56,42,0.09)",
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: "0 18px 45px rgba(28,39,24,0.08)",
+    ...style
+  }}>
     {children}
   </div>
 );
 
 const Modal = ({ title, onClose, children, wide }) => (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-    <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: wide ? 760 : 560, maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 24px", borderBottom: `1px solid ${C.mgray}`, background: C.navy, borderRadius: "12px 12px 0 0" }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{title}</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
+  <div style={{ position: "fixed", inset: 0, background: "rgba(18,20,18,.42)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: wide ? 840 : 620, maxHeight: "90vh", overflow: "auto", boxShadow: "0 30px 90px rgba(18,22,15,0.22)", border: "1px solid rgba(50,56,42,0.09)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: "1px solid rgba(50,56,42,0.08)", background: "rgba(255,255,255,0.97)", borderRadius: "22px 22px 0 0" }}>
+        <span style={{ fontWeight: 800, fontSize: 16, color: C.navy }}>{title}</span>
+        <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(50,56,42,0.12)", color: C.navy, fontSize: 18, cursor: "pointer", lineHeight: 1, width: 34, height: 34, borderRadius: 10 }}>×</button>
       </div>
       <div style={{ padding: 24 }}>{children}</div>
     </div>
@@ -218,8 +260,8 @@ const Modal = ({ title, onClose, children, wide }) => (
 
 const Section = ({ title, action, children }) => (
   <div>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.navy }}>{title}</h2>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+      <h2 style={{ margin: 0, fontSize: 28, fontWeight: 850, color: C.navy, letterSpacing: "-.03em" }}>{title}</h2>
       {action}
     </div>
     {children}
@@ -227,8 +269,8 @@ const Section = ({ title, action, children }) => (
 );
 
 const Empty = ({ msg, cta }) => (
-  <div style={{ textAlign: "center", padding: "48px 24px", color: C.dgray }}>
-    <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+  <div style={{ textAlign: "center", padding: "48px 24px", color: C.dgray, background: "#fff", borderRadius: 16 }}>
+    <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
     <div style={{ fontSize: 14, marginBottom: 16 }}>{msg}</div>
     {cta}
   </div>
@@ -324,33 +366,52 @@ export default function App() {
   const uiQuotes    = quotes.map(q    => ({ id: q.id, productId: q.product_id, supplierId: q.supplier_id, cgSku: q.cg_sku, productName: q.product_name, supplierSku: q.supplier_sku, supplierName: q.supplier_name, unitPrice: q.unit_price, moq: q.moq, incoterm: q.incoterm, shippingMethod: q.shipping_method, notes: q.notes, date: q.quote_date, quoteStatus: q.quote_status }));
 
   const TABS = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "products",  label: `Products (${uiProducts.length})` },
-    { id: "suppliers", label: `Suppliers (${uiSuppliers.length})` },
-    { id: "quotes",    label: `Quotes (${uiQuotes.length})` },
-    { id: "export",    label: "📊 Export / RFQ" },
+    { id: "dashboard", label: "▦ Dashboard" },
+    { id: "products",  label: `▤ Products (${uiProducts.length})` },
+    { id: "suppliers", label: `◉ Suppliers (${uiSuppliers.length})` },
+    { id: "quotes",    label: `▣ Quotes (${uiQuotes.length})` },
+    { id: "export",    label: "▥ Export / RFQ" },
   ];
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", background: C.lgray, minHeight: "100vh", color: C.navy }}>
-      <div style={{ background: C.navy, padding: "0 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 16, paddingBottom: 8 }}>
-            <div style={{ background: C.amber, borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff", fontSize: 16 }}>CG</div>
-            <div>
-              <div style={{ fontWeight: 800, color: "#fff", fontSize: 16, letterSpacing: .5 }}>COSTA GEAR</div>
-              <div style={{ fontSize: 11, color: C.dgray, letterSpacing: 1 }}>SOURCING TRACKER</div>
-            </div>
+    <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 250px, #F3F4EF 250px 100%)", minHeight: "100vh", color: C.navy }}>
+      <div style={{ minHeight: 155, padding: "26px 44px", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
+            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ width: 260, height: "auto", display: "block", objectFit: "contain" }} />
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? C.amber : "transparent", color: tab === t.id ? "#fff" : C.mgray, border: "none", borderRadius: "6px 6px 0 0", padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .15s" }}>{t.label}</button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flexWrap: "wrap", marginLeft: "auto" }}>
+            <div style={{ border: "1px solid rgba(255,255,255,0.12)", background: "linear-gradient(180deg, rgba(38,40,38,0.96), rgba(24,26,24,0.96))", color: "#F4F5EF", borderRadius: 14, minHeight: 50, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)", fontWeight: 700 }}>
+              <span>▤</span><span>Product Sourcing</span>
+            </div>
+            <div style={{ border: "1px solid rgba(255,255,255,0.12)", background: "linear-gradient(180deg, rgba(38,40,38,0.96), rgba(24,26,24,0.96))", color: "#F4F5EF", borderRadius: 14, minHeight: 50, padding: "0 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)", fontWeight: 700 }}>
+              <span>↗</span><span>Supplier Quotes</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
+      <div style={{ borderBottom: "1px solid rgba(132,139,55,0.22)", background: "linear-gradient(180deg, #D9DDD4, #CFD5CB)" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px,1fr))", gap: 12 }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              background: tab === t.id ? "linear-gradient(180deg, #8B9340, #727A30)" : "transparent",
+              color: tab === t.id ? "#fff" : "#2D342B",
+              border: tab === t.id ? "1px solid rgba(114,122,48,0.65)" : "1px solid transparent",
+              borderRadius: 16,
+              padding: "18px 18px",
+              minHeight: 68,
+              fontSize: 14,
+              fontWeight: 750,
+              cursor: "pointer",
+              transition: "all .15s",
+              boxShadow: tab === t.id ? "0 10px 24px rgba(114,122,48,0.24)" : "none"
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1560, margin: "0 auto", padding: "28px 44px 48px" }}>
         {error && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "12px 16px", marginBottom: 20, color: C.red, fontSize: 13 }}>⚠️ Database error: {error}</div>}
         {loading ? <Spinner /> : (
           <>
