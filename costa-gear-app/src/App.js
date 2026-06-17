@@ -391,7 +391,7 @@ export default function App() {
       <div style={{ minHeight: 110, padding: "14px 44px", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
         <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
           <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
-            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "190", width: "auto", display: "block", objectFit: "contain" }} />
+            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "auto", width: 200, display: "block", objectFit: "contain" }} />
           </div>
         </div>
       </div>
