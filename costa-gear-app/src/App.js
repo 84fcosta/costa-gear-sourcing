@@ -387,14 +387,13 @@ export default function App() {
   ];
 
   return (
-    <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 250px, #F3F4EF 250px 100%)", minHeight: "100vh", color: C.navy }}>
-      <div style={{ minHeight: 155, padding: "26px 44px", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
-        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
-            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ width: 260, height: "auto", display: "block", objectFit: "contain" }} />
-          </div>
-        </div>
-      </div>
+    <div style={{ minHeight: 115, padding: "16px 44px", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
+  <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
+    <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
+      <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ width: 190, height: "auto", display: "block", objectFit: "contain" }} />
+    </div>
+  </div>
+</div>
 
       <div style={{ borderBottom: "1px solid rgba(132,139,55,0.22)", background: "linear-gradient(180deg, #D9DDD4, #CFD5CB)" }}>
         <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px,1fr))", gap: 12 }}>
