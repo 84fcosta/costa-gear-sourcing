@@ -1,988 +1,954 @@
-import { useState, useEffect, useCallback } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
-
-// ── Palette ─────────────────────────────────────────────────────
-const C = {
-  navy:  "#1C2B3A", blue:  "#2E4A6B", amber: "#C8872A",
-  teal:  "#1A7A6E", white: "#FFFFFF", lgray: "#F4F5F7",
-  mgray: "#DDE1E7", dgray: "#6B7280", red:   "#C0392B",
-  green: "#1A7A6E", purple: "#6B4E8B",
-};
+import {
+  BarChart3, BriefcaseBusiness, Calendar, ChevronDown, ClipboardList,
+  Download, FileSpreadsheet, Gauge, LayoutDashboard, PlusCircle,
+  ReceiptText, Trash2, Upload, WalletCards, X, Edit3
+} from "lucide-react";
 
 const CATEGORIES = [
-  "Exterior – Protection","Exterior – Lighting","Exterior – Storage & Cargo",
-  "Exterior – Access & Entry","Exterior – Recovery",
-  "Interior – Storage","Interior – Mounting & Tech","Interior – Comfort & Utility",
-  "Drivetrain & Suspension","Other",
+  "Software & Subscriptions",
+  "Website & Hosting",
+  "Office Supplies",
+  "Equipment (CCA)",
+  "Advertising & Marketing",
+  "Business Registration & Fees",
+  "Professional Services",
+  "Banking & Financial Fees",
+  "Communication (Internet/Phone)",
+  "Home Office",
+  "Travel & Meals",
+  "Inventory / Product Samples",
+  "Other"
 ];
-const FITMENTS = [
-  "Wrangler JL 2-Door","Wrangler JL 4-Door","Wrangler JL 2-Door & 4-Door",
-  "Gladiator JT","Wrangler JK 2-Door","Wrangler JK 4-Door",
-  "Wrangler JK 2-Door & 4-Door","Wrangler JL & Gladiator JT","Wrangler JL & JK","Universal",
-];
-const INCOTERMS  = ["DDP","FOB","EXW","DAP","CIF","TBD"];
-const PLATFORMS  = ["Alibaba","WeChat","WhatsApp","Email","Direct","Other"];
-const STATUSES   = ["Active","Inactive","Blocked"];
-const QSTATUSES  = ["Received","Sample Requested","Sample Received","Approved","Rejected","On Hold"];
 
-// ── Export helpers ───────────────────────────────────────────────
-function downloadXlsx(wb, filename) {
+const PAYMENT_METHODS = ["Credit Card", "Debit Card", "Bank Transfer", "Cash", "PayPal", "Other"];
+
+const CCA_CLASSES = [
+  { classCode: "Class 8", rate: 20, label: "Furniture, fixtures, some tools and general equipment" },
+  { classCode: "Class 10", rate: 30, label: "Vehicles and some automotive equipment" },
+  { classCode: "Class 12", rate: 100, label: "Small tools, software, some low-cost assets" },
+  { classCode: "Class 50", rate: 55, label: "Computer hardware and systems software" },
+  { classCode: "Class 53", rate: 50, label: "Manufacturing and processing equipment" },
+  { classCode: "Custom", rate: 0, label: "Manual rate" }
+];
+
+const emptyExpense = {
+  expense_date: new Date().toISOString().slice(0, 10),
+  vendor: "",
+  description: "",
+  category: "Software & Subscriptions",
+  total_amount: "",
+  business_use_pct: 100,
+  payment_method: "Credit Card",
+  payment_reference: "",
+  receipt_url: "",
+  receipt_status: "Missing",
+  notes: "",
+  tax_year: new Date().getFullYear(),
+  is_asset_purchase: false,
+  linked_asset_id: null,
+  tax_ready: false
+};
+
+const emptyAsset = {
+  asset_code: "",
+  asset_name: "",
+  purchase_date: new Date().toISOString().slice(0, 10),
+  vendor: "",
+  cost: "",
+  cca_class: "Class 50",
+  cca_rate: 55,
+  business_use_pct: 100,
+  receipt_url: "",
+  notes: "",
+  tax_year: new Date().getFullYear(),
+  status: "Active",
+  linked_expense_id: null
+};
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function money(value) {
+  const n = Number(value || 0);
+  return n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
+}
+
+function pct(value) {
+  return `${Number(value || 0).toFixed(0)}%`;
+}
+
+function calcDeductible(total, businessPct) {
+  const t = Number(total || 0);
+  const p = Number(businessPct || 0) / 100;
+  return Number((t * p).toFixed(2));
+}
+
+function calcBusinessCost(cost, businessPct) {
+  return calcDeductible(cost, businessPct);
+}
+
+function calcEstimatedCca(asset) {
+  const businessCost = calcBusinessCost(asset.cost, asset.business_use_pct);
+  const rate = Number(asset.cca_rate || 0) / 100;
+  return Number((businessCost * rate * 0.5).toFixed(2));
+}
+
+function safeSheetName(name) {
+  return String(name || "Sheet").replace(/[:\\/?*[\]]/g, "").slice(0, 31);
+}
+
+function downloadWorkbook(wb, filename) {
   XLSX.writeFile(wb, filename);
 }
 
-function exportAllQuotes(quotes) {
-  const rows = quotes.map(q => ({
-    "CG SKU":          q.cgSku || "",
-    "Product":         q.productName || "",
-    "Supplier":        q.supplierName || "",
-    "Supplier SKU":    q.supplierSku || "",
-    "Unit Price USD":  q.unitPrice != null ? Number(q.unitPrice) : "",
-    "MOQ":             q.moq || "",
-    "Incoterm":        q.incoterm || "",
-    "Shipping":        q.shippingMethod || "",
-    "Status":          q.quoteStatus || "",
-    "Date":            q.date || "",
-    "Notes":           q.notes || "",
+function normalizeExpense(row) {
+  const total = Number(row.total_amount || 0);
+  const businessPct = Number(row.business_use_pct || 0);
+  return {
+    ...row,
+    total_amount: total,
+    business_use_pct: businessPct,
+    deductible_amount: calcDeductible(total, businessPct)
+  };
+}
+
+function normalizeAsset(row) {
+  return {
+    ...row,
+    cost: Number(row.cost || 0),
+    cca_rate: Number(row.cca_rate || 0),
+    business_use_pct: Number(row.business_use_pct || 0),
+    business_cost: calcBusinessCost(row.cost, row.business_use_pct),
+    estimated_cca_claim: calcEstimatedCca(row)
+  };
+}
+
+function exportExpenses(expenses, year) {
+  const rows = expenses.map(e => ({
+    "Date": e.expense_date,
+    "Vendor": e.vendor,
+    "Description": e.description,
+    "Category": e.category,
+    "Total CAD": Number(e.total_amount || 0),
+    "Business Use %": Number(e.business_use_pct || 0),
+    "Deductible CAD": calcDeductible(e.total_amount, e.business_use_pct),
+    "Payment Method": e.payment_method,
+    "Payment Reference": e.payment_reference,
+    "Receipt Status": e.receipt_status,
+    "Receipt Link": e.receipt_url,
+    "Asset Purchase": e.is_asset_purchase ? "Yes" : "No",
+    "Tax Ready": e.tax_ready ? "Yes" : "No",
+    "Notes": e.notes
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [10,30,35,15,14,8,10,14,16,12,40].map(w => ({ wch: w }));
+  ws["!cols"] = [12, 28, 36, 26, 12, 14, 14, 18, 18, 16, 36, 14, 12, 42].map(wch => ({ wch }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "All Quotes");
-  downloadXlsx(wb, `CG_All_Quotes_${today()}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+  downloadWorkbook(wb, `Costa_Gear_Expenses_${year}_${today()}.xlsx`);
 }
 
-function exportBestPrice(products, quotes) {
-  const rows = products.map(p => {
-    const pq     = quotes.filter(q => q.productId === p.id && q.unitPrice != null);
-    const sorted = [...pq].sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice));
-    const best   = sorted[0];
-    return {
-      "CG SKU":           p.skuId,
-      "Product":          p.name,
-      "Category":         p.category || "",
-      "Fitment":          p.fitment  || "",
-      "Material":         p.material || "",
-      "Best Price USD":   best ? Number(best.unitPrice) : "",
-      "Best Supplier":    best ? best.supplierName : "No quotes",
-      "Supplier SKU":     best ? best.supplierSku  : "",
-      "MOQ":              best ? best.moq           : "",
-      "Incoterm":         best ? best.incoterm      : "",
-      "# Quotes":         pq.length,
-      "2nd Best USD":     sorted[1] ? Number(sorted[1].unitPrice) : "",
-      "2nd Best Supplier":sorted[1] ? sorted[1].supplierName      : "",
-    };
-  });
+function exportAssets(assets, year) {
+  const rows = assets.map(a => ({
+    "Asset ID": a.asset_code,
+    "Asset Name": a.asset_name,
+    "Purchase Date": a.purchase_date,
+    "Vendor": a.vendor,
+    "Cost CAD": Number(a.cost || 0),
+    "CCA Class": a.cca_class,
+    "CCA Rate %": Number(a.cca_rate || 0),
+    "Business Use %": Number(a.business_use_pct || 0),
+    "Business Cost CAD": calcBusinessCost(a.cost, a.business_use_pct),
+    "Estimated First-Year CCA CAD": calcEstimatedCca(a),
+    "Status": a.status,
+    "Receipt Link": a.receipt_url,
+    "Notes": a.notes
+  }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [10,35,26,24,18,13,35,14,8,10,8,13,35].map(w => ({ wch: w }));
+  ws["!cols"] = [13, 32, 14, 26, 12, 12, 12, 14, 16, 24, 12, 36, 42].map(wch => ({ wch }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Best Price per Product");
-  downloadXlsx(wb, `CG_Best_Prices_${today()}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, "Assets CCA");
+  downloadWorkbook(wb, `Costa_Gear_Assets_CCA_${year}_${today()}.xlsx`);
 }
 
-function exportBySupplier(suppliers, products, quotes) {
-  const wb = XLSX.utils.book_new();
-  suppliers.forEach(s => {
-    const sq = quotes.filter(q => q.supplierId === s.id);
-    if (!sq.length) return;
-    const rows = sq.map(q => ({
-      "CG SKU":        q.cgSku || "",
-      "Product":       q.productName || "",
-      "Supplier SKU":  q.supplierSku || "",
-      "Unit Price USD":q.unitPrice != null ? Number(q.unitPrice) : "",
-      "MOQ":           q.moq || "",
-      "Incoterm":      q.incoterm || "",
-      "Shipping":      q.shippingMethod || "",
-      "Status":        q.quoteStatus || "",
-      "Notes":         q.notes || "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [10,35,15,14,8,10,14,16,40].map(w => ({ wch: w }));
-    // Safe sheet name (max 31 chars, no special chars)
-    const sheetName = s.name.replace(/[:\\\/\?\*\[\]]/g,"").slice(0,31);
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  });
-  if (wb.SheetNames.length === 0) return alert("No quotes to export.");
-  downloadXlsx(wb, `CG_By_Supplier_${today()}.xlsx`);
-}
+function exportTaxReport(expenses, assets, year) {
+  const regular = expenses.filter(e => !e.is_asset_purchase);
+  const byCategory = CATEGORIES.map(cat => {
+    const items = regular.filter(e => e.category === cat);
+    const total = items.reduce((sum, e) => sum + Number(e.total_amount || 0), 0);
+    const deductible = items.reduce((sum, e) => sum + calcDeductible(e.total_amount, e.business_use_pct), 0);
+    return { "Category": cat, "Total CAD": total, "Deductible CAD": deductible };
+  }).filter(r => r["Total CAD"] || r["Deductible CAD"]);
 
-function exportRFQ(selectedProductIds, supplierId, products, quotes, suppliers) {
-  const supplier = suppliers.find(s => s.id === supplierId);
-  const rows = selectedProductIds.map(pid => {
-    const p  = products.find(x => x.id === pid);
-    const pq = quotes.filter(q => q.productId === pid && q.supplierId === supplierId);
-    const q  = pq[0];
-    return {
-      "CG SKU":          p?.skuId || "",
-      "Product Description": p?.name || "",
-      "Fitment":         p?.fitment || "",
-      "Material":        p?.material || "",
-      "Supplier SKU":    q?.supplierSku || "(please quote)",
-      "Last Price USD":  q?.unitPrice != null ? Number(q.unitPrice) : "(please quote)",
-      "MOQ":             q?.moq || "",
-      "Your New Price":  "",
-      "New MOQ":         "",
-      "Lead Time (days)":"",
-      "Notes":           q?.notes || "",
-    };
-  });
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [10,40,24,18,15,14,8,14,8,16,35].map(w => ({ wch: w }));
-  // Header row with supplier info
-  XLSX.utils.sheet_add_aoa(ws, [
-    [`RFQ — Costa Gear`],
-    [`Supplier: ${supplier?.name || ""}`],
-    [`Contact:  ${supplier?.contact || ""}`],
-    [`Date:     ${today()}`],
-    [],
-  ], { origin: "A1" });
-  // Re-add column headers after prepended rows
-  const dataRows = [
-    ["CG SKU","Product Description","Fitment","Material","Supplier SKU","Last Price USD","MOQ","Your New Price","New MOQ","Lead Time (days)","Notes"],
-    ...rows.map(r => Object.values(r)),
-  ];
-  const ws2 = XLSX.utils.aoa_to_sheet([
-    [`RFQ — Costa Gear`],
-    [`Supplier: ${supplier?.name || ""}`],
-    [`Contact:  ${supplier?.contact || ""}`],
-    [`Date: ${today()}`],
-    [],
-    ...dataRows,
-  ]);
-  ws2["!cols"] = [10,40,24,18,15,14,8,14,8,16,35].map(w => ({ wch: w }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws2, "RFQ");
-  const safeName = (supplier?.name || "Supplier").replace(/[:\\\/\?\*\[\]]/g,"").slice(0,20);
-  downloadXlsx(wb, `CG_RFQ_${safeName}_${today()}.xlsx`);
-}
+  const expenseRows = expenses.map(e => ({
+    "Date": e.expense_date,
+    "Vendor": e.vendor,
+    "Description": e.description,
+    "Category": e.category,
+    "Total CAD": Number(e.total_amount || 0),
+    "Business Use %": Number(e.business_use_pct || 0),
+    "Deductible CAD": calcDeductible(e.total_amount, e.business_use_pct),
+    "Payment Method": e.payment_method,
+    "Receipt Status": e.receipt_status,
+    "Receipt Link": e.receipt_url,
+    "Asset Purchase": e.is_asset_purchase ? "Yes" : "No",
+    "Tax Ready": e.tax_ready ? "Yes" : "No",
+    "Notes": e.notes
+  }));
 
-function today() { return new Date().toISOString().slice(0,10); }
+  const assetRows = assets.map(a => ({
+    "Asset ID": a.asset_code,
+    "Asset Name": a.asset_name,
+    "Purchase Date": a.purchase_date,
+    "Vendor": a.vendor,
+    "Cost CAD": Number(a.cost || 0),
+    "CCA Class": a.cca_class,
+    "CCA Rate %": Number(a.cca_rate || 0),
+    "Business Use %": Number(a.business_use_pct || 0),
+    "Business Cost CAD": calcBusinessCost(a.cost, a.business_use_pct),
+    "Estimated First-Year CCA CAD": calcEstimatedCca(a),
+    "Status": a.status,
+    "Receipt Link": a.receipt_url,
+    "Notes": a.notes
+  }));
 
-// ── UI Primitives ────────────────────────────────────────────────
-const Badge = ({ label, color = C.blue }) => (
-  <span style={{ background: color, color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-    {label}
-  </span>
-);
-
-const Btn = ({ children, onClick, variant = "primary", small, disabled }) => {
-  const bg = variant === "primary" ? C.amber : variant === "danger" ? C.red : variant === "ghost" ? "transparent" : variant === "teal" ? C.teal : variant === "purple" ? C.purple : C.lgray;
-  const fc = variant === "ghost" ? C.dgray : variant === "secondary" ? C.navy : "#fff";
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: bg, color: fc, border: variant === "ghost" ? `1px solid ${C.mgray}` : "none",
-      borderRadius: 6, padding: small ? "4px 12px" : "8px 18px",
-      fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.5 : 1, transition: "opacity .15s",
-    }}>{children}</button>
-  );
-};
-
-const inputStyle = {
-  border: `1px solid ${C.mgray}`, borderRadius: 6, padding: "7px 10px",
-  fontSize: 13, color: C.navy, background: "#fff", outline: "none",
-  fontFamily: "inherit", width: "100%", boxSizing: "border-box",
-};
-
-const Input = ({ label, value, onChange, type = "text", placeholder, options, required, small }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: small ? 100 : 140 }}>
-    {label && <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5 }}>{label}{required && " *"}</label>}
-    {options ? (
-      <select value={value} onChange={e => onChange(e.target.value)} style={inputStyle}>
-        <option value="">— select —</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    ) : (
-      <input type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
-    )}
-  </div>
-);
-
-const Card = ({ children, style }) => (
-  <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 20, ...style }}>
-    {children}
-  </div>
-);
-
-const Modal = ({ title, onClose, children, wide }) => (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-    <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: wide ? 760 : 560, maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 24px", borderBottom: `1px solid ${C.mgray}`, background: C.navy, borderRadius: "12px 12px 0 0" }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{title}</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
-      </div>
-      <div style={{ padding: 24 }}>{children}</div>
-    </div>
-  </div>
-);
-
-const Section = ({ title, action, children }) => (
-  <div>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.navy }}>{title}</h2>
-      {action}
-    </div>
-    {children}
-  </div>
-);
-
-const Empty = ({ msg, cta }) => (
-  <div style={{ textAlign: "center", padding: "48px 24px", color: C.dgray }}>
-    <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-    <div style={{ fontSize: 14, marginBottom: 16 }}>{msg}</div>
-    {cta}
-  </div>
-);
-
-const Spinner = () => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 32, color: C.dgray, fontSize: 14 }}>
-    Loading…
-  </div>
-);
-
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-const QSTATUS_COLOR = {
-  "Received":         C.blue,
-  "Sample Requested": C.amber,
-  "Sample Received":  C.purple,
-  "Approved":         C.teal,
-  "Rejected":         C.red,
-  "On Hold":          C.dgray,
-};
-
-// ════════════════════════════════════════════════════════════════
-// MAIN APP
-// ════════════════════════════════════════════════════════════════
-export default function App() {
-  const [tab, setTab]           = useState("dashboard");
-  const [products,  setProducts]  = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [quotes,    setQuotes]    = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
-
-  const [modal,    setModal]    = useState(null);
-  const [editing,  setEditing]  = useState(null);
-  const [detailId, setDetailId] = useState(null);
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }] = await Promise.all([
-        supabase.from("suppliers").select("*").order("sup_id"),
-        supabase.from("products").select("*").order("sku_id"),
-        supabase.from("quotes").select("*").order("created_at", { ascending: false }),
-      ]);
-      if (se || pe || qe) throw new Error((se || pe || qe).message);
-      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  const openAdd    = (type) => { setEditing(null); setModal(type); };
-  const openEdit   = (type, item) => { setEditing(item); setModal(type); };
-  const closeModal = () => { setModal(null); setEditing(null); };
-  const openDetail = (id) => { setDetailId(id); setModal("product-detail"); };
-
-  const saveSupplier = async (f) => {
-    const row = { sup_id: f.supId, name: f.name, platform: f.platform, contact: f.contact, response_time: f.responseTime, rating: f.rating ? Number(f.rating) : null, status: f.status, notes: f.notes };
-    if (editing) await supabase.from("suppliers").update(row).eq("id", editing.id);
-    else         await supabase.from("suppliers").insert(row);
-    closeModal(); fetchAll();
-  };
-
-  const deleteSupplier = async (id) => {
-    await supabase.from("quotes").delete().eq("supplier_id", id);
-    await supabase.from("suppliers").delete().eq("id", id);
-    fetchAll();
-  };
-
-  const saveProduct = async (f) => {
-    const row = { sku_id: f.skuId, product_type: f.productType, material: f.material, fitment: f.fitment, name: f.name, category: f.category, length_cm: f.length ? Number(f.length) : null, width_cm: f.width ? Number(f.width) : null, height_cm: f.height ? Number(f.height) : null, weight_kg: f.weight ? Number(f.weight) : null, notes: f.notes };
-    if (editing) await supabase.from("products").update(row).eq("id", editing.id);
-    else         await supabase.from("products").insert(row);
-    closeModal(); fetchAll();
-  };
-
-  const deleteProduct = async (id) => { await supabase.from("products").delete().eq("id", id); fetchAll(); };
-
-  const saveQuote = async (f) => {
-    const row = { product_id: f.productId, supplier_id: f.supplierId, cg_sku: f.cgSku, product_name: f.productName, supplier_sku: f.supplierSku, supplier_name: f.supplierName, unit_price: f.unitPrice ? Number(f.unitPrice) : null, moq: f.moq || null, incoterm: f.incoterm || null, shipping_method: f.shippingMethod || null, notes: f.notes || null, quote_date: f.date || null, quote_status: f.quoteStatus || null };
-    if (editing) await supabase.from("quotes").update(row).eq("id", editing.id);
-    else         await supabase.from("quotes").insert(row);
-    closeModal(); fetchAll();
-  };
-
-  const deleteQuote = async (id) => { await supabase.from("quotes").delete().eq("id", id); fetchAll(); };
-
-  // Map DB → UI
-  const uiSuppliers = suppliers.map(s => ({ id: s.id, supId: s.sup_id, name: s.name, platform: s.platform, contact: s.contact, responseTime: s.response_time, rating: s.rating, status: s.status, notes: s.notes }));
-  const uiProducts  = products.map(p  => ({ id: p.id, skuId: p.sku_id, productType: p.product_type, material: p.material, fitment: p.fitment, name: p.name, category: p.category, length: p.length_cm, width: p.width_cm, height: p.height_cm, weight: p.weight_kg, notes: p.notes }));
-  const uiQuotes    = quotes.map(q    => ({ id: q.id, productId: q.product_id, supplierId: q.supplier_id, cgSku: q.cg_sku, productName: q.product_name, supplierSku: q.supplier_sku, supplierName: q.supplier_name, unitPrice: q.unit_price, moq: q.moq, incoterm: q.incoterm, shippingMethod: q.shipping_method, notes: q.notes, date: q.quote_date, quoteStatus: q.quote_status }));
-
-  const TABS = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "products",  label: `Products (${uiProducts.length})` },
-    { id: "suppliers", label: `Suppliers (${uiSuppliers.length})` },
-    { id: "quotes",    label: `Quotes (${uiQuotes.length})` },
-    { id: "export",    label: "📊 Export / RFQ" },
+  const totals = [
+    { "Metric": "Total expenses entered", "Amount CAD": expenses.reduce((s, e) => s + Number(e.total_amount || 0), 0) },
+    { "Metric": "Deductible regular expenses, excluding asset purchases", "Amount CAD": regular.reduce((s, e) => s + calcDeductible(e.total_amount, e.business_use_pct), 0) },
+    { "Metric": "Asset purchases", "Amount CAD": assets.reduce((s, a) => s + Number(a.cost || 0), 0) },
+    { "Metric": "Estimated first-year CCA claim", "Amount CAD": assets.reduce((s, a) => s + calcEstimatedCca(a), 0) },
+    { "Metric": "Estimated tax deduction total", "Amount CAD": regular.reduce((s, e) => s + calcDeductible(e.total_amount, e.business_use_pct), 0) + assets.reduce((s, a) => s + calcEstimatedCca(a), 0) }
   ];
 
+  const wb = XLSX.utils.book_new();
+  const wsSummary = XLSX.utils.json_to_sheet(totals);
+  wsSummary["!cols"] = [56, 18].map(wch => ({ wch }));
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Tax Summary");
+
+  const wsCat = XLSX.utils.json_to_sheet(byCategory);
+  wsCat["!cols"] = [34, 14, 16].map(wch => ({ wch }));
+  XLSX.utils.book_append_sheet(wb, wsCat, "By Category");
+
+  const wsExpenses = XLSX.utils.json_to_sheet(expenseRows);
+  wsExpenses["!cols"] = [12, 28, 36, 26, 12, 14, 14, 18, 16, 36, 14, 12, 42].map(wch => ({ wch }));
+  XLSX.utils.book_append_sheet(wb, wsExpenses, "Expense Details");
+
+  const wsAssets = XLSX.utils.json_to_sheet(assetRows);
+  wsAssets["!cols"] = [13, 32, 14, 26, 12, 12, 12, 14, 16, 24, 12, 36, 42].map(wch => ({ wch }));
+  XLSX.utils.book_append_sheet(wb, wsAssets, "Assets CCA");
+
+  downloadWorkbook(wb, `Costa_Gear_Tax_Report_${year}_${today()}.xlsx`);
+}
+
+function TopHeader({ year, setYear, view, setView }) {
+  const years = [2024, 2025, 2026, 2027, 2028];
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", background: C.lgray, minHeight: "100vh", color: C.navy }}>
-      <div style={{ background: C.navy, padding: "0 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 16, paddingBottom: 8 }}>
-            <div style={{ background: C.amber, borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff", fontSize: 16 }}>CG</div>
-            <div>
-              <div style={{ fontWeight: 800, color: "#fff", fontSize: 16, letterSpacing: .5 }}>COSTA GEAR</div>
-              <div style={{ fontSize: 11, color: C.dgray, letterSpacing: 1 }}>SOURCING TRACKER</div>
+    <>
+      <header className="top-header">
+        <div className="header-content">
+          <div className="logo-box">
+            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
+          </div>
+          <div className="header-controls">
+            <div className="select-wrap">
+              <Calendar size={20} />
+              <select value={year} onChange={e => setYear(Number(e.target.value))}>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <ChevronDown size={18} />
+            </div>
+            <div className="select-wrap business">
+              <BriefcaseBusiness size={20} />
+              <select value="Business Expenses" onChange={() => {}}>
+                <option>Business Expenses</option>
+                <option disabled>Inventory Costs</option>
+                <option disabled>Vehicle Log</option>
+              </select>
+              <ChevronDown size={18} />
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? C.amber : "transparent", color: tab === t.id ? "#fff" : C.mgray, border: "none", borderRadius: "6px 6px 0 0", padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .15s" }}>{t.label}</button>
-            ))}
-          </div>
+        </div>
+      </header>
+
+      <nav className="command-bar">
+        <div className="command-inner">
+          <button className={`command-btn ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}><LayoutDashboard />Dashboard</button>
+          <button className={`command-btn ${view === "add" ? "active" : ""}`} onClick={() => setView("add")}><PlusCircle />Add Expense</button>
+          <button className={`command-btn ${view === "expenses" ? "active" : ""}`} onClick={() => setView("expenses")}><ReceiptText />Expenses</button>
+          <button className={`command-btn ${view === "assets" ? "active" : ""}`} onClick={() => setView("assets")}><WalletCards />Assets (CCA)</button>
+          <button className={`command-btn ${view === "tax" ? "active" : ""}`} onClick={() => setView("tax")}><BarChart3 />Tax Report</button>
+        </div>
+      </nav>
+    </>
+  );
+}
+
+function Kpi({ label, value, sub, accent }) {
+  return (
+    <div className="card kpi">
+      <div className="kpi-label">{label}</div>
+      <div className={`kpi-value ${accent ? "accent" : ""}`}>{value}</div>
+      <div className="kpi-sub">{sub}</div>
+    </div>
+  );
+}
+
+function ExpenseForm({ initial, onSubmit, onCancel, assets }) {
+  const [form, setForm] = useState({ ...emptyExpense, ...initial });
+
+  function set(name, value) {
+    setForm(prev => ({ ...prev, [name]: value }));
+  }
+
+  const deductible = calcDeductible(form.total_amount, form.business_use_pct);
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, deductible_amount: deductible }); }}>
+      <div className="form-grid">
+        <div>
+          <label>Date</label>
+          <input className="input" type="date" value={form.expense_date || ""} onChange={e => set("expense_date", e.target.value)} required />
+        </div>
+        <div>
+          <label>Vendor</label>
+          <input className="input" value={form.vendor || ""} onChange={e => set("vendor", e.target.value)} required />
+        </div>
+        <div className="wide">
+          <label>Description</label>
+          <input className="input" value={form.description || ""} onChange={e => set("description", e.target.value)} required />
+        </div>
+        <div>
+          <label>Category</label>
+          <select className="select" value={form.category || ""} onChange={e => set("category", e.target.value)}>
+            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Total CAD</label>
+          <input className="input" type="number" step="0.01" value={form.total_amount ?? ""} onChange={e => set("total_amount", e.target.value)} required />
+        </div>
+        <div>
+          <label>Business Use %</label>
+          <input className="input" type="number" min="0" max="100" step="1" value={form.business_use_pct ?? 100} onChange={e => set("business_use_pct", e.target.value)} />
+        </div>
+        <div>
+          <label>Deductible</label>
+          <input className="input" value={money(deductible)} readOnly />
+        </div>
+        <div>
+          <label>Payment Method</label>
+          <select className="select" value={form.payment_method || ""} onChange={e => set("payment_method", e.target.value)}>
+            {PAYMENT_METHODS.map(p => <option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Payment Reference</label>
+          <input className="input" placeholder="ex. Visa 4242" value={form.payment_reference || ""} onChange={e => set("payment_reference", e.target.value)} />
+        </div>
+        <div>
+          <label>Receipt Status</label>
+          <select className="select" value={form.receipt_status || "Missing"} onChange={e => set("receipt_status", e.target.value)}>
+            <option>Missing</option>
+            <option>Saved</option>
+            <option>Not Required</option>
+          </select>
+        </div>
+        <div>
+          <label>Tax Year</label>
+          <input className="input" type="number" value={form.tax_year || new Date().getFullYear()} onChange={e => set("tax_year", Number(e.target.value))} />
+        </div>
+        <div className="wide">
+          <label>Receipt Link</label>
+          <input className="input" placeholder="Google Drive, Dropbox or receipt URL" value={form.receipt_url || ""} onChange={e => set("receipt_url", e.target.value)} />
+        </div>
+        <div>
+          <label>Asset Purchase?</label>
+          <select className="select" value={form.is_asset_purchase ? "Yes" : "No"} onChange={e => set("is_asset_purchase", e.target.value === "Yes")}>
+            <option>No</option>
+            <option>Yes</option>
+          </select>
+        </div>
+        <div>
+          <label>Linked Asset</label>
+          <select className="select" value={form.linked_asset_id || ""} onChange={e => set("linked_asset_id", e.target.value || null)}>
+            <option value="">None</option>
+            {assets.map(a => <option key={a.id} value={a.id}>{a.asset_code} | {a.asset_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Tax Ready?</label>
+          <select className="select" value={form.tax_ready ? "Yes" : "No"} onChange={e => set("tax_ready", e.target.value === "Yes")}>
+            <option>No</option>
+            <option>Yes</option>
+          </select>
+        </div>
+        <div className="full">
+          <label>Notes</label>
+          <textarea rows="3" value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn primary"><Upload size={18} />Save Expense</button>
+      </div>
+    </form>
+  );
+}
+
+function AssetForm({ initial, onSubmit, onCancel, expenses }) {
+  const [form, setForm] = useState({ ...emptyAsset, ...initial });
+
+  function set(name, value) {
+    setForm(prev => ({ ...prev, [name]: value }));
+  }
+
+  function onClassChange(value) {
+    const selected = CCA_CLASSES.find(c => c.classCode === value);
+    setForm(prev => ({ ...prev, cca_class: value, cca_rate: selected ? selected.rate : prev.cca_rate }));
+  }
+
+  const businessCost = calcBusinessCost(form.cost, form.business_use_pct);
+  const cca = calcEstimatedCca(form);
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, business_cost: businessCost, estimated_cca_claim: cca }); }}>
+      <div className="form-grid">
+        <div>
+          <label>Asset ID</label>
+          <input className="input" placeholder="A-001" value={form.asset_code || ""} onChange={e => set("asset_code", e.target.value)} required />
+        </div>
+        <div className="wide">
+          <label>Asset Name</label>
+          <input className="input" value={form.asset_name || ""} onChange={e => set("asset_name", e.target.value)} required />
+        </div>
+        <div>
+          <label>Purchase Date</label>
+          <input className="input" type="date" value={form.purchase_date || ""} onChange={e => set("purchase_date", e.target.value)} required />
+        </div>
+        <div>
+          <label>Vendor</label>
+          <input className="input" value={form.vendor || ""} onChange={e => set("vendor", e.target.value)} />
+        </div>
+        <div>
+          <label>Cost CAD</label>
+          <input className="input" type="number" step="0.01" value={form.cost ?? ""} onChange={e => set("cost", e.target.value)} required />
+        </div>
+        <div>
+          <label>CCA Class</label>
+          <select className="select" value={form.cca_class || "Class 50"} onChange={e => onClassChange(e.target.value)}>
+            {CCA_CLASSES.map(c => <option key={c.classCode} value={c.classCode}>{c.classCode} | {c.rate}%</option>)}
+          </select>
+        </div>
+        <div>
+          <label>CCA Rate %</label>
+          <input className="input" type="number" step="0.01" value={form.cca_rate ?? 0} onChange={e => set("cca_rate", e.target.value)} />
+        </div>
+        <div>
+          <label>Business Use %</label>
+          <input className="input" type="number" min="0" max="100" step="1" value={form.business_use_pct ?? 100} onChange={e => set("business_use_pct", e.target.value)} />
+        </div>
+        <div>
+          <label>Business Cost</label>
+          <input className="input" value={money(businessCost)} readOnly />
+        </div>
+        <div>
+          <label>Estimated First-Year CCA</label>
+          <input className="input" value={money(cca)} readOnly />
+        </div>
+        <div>
+          <label>Tax Year</label>
+          <input className="input" type="number" value={form.tax_year || new Date().getFullYear()} onChange={e => set("tax_year", Number(e.target.value))} />
+        </div>
+        <div>
+          <label>Status</label>
+          <select className="select" value={form.status || "Active"} onChange={e => set("status", e.target.value)}>
+            <option>Active</option>
+            <option>Disposed</option>
+            <option>Sold</option>
+            <option>Retired</option>
+          </select>
+        </div>
+        <div className="wide">
+          <label>Linked Expense</label>
+          <select className="select" value={form.linked_expense_id || ""} onChange={e => set("linked_expense_id", e.target.value || null)}>
+            <option value="">None</option>
+            {expenses.map(e => <option key={e.id} value={e.id}>{e.expense_date} | {e.vendor} | {e.description}</option>)}
+          </select>
+        </div>
+        <div className="wide">
+          <label>Receipt Link</label>
+          <input className="input" value={form.receipt_url || ""} onChange={e => set("receipt_url", e.target.value)} />
+        </div>
+        <div className="full">
+          <label>Notes</label>
+          <textarea rows="3" value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn primary"><Upload size={18} />Save Asset</button>
+      </div>
+    </form>
+  );
+}
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2 style={{ margin: 0 }}>{title}</h2>
+          <button className="btn ghost small" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ expenses, assets, year, setView, onExportTax }) {
+  const regular = expenses.filter(e => !e.is_asset_purchase);
+  const total = expenses.reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const deductibleRegular = regular.reduce((s, e) => s + calcDeductible(e.total_amount, e.business_use_pct), 0);
+  const assetPurchases = assets.reduce((s, a) => s + Number(a.cost || 0), 0);
+  const cca = assets.reduce((s, a) => s + calcEstimatedCca(a), 0);
+  const receiptsSaved = expenses.filter(e => e.receipt_status === "Saved" || e.receipt_status === "Not Required").length;
+
+  return (
+    <>
+      <div className="section-title">
+        <div>
+          <h1>Business Expenses</h1>
+          <p>Simple year-end control for expenses, receipts, asset purchases and estimated CCA.</p>
+        </div>
+        <div className="toolbar">
+          <button className="btn" onClick={() => setView("expenses")}><ReceiptText size={18} />View Expenses</button>
+          <button className="btn primary" onClick={() => setView("add")}><PlusCircle size={18} />Add Expense</button>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
-        {error && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "12px 16px", marginBottom: 20, color: C.red, fontSize: 13 }}>⚠️ Database error: {error}</div>}
-        {loading ? <Spinner /> : (
-          <>
-            {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
-            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
-            {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} />}
-            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onAdd={() => openAdd("quote")} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete quote?")) deleteQuote(id); }} />}
-            {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
-          </>
-        )}
+      <div className="grid-cards">
+        <Kpi label="Total Expenses YTD" value={money(total)} sub={`${expenses.length} entries for ${year}`} />
+        <Kpi label="Deductible Expenses" value={money(deductibleRegular)} sub="Excludes asset purchases" />
+        <Kpi label="Asset Purchases" value={money(assetPurchases)} sub={`${assets.length} assets tracked`} />
+        <Kpi label="Estimated CCA Claim" value={money(cca)} sub="First-year estimate with half-year rule" accent />
       </div>
 
-      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} />}
-      {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
-      {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
-      {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ════════════════════════════════════════════════════════════════
-function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
-  const kpis = [
-    { label: "Products",             value: products.length,  color: C.blue  },
-    { label: "Suppliers",            value: suppliers.length, color: C.teal  },
-    { label: "Quotes",               value: quotes.length,    color: C.amber },
-    { label: "Avg Quotes / Product", value: products.length ? (quotes.length / products.length).toFixed(1) : "—", color: C.navy },
-  ];
-
-  const enriched = products.map(p => {
-    const pq     = quotes.filter(q => q.productId === p.id);
-    const prices = pq.map(q => parseFloat(q.unitPrice)).filter(Boolean);
-    return { ...p, qcount: pq.length, bestPrice: prices.length ? Math.min(...prices) : null };
-  }).sort((a, b) => b.qcount - a.qcount);
-
-  const maxQ = Math.max(1, ...enriched.map(x => x.qcount));
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 16 }}>
-        {kpis.map(k => (
-          <Card key={k.label} style={{ borderTop: `4px solid ${k.color}`, textAlign: "center" }}>
-            <div style={{ fontSize: 36, fontWeight: 900, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{k.label}</div>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, color: C.dgray }}>Product Quote Coverage</h3>
-        {products.length === 0 ? <Empty msg="No products yet." /> : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {enriched.map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => onOpenDetail(p.id)}>
-                <div style={{ width: 80, fontSize: 11, fontWeight: 700, color: C.amber, flexShrink: 0 }}>{p.skuId}</div>
-                <div style={{ flex: 1, fontSize: 12, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                <div style={{ width: 120, background: C.lgray, borderRadius: 4, height: 8, flexShrink: 0 }}>
-                  <div style={{ width: `${(p.qcount / maxQ) * 100}%`, background: p.qcount > 0 ? C.teal : C.mgray, height: "100%", borderRadius: 4 }} />
-                </div>
-                <div style={{ width: 60, textAlign: "right", fontSize: 12, fontWeight: 700, color: p.qcount > 0 ? C.teal : C.mgray }}>{p.qcount} q</div>
-                {p.bestPrice && <div style={{ width: 80, textAlign: "right", fontSize: 12, color: C.dgray }}>from ${p.bestPrice}</div>}
-              </div>
-            ))}
+      <div className="two-col">
+        <div className="card panel">
+          <div className="panel-head">
+            <div>
+              <h2>Recent Expenses</h2>
+              <p>Latest records entered for the selected year.</p>
+            </div>
+            <button className="btn small" onClick={() => setView("expenses")}>Open list</button>
           </div>
-        )}
-      </Card>
-
-      <Card>
-        <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, color: C.dgray }}>Recent Quotes</h3>
-        {quotes.length === 0 ? <Empty msg="No quotes yet." /> : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: C.lgray }}>
-                  {["SKU","Product","Supplier","Price USD","Incoterm","Status","Date"].map(h => (
-                    <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Total</th><th>Receipt</th></tr></thead>
               <tbody>
-                {quotes.slice(0, 10).map((q, i) => (
-                  <tr key={q.id} style={{ background: i % 2 === 0 ? "#fff" : C.lgray, borderBottom: `1px solid ${C.mgray}` }}>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, color: C.amber, fontSize: 12 }}>{q.cgSku || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 12 }}>{q.supplierName || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, color: C.teal }}>{q.unitPrice ? `$${q.unitPrice}` : "—"}</td>
-                    <td style={{ padding: "8px 12px" }}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
-                    <td style={{ padding: "8px 12px" }}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 11, color: C.dgray }}>{q.date || "—"}</td>
+                {expenses.slice(0, 6).map(e => (
+                  <tr key={e.id}>
+                    <td>{e.expense_date}</td>
+                    <td>{e.vendor}</td>
+                    <td>{e.description}</td>
+                    <td><span className={`tag ${e.is_asset_purchase ? "asset" : ""}`}>{e.category}</span></td>
+                    <td className="amount">{money(e.total_amount)}</td>
+                    <td><span className={`tag ${e.receipt_status === "Saved" ? "ok" : "warn"}`}>{e.receipt_status}</span></td>
                   </tr>
                 ))}
+                {!expenses.length && <tr><td colSpan="6"><div className="empty">No expenses yet.</div></td></tr>}
               </tbody>
             </table>
           </div>
-        )}
-      </Card>
-    </div>
-  );
-}
+        </div>
 
-// ════════════════════════════════════════════════════════════════
-// PRODUCTS TAB
-// ════════════════════════════════════════════════════════════════
-function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
-  const [filter, setFilter]       = useState("");
-  const [catFilter, setCatFilter] = useState("");
-
-  const filtered = products.filter(p => {
-    const q   = filter.toLowerCase();
-    const match = !q || p.skuId?.toLowerCase().includes(q) || p.name?.toLowerCase().includes(q) || p.fitment?.toLowerCase().includes(q) || p.productType?.toLowerCase().includes(q) || p.material?.toLowerCase().includes(q);
-    return match && (!catFilter || p.category === catFilter);
-  });
-
-  return (
-    <Section title="Products" action={<Btn onClick={onAdd}>+ Add Product</Btn>}>
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <Input placeholder="Search SKU or name…" value={filter} onChange={setFilter} />
-        <Input options={CATEGORIES} value={catFilter} onChange={setCatFilter} />
-        {catFilter && <Btn variant="ghost" small onClick={() => setCatFilter("")}>Clear</Btn>}
+        <div className="card panel">
+          <div className="panel-head">
+            <div>
+              <h2>Tax Readiness</h2>
+              <p>Quick check before exporting your year-end report.</p>
+            </div>
+            <Gauge />
+          </div>
+          <div className="notice">
+            <strong>{receiptsSaved} of {expenses.length}</strong> expenses have receipt status saved or not required.
+          </div>
+          <br />
+          <div className="notice">
+            Regular expenses and CCA assets are separated so you do not accidentally deduct an asset purchase as a normal expense.
+          </div>
+          <br />
+          <button className="btn primary" onClick={onExportTax}><FileSpreadsheet size={18} />Export Tax Report</button>
+        </div>
       </div>
-      {filtered.length === 0 ? (
-        <Empty msg={products.length === 0 ? "No products yet." : "No products match."} cta={products.length === 0 && <Btn onClick={onAdd}>+ Add First Product</Btn>} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map(p => {
-            const pq     = quotes.filter(q => q.productId === p.id);
-            const prices = pq.map(q => parseFloat(q.unitPrice)).filter(Boolean);
-            const minP   = prices.length ? Math.min(...prices) : null;
-            const maxP   = prices.length ? Math.max(...prices) : null;
-            return (
-              <Card key={p.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
-                <div onClick={() => onDetail(p.id)} style={{ display: "flex", alignItems: "center", gap: 16, flex: 1, minWidth: 0, cursor: "pointer" }}>
-                  <div style={{ background: C.navy, color: C.amber, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                    <div style={{ fontSize: 11, color: C.dgray, marginTop: 2 }}>{p.productType} · {p.material || "—"} · {p.fitment || "—"} · {p.category}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
-                  {pq.length > 0 ? (
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>${minP}{maxP !== minP ? `–$${maxP}` : ""}</div>
-                      <div style={{ fontSize: 11, color: C.dgray }}>{pq.length} {pq.length === 1 ? "quote" : "quotes"}</div>
-                    </div>
-                  ) : <Badge label="No quotes" color={C.mgray} />}
-                  <Btn small variant="ghost"  onClick={() => onEdit(p)}>Edit</Btn>
-                  <Btn small variant="danger" onClick={() => onDelete(p.id)}>Del</Btn>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </Section>
+    </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// SUPPLIERS TAB
-// ════════════════════════════════════════════════════════════════
-function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
-  return (
-    <Section title="Suppliers" action={<Btn onClick={onAdd}>+ Add Supplier</Btn>}>
-      {suppliers.length === 0 ? (
-        <Empty msg="No suppliers yet." cta={<Btn onClick={onAdd}>+ Add First Supplier</Btn>} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {suppliers.map(s => {
-            const sq = quotes.filter(q => q.supplierId === s.id);
-            return (
-              <Card key={s.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
-                <div style={{ background: C.teal, color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{s.supId}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: C.dgray, marginTop: 2 }}>{s.platform} · {s.contact} · Response: {s.responseTime || "—"}</div>
-                  {s.notes && <div style={{ fontSize: 11, color: C.dgray, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.notes}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>{sq.length} {sq.length === 1 ? "quote" : "quotes"}</div>
-                    <div style={{ fontSize: 11, color: C.dgray }}>Rating: {s.rating || "—"}/5</div>
-                  </div>
-                  <Badge label={s.status || "Active"} color={s.status === "Blocked" ? C.red : s.status === "Inactive" ? C.dgray : C.teal} />
-                  <Btn small variant="ghost"  onClick={() => onEdit(s)}>Edit</Btn>
-                  <Btn small variant="danger" onClick={() => onDelete(s.id)}>Del</Btn>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </Section>
-  );
-}
+function ExpensesView({ expenses, assets, year, onAdd, onEdit, onDelete, onExport }) {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const [receipt, setReceipt] = useState("All");
+  const [assetFilter, setAssetFilter] = useState("All");
 
-// ════════════════════════════════════════════════════════════════
-// QUOTES TAB
-// ════════════════════════════════════════════════════════════════
-function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
-  const [filter, setFilter]         = useState("");
-  const [statusFilter, setStatus]   = useState("");
-  const [supplierFilter, setSupFil] = useState("");
-
-  const filtered = quotes.filter(q => {
-    const s = filter.toLowerCase();
-    const textOk = !s || q.productName?.toLowerCase().includes(s) || q.supplierName?.toLowerCase().includes(s) || q.cgSku?.toLowerCase().includes(s) || q.supplierSku?.toLowerCase().includes(s);
-    const stOk   = !statusFilter   || q.quoteStatus   === statusFilter;
-    const supOk  = !supplierFilter || q.supplierId     === supplierFilter;
-    return textOk && stOk && supOk;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return expenses.filter(e => {
+      const matchesText = !q || [e.vendor, e.description, e.category, e.notes].join(" ").toLowerCase().includes(q);
+      const matchesCategory = category === "All" || e.category === category;
+      const matchesReceipt = receipt === "All" || e.receipt_status === receipt;
+      const matchesAsset = assetFilter === "All" || (assetFilter === "Assets" ? e.is_asset_purchase : !e.is_asset_purchase);
+      return matchesText && matchesCategory && matchesReceipt && matchesAsset;
+    });
+  }, [expenses, search, category, receipt, assetFilter]);
 
   return (
-    <Section title="Quotes" action={<Btn onClick={onAdd}>+ Add Quote</Btn>}>
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <Input placeholder="Search product, supplier or SKU…" value={filter} onChange={setFilter} />
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <select value={statusFilter} onChange={e => setStatus(e.target.value)} style={inputStyle}>
-            <option value="">All statuses</option>
-            {QSTATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+    <>
+      <div className="section-title">
+        <div>
+          <h1>Expenses</h1>
+          <p>Complete expense register for {year}.</p>
         </div>
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <select value={supplierFilter} onChange={e => setSupFil(e.target.value)} style={inputStyle}>
-            <option value="">All suppliers</option>
-            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+        <div className="toolbar">
+          <button className="btn" onClick={() => onExport(filtered)}><Download size={18} />Export to Excel</button>
+          <button className="btn primary" onClick={onAdd}><PlusCircle size={18} />Add Expense</button>
         </div>
-        {(statusFilter || supplierFilter || filter) && <Btn variant="ghost" small onClick={() => { setFilter(""); setStatus(""); setSupFil(""); }}>Clear</Btn>}
       </div>
-      {filtered.length === 0 ? (
-        <Empty msg={quotes.length === 0 ? "No quotes yet." : "No quotes match."} cta={quotes.length === 0 && <Btn onClick={onAdd}>+ Add First Quote</Btn>} />
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+
+      <div className="card panel">
+        <div className="filters">
+          <input className="input" placeholder="Search vendor, description, notes..." value={search} onChange={e => setSearch(e.target.value)} />
+          <select className="select" value={category} onChange={e => setCategory(e.target.value)}>
+            <option>All</option>
+            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select className="select" value={receipt} onChange={e => setReceipt(e.target.value)}>
+            <option>All</option><option>Saved</option><option>Missing</option><option>Not Required</option>
+          </select>
+          <select className="select" value={assetFilter} onChange={e => setAssetFilter(e.target.value)}>
+            <option>All</option><option>Regular</option><option>Assets</option>
+          </select>
+          <button className="btn ghost" onClick={() => { setSearch(""); setCategory("All"); setReceipt("All"); setAssetFilter("All"); }}>Clear</button>
+        </div>
+
+        <div className="table-wrap">
+          <table>
             <thead>
-              <tr style={{ background: C.navy }}>
-                {["SKU","Product","Supp. SKU","Supplier","Price USD","MOQ","Incoterm","Status","Date",""].map(h => (
-                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.mgray, textTransform: "uppercase", letterSpacing: .5, whiteSpace: "nowrap" }}>{h}</th>
-                ))}
+              <tr>
+                <th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Total</th><th>Business %</th><th>Deductible</th><th>Payment</th><th>Receipt</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((q, i) => (
-                <tr key={q.id} style={{ background: i % 2 === 0 ? "#fff" : C.lgray, borderBottom: `1px solid ${C.mgray}` }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 800, color: C.amber, fontFamily: "monospace", fontSize: 12 }}>{q.cgSku || "—"}</td>
-                  <td style={{ padding: "10px 12px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
-                  <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: C.dgray }}>{q.supplierSku || "—"}</td>
-                  <td style={{ padding: "10px 12px" }}>{q.supplierName || "—"}</td>
-                  <td style={{ padding: "10px 12px", fontWeight: 700, color: C.teal }}>{q.unitPrice ? `$${q.unitPrice}` : "—"}</td>
-                  <td style={{ padding: "10px 12px", color: C.dgray }}>{q.moq || "—"}</td>
-                  <td style={{ padding: "10px 12px" }}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
-                  <td style={{ padding: "10px 12px" }}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
-                  <td style={{ padding: "10px 12px", fontSize: 11, color: C.dgray, whiteSpace: "nowrap" }}>{q.date || "—"}</td>
-                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="ghost"  onClick={() => onEdit(q)}>Edit</Btn>
-                      <Btn small variant="danger" onClick={() => onDelete(q.id)}>Del</Btn>
+              {filtered.map(e => (
+                <tr key={e.id}>
+                  <td>{e.expense_date}</td>
+                  <td>{e.vendor}</td>
+                  <td>{e.description}<div className="muted">{e.notes}</div></td>
+                  <td><span className={`tag ${e.is_asset_purchase ? "asset" : ""}`}>{e.category}</span></td>
+                  <td className="amount">{money(e.total_amount)}</td>
+                  <td>{pct(e.business_use_pct)}</td>
+                  <td className="amount">{money(calcDeductible(e.total_amount, e.business_use_pct))}</td>
+                  <td>{e.payment_method}<div className="muted">{e.payment_reference}</div></td>
+                  <td><span className={`tag ${e.receipt_status === "Saved" ? "ok" : "warn"}`}>{e.receipt_status}</span></td>
+                  <td>
+                    <div className="toolbar">
+                      <button className="btn small" onClick={() => onEdit(e)}><Edit3 size={15} />Edit</button>
+                      <button className="btn small danger" onClick={() => onDelete(e)}><Trash2 size={15} /></button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {!filtered.length && <tr><td colSpan="10"><div className="empty">No expenses found.</div></td></tr>}
             </tbody>
           </table>
         </div>
-      )}
-    </Section>
+      </div>
+    </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// EXPORT / RFQ TAB
-// ════════════════════════════════════════════════════════════════
-function ExportRFQ({ products, suppliers, quotes }) {
-  const [rfqSupplier,  setRfqSupplier]  = useState("");
-  const [rfqSelected,  setRfqSelected]  = useState([]);
-  const [rfqFilter,    setRfqFilter]    = useState("");
-
-  const toggleProduct = (id) => setRfqSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const selectAll     = () => setRfqSelected(filteredProds.map(p => p.id));
-  const clearAll      = () => setRfqSelected([]);
-
-  const filteredProds = products.filter(p => {
-    const s = rfqFilter.toLowerCase();
-    return !s || p.skuId?.toLowerCase().includes(s) || p.name?.toLowerCase().includes(s);
-  });
-
+function AssetsView({ assets, expenses, year, onAdd, onEdit, onDelete, onExport }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* ── Quick Exports ── */}
-      <Card>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: C.navy }}>Quick Exports</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 16 }}>
-
-          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>📋 All Quotes</div>
-            <div style={{ fontSize: 12, color: C.dgray, marginBottom: 12 }}>Every quote in the database, one row each.</div>
-            <Btn variant="teal" small onClick={() => exportAllQuotes(quotes)}>Download Excel</Btn>
-          </div>
-
-          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>🏆 Best Price per Product</div>
-            <div style={{ fontSize: 12, color: C.dgray, marginBottom: 12 }}>One row per product showing cheapest quote + supplier. Includes 2nd best.</div>
-            <Btn variant="teal" small onClick={() => exportBestPrice(products, quotes)}>Download Excel</Btn>
-          </div>
-
-          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>🏭 By Supplier</div>
-            <div style={{ fontSize: 12, color: C.dgray, marginBottom: 12 }}>One tab per supplier with all their quotes. Good for comparison.</div>
-            <Btn variant="teal" small onClick={() => exportBySupplier(suppliers, products, quotes)}>Download Excel</Btn>
-          </div>
-
-        </div>
-      </Card>
-
-      {/* ── RFQ Builder ── */}
-      <Card>
-        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: C.navy }}>📨 RFQ Builder</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: C.dgray }}>Select a supplier and the products you want to request pricing for. The exported file includes your last known price for reference and blank columns for the supplier to fill in.</p>
-
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 4 }}>Supplier *</label>
-            <select value={rfqSupplier} onChange={e => setRfqSupplier(e.target.value)} style={inputStyle}>
-              <option value="">— select supplier —</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <Input placeholder="Filter products…" value={rfqFilter} onChange={setRfqFilter} label="Filter" />
-        </div>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <Btn variant="ghost" small onClick={selectAll}>Select all</Btn>
-          <Btn variant="ghost" small onClick={clearAll}>Clear</Btn>
-          <span style={{ fontSize: 12, color: C.dgray, alignSelf: "center" }}>{rfqSelected.length} selected</span>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 8 }}>
-          {filteredProds.length === 0 && <div style={{ padding: 16, textAlign: "center", color: C.dgray, fontSize: 13 }}>No products match.</div>}
-          {filteredProds.map(p => {
-            const checked = rfqSelected.includes(p.id);
-            const existingQ = quotes.filter(q => q.productId === p.id && q.supplierId === rfqSupplier);
-            const lastPrice = existingQ.length ? `$${Math.min(...existingQ.map(q => Number(q.unitPrice)).filter(Boolean))}` : null;
-            return (
-              <div key={p.id} onClick={() => toggleProduct(p.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 6, background: checked ? "#f0faf9" : "#fff", border: `1px solid ${checked ? C.teal : C.mgray}`, cursor: "pointer" }}>
-                <input type="checkbox" checked={checked} onChange={() => {}} style={{ accentColor: C.teal, width: 16, height: 16, flexShrink: 0 }} />
-                <div style={{ width: 70, fontSize: 11, fontWeight: 800, color: C.amber, fontFamily: "monospace" }}>{p.skuId}</div>
-                <div style={{ flex: 1, fontSize: 13, color: C.navy }}>{p.name}</div>
-                {lastPrice && <div style={{ fontSize: 11, color: C.teal, fontWeight: 700, whiteSpace: "nowrap" }}>Last: {lastPrice}</div>}
-                {!lastPrice && rfqSupplier && <div style={{ fontSize: 11, color: C.mgray, whiteSpace: "nowrap" }}>No prior quote</div>}
-              </div>
-            );
-          })}
-        </div>
-
-        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-          <Btn
-            variant="purple"
-            disabled={!rfqSupplier || rfqSelected.length === 0}
-            onClick={() => exportRFQ(rfqSelected, rfqSupplier, products, quotes, suppliers)}
-          >
-            📥 Export RFQ ({rfqSelected.length} products)
-          </Btn>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
-// PRODUCT DETAIL MODAL
-// ════════════════════════════════════════════════════════════════
-function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, onDeleteQuote }) {
-  const product = products.find(p => p.id === id);
-  if (!product) return null;
-  const pquotes = quotes.filter(q => q.productId === id);
-  const prices  = pquotes.map(q => parseFloat(q.unitPrice)).filter(Boolean);
-  const best    = prices.length ? Math.min(...prices) : null;
-
-  // Simple landed cost estimator state
-  const [fxRate,    setFxRate]    = useState("1.38"); // USD→CAD
-  const [freightCA, setFreightCA] = useState("50");   // CAD per unit
-  const [dutyPct,   setDutyPct]   = useState("6.5");  // % customs duty
-
-  const calcLanded = (priceUSD) => {
-    const fx      = parseFloat(fxRate)    || 0;
-    const freight = parseFloat(freightCA) || 0;
-    const duty    = parseFloat(dutyPct)   || 0;
-    const cad     = priceUSD * fx;
-    const dutyAmt = cad * (duty / 100);
-    const gst     = (cad + dutyAmt) * 0.05; // 5% GST recoverable as ITC
-    return { cad: cad.toFixed(2), duty: dutyAmt.toFixed(2), gst: gst.toFixed(2), total: (cad + dutyAmt + freight).toFixed(2) };
-  };
-
-  return (
-    <Modal title={`${product.skuId} — ${product.name}`} onClose={onClose} wide>
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Product info */}
-        <div style={{ background: C.lgray, borderRadius: 8, padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[
-            ["Category",       product.category],
-            ["Product Type",   product.productType || "—"],
-            ["Material",       product.material    || "—"],
-            ["Fitment",        product.fitment     || "—"],
-            ["Dimensions (cm)",(product.length || product.width || product.height) ? `${product.length||"—"} × ${product.width||"—"} × ${product.height||"—"}` : "—"],
-            ["Gross Weight",   product.weight ? `${product.weight} kg` : "—"],
-          ].map(([k, v]) => (
-            <div key={k}>
-              <div style={{ fontSize: 11, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{k}</div>
-              <div style={{ fontSize: 13, color: C.navy, fontWeight: 600, marginTop: 2 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        {product.notes && <div style={{ fontSize: 13, color: C.dgray, fontStyle: "italic" }}>{product.notes}</div>}
-
-        {/* Landed Cost Estimator */}
-        <div style={{ background: "#fffbf0", border: `1px solid #f0d080`, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: C.navy, marginBottom: 12 }}>🧮 Landed Cost Estimator (per unit)</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>USD → CAD Rate</label>
-              <input value={fxRate}    onChange={e => setFxRate(e.target.value)}    style={{ ...inputStyle, width: "100%" }} placeholder="1.38" />
-            </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Freight (CAD/unit)</label>
-              <input value={freightCA} onChange={e => setFreightCA(e.target.value)} style={{ ...inputStyle, width: "100%" }} placeholder="50" />
-            </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Duty Rate (%)</label>
-              <input value={dutyPct}   onChange={e => setDutyPct(e.target.value)}   style={{ ...inputStyle, width: "100%" }} placeholder="6.5" />
-            </div>
-          </div>
-          {best !== null && (() => {
-            const lc = calcLanded(best);
-            return (
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {[["Product (CAD)", `$${lc.cad}`], ["Duty", `$${lc.duty}`], ["GST (ITC)", `$${lc.gst}`], ["Freight", `CA$${freightCA}`], ["Total Landed", `CA$${lc.total}`]].map(([label, val], i) => (
-                  <div key={label} style={{ background: i === 4 ? C.navy : "#fff", borderRadius: 6, padding: "8px 14px", border: `1px solid ${C.mgray}` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: i === 4 ? C.mgray : C.dgray, textTransform: "uppercase" }}>{label}</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 4 ? C.amber : C.navy, marginTop: 2 }}>{val}</div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-          {best === null && <div style={{ fontSize: 12, color: C.dgray }}>Add at least one quote to see the calculation.</div>}
-          <div style={{ fontSize: 11, color: C.dgray, marginTop: 8 }}>GST shown as reference — recoverable as ITC (FOB/EXW orders only).</div>
-        </div>
-
-        {/* Quotes */}
+    <>
+      <div className="section-title">
         <div>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 800, color: C.navy }}>
-            Quotes ({pquotes.length}) {best !== null && <span style={{ color: C.teal }}>· best ${best} USD</span>}
-          </h3>
-          {pquotes.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 24, color: C.dgray, fontSize: 13 }}>No quotes for this product yet.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {pquotes.sort((a, b) => (parseFloat(a.unitPrice) || 999) - (parseFloat(b.unitPrice) || 999)).map(q => {
-                const isBest = parseFloat(q.unitPrice) === best;
-                const lc = q.unitPrice ? calcLanded(parseFloat(q.unitPrice)) : null;
-                return (
-                  <div key={q.id} style={{ border: `2px solid ${isBest ? C.teal : C.mgray}`, borderRadius: 8, padding: "12px 16px", background: isBest ? "#f0faf9" : "#fff" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>{q.supplierName}</span>
-                          {isBest && <Badge label="Best price" color={C.teal} />}
-                          <Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.blue} />
-                          {q.quoteStatus && <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} />}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.dgray }}>
-                          SKU: <span style={{ fontFamily: "monospace", color: C.navy }}>{q.supplierSku || "—"}</span>
-                          {q.moq && ` · MOQ: ${q.moq}`}
-                          {q.shippingMethod && ` · ${q.shippingMethod}`}
-                          {q.date && ` · ${q.date}`}
-                        </div>
-                        {q.notes && <div style={{ fontSize: 12, color: C.dgray, marginTop: 4, fontStyle: "italic" }}>{q.notes}</div>}
-                        {lc && <div style={{ fontSize: 11, color: C.purple, marginTop: 4, fontWeight: 600 }}>Est. landed: CA${lc.total} (excl. GST)</div>}
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
-                        <div style={{ fontSize: 22, fontWeight: 900, color: isBest ? C.teal : C.navy }}>${q.unitPrice || "—"}</div>
-                        <div style={{ fontSize: 11, color: C.dgray }}>per unit USD</div>
-                        <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
-                          <Btn small variant="ghost"  onClick={() => onEditQuote(q)}>Edit</Btn>
-                          <Btn small variant="danger" onClick={() => onDeleteQuote(q.id)}>Del</Btn>
-                        </div>
-                      </div>
+          <h1>Assets (CCA)</h1>
+          <p>Track business assets separately from normal expenses for depreciation support.</p>
+        </div>
+        <div className="toolbar">
+          <button className="btn" onClick={() => onExport(assets)}><Download size={18} />Export Assets</button>
+          <button className="btn primary" onClick={onAdd}><PlusCircle size={18} />Add Asset</button>
+        </div>
+      </div>
+
+      <div className="card panel">
+        <div className="notice" style={{ marginBottom: 14 }}>
+          CCA is estimated using business cost × CCA rate × 50% first-year rule. Confirm the final CCA class and claim with your accountant before filing.
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Asset ID</th><th>Asset</th><th>Purchase Date</th><th>Vendor</th><th>Cost</th><th>Class</th><th>Rate</th><th>Business Cost</th><th>Est. CCA</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {assets.map(a => (
+                <tr key={a.id}>
+                  <td>{a.asset_code}</td>
+                  <td>{a.asset_name}<div className="muted">{a.notes}</div></td>
+                  <td>{a.purchase_date}</td>
+                  <td>{a.vendor}</td>
+                  <td className="amount">{money(a.cost)}</td>
+                  <td><span className="tag asset">{a.cca_class}</span></td>
+                  <td>{Number(a.cca_rate || 0)}%</td>
+                  <td className="amount">{money(calcBusinessCost(a.cost, a.business_use_pct))}</td>
+                  <td className="amount">{money(calcEstimatedCca(a))}</td>
+                  <td><span className="tag ok">{a.status}</span></td>
+                  <td>
+                    <div className="toolbar">
+                      <button className="btn small" onClick={() => onEdit(a)}><Edit3 size={15} />Edit</button>
+                      <button className="btn small danger" onClick={() => onDelete(a)}><Trash2 size={15} /></button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  </td>
+                </tr>
+              ))}
+              {!assets.length && <tr><td colSpan="11"><div className="empty">No assets yet.</div></td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
-    </Modal>
+    </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// PRODUCT MODAL
-// ════════════════════════════════════════════════════════════════
-function ProductModal({ onSave, onClose, editing }) {
-  const [form, setForm] = useState(editing || { skuId: "", productType: "", material: "", fitment: "", name: "", category: "", length: "", width: "", height: "", weight: "", notes: "" });
-  const set = (k) => (v) => {
-    setForm(f => {
-      const u = { ...f, [k]: v };
-      const parts = [k === "productType" ? v : f.productType, k === "material" ? v : f.material, k === "fitment" ? v : f.fitment].filter(Boolean);
-      u.name = parts.join(" – ");
-      return u;
-    });
-  };
-  const valid = form.skuId && form.productType;
+function AddExpenseView({ assets, onSubmit, onCancel }) {
   return (
-    <Modal title={editing ? "Edit Product" : "Add Product"} onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="SKU ID" value={form.skuId} onChange={set("skuId")} placeholder="e.g. CG-004" required />
-          <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 4 }}>Auto Name</label>
-            <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 6, padding: "7px 10px", fontSize: 13, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 34 }}>{form.name || "Filled automatically…"}</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Product Type *" value={form.productType} onChange={set("productType")} placeholder="e.g. Side Steps" required />
-          <Input label="Material"       value={form.material}    onChange={set("material")}    placeholder="e.g. Aluminum" />
-          <Input label="Fitment"        value={form.fitment}     onChange={set("fitment")}     options={FITMENTS} />
-        </div>
-        <Input label="Category" value={form.category} onChange={set("category")} options={CATEGORIES} />
+    <>
+      <div className="section-title">
         <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 6 }}>Dimensions (cm) & Weight</label>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Input label="Length" value={form.length} onChange={set("length")} type="number" placeholder="cm" small />
-            <Input label="Width"  value={form.width}  onChange={set("width")}  type="number" placeholder="cm" small />
-            <Input label="Height" value={form.height} onChange={set("height")} type="number" placeholder="cm" small />
-            <Input label="Weight (kg)" value={form.weight} onChange={set("weight")} type="number" placeholder="kg" small />
-          </div>
-        </div>
-        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Optional notes" />
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Product</Btn>
+          <h1>Add Expense</h1>
+          <p>Register a new business expense. If the purchase is an asset, mark it and add it to Assets (CCA) too.</p>
         </div>
       </div>
-    </Modal>
+      <div className="card panel">
+        <ExpenseForm initial={emptyExpense} assets={assets} onSubmit={onSubmit} onCancel={onCancel} />
+      </div>
+    </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// SUPPLIER MODAL
-// ════════════════════════════════════════════════════════════════
-function SupplierModal({ onSave, onClose, editing }) {
-  const [form, setForm] = useState(editing || { supId: "", name: "", platform: "Alibaba", contact: "", responseTime: "", rating: "", status: "Active", notes: "" });
-  const set  = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
-  const valid = form.supId && form.name;
+function TaxReportView({ expenses, assets, year, onExportTax }) {
+  const regular = expenses.filter(e => !e.is_asset_purchase);
+  const totalRegularDeductible = regular.reduce((s, e) => s + calcDeductible(e.total_amount, e.business_use_pct), 0);
+  const estimatedCca = assets.reduce((s, a) => s + calcEstimatedCca(a), 0);
+  const totalEstimate = totalRegularDeductible + estimatedCca;
+
+  const byCategory = CATEGORIES.map(cat => {
+    const items = regular.filter(e => e.category === cat);
+    return {
+      category: cat,
+      total: items.reduce((sum, e) => sum + Number(e.total_amount || 0), 0),
+      deductible: items.reduce((sum, e) => sum + calcDeductible(e.total_amount, e.business_use_pct), 0)
+    };
+  }).filter(r => r.total || r.deductible);
+
   return (
-    <Modal title={editing ? "Edit Supplier" : "Add Supplier"} onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Supplier ID"   value={form.supId} onChange={set("supId")} placeholder="e.g. SUP-005" required />
-          <Input label="Supplier Name" value={form.name}  onChange={set("name")}  placeholder="Company name" required />
+    <>
+      <div className="section-title">
+        <div>
+          <h1>Tax Report</h1>
+          <p>Export-ready summary for your accountant or tax filing package.</p>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Platform"     value={form.platform}  onChange={set("platform")}  options={PLATFORMS} />
-          <Input label="Contact Name" value={form.contact}   onChange={set("contact")}   placeholder="e.g. Kevin Gong" />
+        <button className="btn primary" onClick={onExportTax}><FileSpreadsheet size={18} />Export Full Tax Report</button>
+      </div>
+
+      <div className="grid-cards">
+        <Kpi label="Regular Deductible Expenses" value={money(totalRegularDeductible)} sub="Excludes asset purchases" />
+        <Kpi label="Estimated CCA Claim" value={money(estimatedCca)} sub={`${assets.length} assets`} accent />
+        <Kpi label="Estimated Deduction Total" value={money(totalEstimate)} sub={`For ${year}`} />
+        <Kpi label="Missing Receipts" value={String(expenses.filter(e => e.receipt_status === "Missing").length)} sub="Review before filing" />
+      </div>
+
+      <div className="two-col">
+        <div className="card panel">
+          <div className="panel-head"><h2>Category Summary</h2></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Category</th><th>Total</th><th>Deductible</th></tr></thead>
+              <tbody>
+                {byCategory.map(r => <tr key={r.category}><td>{r.category}</td><td>{money(r.total)}</td><td className="amount">{money(r.deductible)}</td></tr>)}
+                {!byCategory.length && <tr><td colSpan="3"><div className="empty">No regular expenses found.</div></td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Response Time" value={form.responseTime} onChange={set("responseTime")} placeholder="e.g. Same day" />
-          <Input label="Rating (1–5)"  value={form.rating}       onChange={set("rating")}       type="number" placeholder="1–5" />
-          <Input label="Status"        value={form.status}       onChange={set("status")}       options={STATUSES} />
-        </div>
-        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Email, WhatsApp, communication quality…" />
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Supplier</Btn>
+        <div className="card panel">
+          <div className="panel-head"><h2>What the export includes</h2><ClipboardList /></div>
+          <div className="notice">Sheet 1: Tax Summary with regular deductions, asset purchases and estimated CCA.</div><br />
+          <div className="notice">Sheet 2: Category summary for regular expenses.</div><br />
+          <div className="notice">Sheet 3: Full expense details with receipts and business-use percentage.</div><br />
+          <div className="notice">Sheet 4: Assets and estimated CCA support.</div>
         </div>
       </div>
-    </Modal>
+    </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// QUOTE MODAL
-// ════════════════════════════════════════════════════════════════
-function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState(editing || { productId: "", supplierId: "", supplierSku: "", cgSku: "", productName: "", supplierName: "", unitPrice: "", moq: "", incoterm: "", shippingMethod: "", notes: "", date: todayStr, quoteStatus: "Received" });
-  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
-  const selectProduct  = (id) => { const p = products.find(x => x.id === id);  setForm(f => ({ ...f, productId: id,  cgSku: p?.skuId || "", productName: p?.name || "" })); };
-  const selectSupplier = (id) => { const s = suppliers.find(x => x.id === id); setForm(f => ({ ...f, supplierId: id, supplierName: s?.name || "" })); };
-  const valid = form.productId && form.supplierId;
+export default function App() {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [view, setView] = useState("dashboard");
+  const [expenses, setExpenses] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expenseModal, setExpenseModal] = useState(null);
+  const [assetModal, setAssetModal] = useState(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [{ data: expenseData, error: expenseError }, { data: assetData, error: assetError }] = await Promise.all([
+      supabase.from("expenses").select("*").eq("tax_year", year).order("expense_date", { ascending: false }),
+      supabase.from("assets").select("*").eq("tax_year", year).order("purchase_date", { ascending: false })
+    ]);
+
+    if (expenseError) alert(`Error loading expenses: ${expenseError.message}`);
+    if (assetError) alert(`Error loading assets: ${assetError.message}`);
+
+    setExpenses((expenseData || []).map(normalizeExpense));
+    setAssets((assetData || []).map(normalizeAsset));
+    setLoading(false);
+  }, [year]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function saveExpense(payload) {
+    const clean = {
+      expense_date: payload.expense_date,
+      vendor: payload.vendor,
+      description: payload.description,
+      category: payload.category,
+      total_amount: Number(payload.total_amount || 0),
+      business_use_pct: Number(payload.business_use_pct || 0),
+      deductible_amount: calcDeductible(payload.total_amount, payload.business_use_pct),
+      payment_method: payload.payment_method,
+      payment_reference: payload.payment_reference,
+      receipt_url: payload.receipt_url,
+      receipt_status: payload.receipt_status,
+      notes: payload.notes,
+      tax_year: Number(payload.tax_year || year),
+      is_asset_purchase: Boolean(payload.is_asset_purchase),
+      linked_asset_id: payload.linked_asset_id || null,
+      tax_ready: Boolean(payload.tax_ready)
+    };
+
+    const result = payload.id
+      ? await supabase.from("expenses").update(clean).eq("id", payload.id)
+      : await supabase.from("expenses").insert(clean);
+
+    if (result.error) return alert(result.error.message);
+    setExpenseModal(null);
+    setView("expenses");
+    await loadData();
+  }
+
+  async function deleteExpense(expense) {
+    if (!window.confirm(`Delete expense "${expense.description}"?`)) return;
+    const { error } = await supabase.from("expenses").delete().eq("id", expense.id);
+    if (error) return alert(error.message);
+    await loadData();
+  }
+
+  async function saveAsset(payload) {
+    const clean = {
+      asset_code: payload.asset_code,
+      asset_name: payload.asset_name,
+      purchase_date: payload.purchase_date,
+      vendor: payload.vendor,
+      cost: Number(payload.cost || 0),
+      cca_class: payload.cca_class,
+      cca_rate: Number(payload.cca_rate || 0),
+      business_use_pct: Number(payload.business_use_pct || 0),
+      business_cost: calcBusinessCost(payload.cost, payload.business_use_pct),
+      estimated_cca_claim: calcEstimatedCca(payload),
+      receipt_url: payload.receipt_url,
+      notes: payload.notes,
+      tax_year: Number(payload.tax_year || year),
+      status: payload.status,
+      linked_expense_id: payload.linked_expense_id || null
+    };
+
+    const result = payload.id
+      ? await supabase.from("assets").update(clean).eq("id", payload.id)
+      : await supabase.from("assets").insert(clean);
+
+    if (result.error) return alert(result.error.message);
+    setAssetModal(null);
+    await loadData();
+  }
+
+  async function deleteAsset(asset) {
+    if (!window.confirm(`Delete asset "${asset.asset_name}"?`)) return;
+    const { error } = await supabase.from("assets").delete().eq("id", asset.id);
+    if (error) return alert(error.message);
+    await loadData();
+  }
+
+  function renderView() {
+    if (loading) return <div className="card panel"><div className="empty">Loading Costa Gear expenses...</div></div>;
+
+    if (view === "dashboard") {
+      return <Dashboard expenses={expenses} assets={assets} year={year} setView={setView} onExportTax={() => exportTaxReport(expenses, assets, year)} />;
+    }
+    if (view === "add") {
+      return <AddExpenseView assets={assets} onSubmit={saveExpense} onCancel={() => setView("dashboard")} />;
+    }
+    if (view === "expenses") {
+      return <ExpensesView
+        expenses={expenses}
+        assets={assets}
+        year={year}
+        onAdd={() => setView("add")}
+        onEdit={setExpenseModal}
+        onDelete={deleteExpense}
+        onExport={(rows) => exportExpenses(rows, year)}
+      />;
+    }
+    if (view === "assets") {
+      return <AssetsView
+        assets={assets}
+        expenses={expenses}
+        year={year}
+        onAdd={() => setAssetModal(emptyAsset)}
+        onEdit={setAssetModal}
+        onDelete={deleteAsset}
+        onExport={(rows) => exportAssets(rows, year)}
+      />;
+    }
+    if (view === "tax") {
+      return <TaxReportView expenses={expenses} assets={assets} year={year} onExportTax={() => exportTaxReport(expenses, assets, year)} />;
+    }
+    return null;
+  }
+
   return (
-    <Modal title={editing ? "Edit Quote" : "Add Quote"} onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 4 }}>Costa Gear Product *</label>
-          <select value={form.productId} onChange={e => selectProduct(e.target.value)} style={{ ...inputStyle, width: "100%" }}>
-            <option value="">— select product —</option>
-            {products.map(p => <option key={p.id} value={p.id}>{p.skuId} — {p.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.dgray, textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 4 }}>Supplier *</label>
-          <select value={form.supplierId} onChange={e => selectSupplier(e.target.value)} style={{ ...inputStyle, width: "100%" }}>
-            <option value="">— select supplier —</option>
-            {suppliers.map(s => <option key={s.id} value={s.id}>{s.supId} — {s.name}</option>)}
-          </select>
-        </div>
-        <Input label="Supplier's SKU" value={form.supplierSku} onChange={set("supplierSku")} placeholder="e.g. SKJLM001" />
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Unit Price (USD)" value={form.unitPrice} onChange={set("unitPrice")} type="number" placeholder="e.g. 48" />
-          <Input label="MOQ (units)"      value={form.moq}       onChange={set("moq")}       placeholder="e.g. 10" />
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Incoterm"        value={form.incoterm}       onChange={set("incoterm")}       options={INCOTERMS} />
-          <Input label="Shipping Method" value={form.shippingMethod} onChange={set("shippingMethod")} placeholder="e.g. DHL Express" />
-          <Input label="Date"            value={form.date}           onChange={set("date")}           type="date" />
-        </div>
-        <Input label="Quote Status" value={form.quoteStatus} onChange={set("quoteStatus")} options={QSTATUSES} />
-        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="e.g. Steel, blade style. 197×25×22.5 cm, 15.9 kg." />
-        {form.incoterm === "DDP" && (
-          <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#856404" }}>
-            ⚠️ <strong>DDP</strong> — supplier acts as importer of record. You cannot recover GST as ITC. Request FOB or DHL Express (DAP) instead.
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Quote</Btn>
-        </div>
-      </div>
-    </Modal>
+    <div className="app-shell">
+      <TopHeader year={year} setYear={setYear} view={view} setView={setView} />
+      <main className="main">{renderView()}</main>
+
+      {expenseModal && (
+        <Modal title={expenseModal.id ? "Edit Expense" : "Add Expense"} onClose={() => setExpenseModal(null)}>
+          <ExpenseForm initial={expenseModal} assets={assets} onSubmit={saveExpense} onCancel={() => setExpenseModal(null)} />
+        </Modal>
+      )}
+
+      {assetModal && (
+        <Modal title={assetModal.id ? "Edit Asset" : "Add Asset"} onClose={() => setAssetModal(null)}>
+          <AssetForm initial={assetModal} expenses={expenses} onSubmit={saveAsset} onCancel={() => setAssetModal(null)} />
+        </Modal>
+      )}
+    </div>
   );
 }
