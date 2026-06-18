@@ -356,7 +356,25 @@ export default function App() {
   };
 
   const saveProduct = async (f) => {
-    const row = { sku_id: f.skuId, product_type: f.productType, material: f.material, fitment: f.fitment, name: f.name, category: f.category, length_cm: f.length ? Number(f.length) : null, width_cm: f.width ? Number(f.width) : null, height_cm: f.height ? Number(f.height) : null, weight_kg: f.weight ? Number(f.weight) : null, notes: f.notes };
+    const row = {
+      sku_id: f.skuId,
+      product_type: f.productType,
+      material: f.material,
+      fitment: f.fitment,
+      name: f.name,
+      category: f.category,
+      length_cm: f.length ? Number(f.length) : null,
+      width_cm: f.width ? Number(f.width) : null,
+      height_cm: f.height ? Number(f.height) : null,
+      weight_kg: f.weight ? Number(f.weight) : null,
+      notes: f.notes,
+      market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
+      target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
+      target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
+      competitor_reference: f.competitorReference || null,
+      competitor_url: f.competitorUrl || null,
+      pricing_notes: f.pricingNotes || null,
+    };
     if (editing) await supabase.from("products").update(row).eq("id", editing.id);
     else         await supabase.from("products").insert(row);
     closeModal(); fetchAll();
@@ -375,7 +393,26 @@ export default function App() {
 
   // Map DB → UI
   const uiSuppliers = suppliers.map(s => ({ id: s.id, supId: s.sup_id, name: s.name, platform: s.platform, contact: s.contact, responseTime: s.response_time, rating: s.rating, status: s.status, notes: s.notes }));
-  const uiProducts  = products.map(p  => ({ id: p.id, skuId: p.sku_id, productType: p.product_type, material: p.material, fitment: p.fitment, name: p.name, category: p.category, length: p.length_cm, width: p.width_cm, height: p.height_cm, weight: p.weight_kg, notes: p.notes, marketReferenceCad: p.market_reference_cad || p.market_price_cad || p.competitor_price_cad || null }));
+  const uiProducts  = products.map(p  => ({
+    id: p.id,
+    skuId: p.sku_id,
+    productType: p.product_type,
+    material: p.material,
+    fitment: p.fitment,
+    name: p.name,
+    category: p.category,
+    length: p.length_cm,
+    width: p.width_cm,
+    height: p.height_cm,
+    weight: p.weight_kg,
+    notes: p.notes,
+    marketReferenceCad: p.market_reference_cad ?? p.market_price_cad ?? p.competitor_price_cad ?? null,
+    targetSellPriceCad: p.target_sell_price_cad ?? null,
+    targetMarginPct: p.target_margin_pct ?? null,
+    competitorReference: p.competitor_reference || "",
+    competitorUrl: p.competitor_url || "",
+    pricingNotes: p.pricing_notes || "",
+  }));
   const uiQuotes    = quotes.map(q    => ({ id: q.id, productId: q.product_id, supplierId: q.supplier_id, cgSku: q.cg_sku, productName: q.product_name, supplierSku: q.supplier_sku, supplierName: q.supplier_name, unitPrice: q.unit_price, moq: q.moq, incoterm: q.incoterm, shippingMethod: q.shipping_method, notes: q.notes, date: q.quote_date, quoteStatus: q.quote_status }));
 
   const TABS = [
@@ -473,6 +510,16 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
     return productCad + dutyCad + FREIGHT_CAD_PER_UNIT;
   };
 
+  const targetSellCadFor = (landedCad, product) => {
+    if (!landedCad) return null;
+    if (product.targetSellPriceCad) return Number(product.targetSellPriceCad);
+    if (product.targetMarginPct) {
+      const margin = Number(product.targetMarginPct) / 100;
+      if (margin > 0 && margin < 0.95) return landedCad / (1 - margin);
+    }
+    return landedCad * TARGET_MARKUP;
+  };
+
   const productRows = products.map(p => {
     const pq = quotes.filter(q => q.productId === p.id && q.unitPrice != null && q.unitPrice !== "");
     const sortedQuotes = [...pq].sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice));
@@ -481,7 +528,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
     const bestPrice = prices.length ? Math.min(...prices) : null;
     const highestPrice = prices.length ? Math.max(...prices) : null;
     const landedCad = bestPrice ? estimatedLandedCad(bestPrice) : null;
-    const targetSellCad = landedCad ? landedCad * TARGET_MARKUP : null;
+    const targetSellCad = targetSellCadFor(landedCad, p);
     return {
       ...p,
       quoteCount: pq.length,
@@ -583,7 +630,14 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
                       <td style={tableCellStyle}>{p.bestQuote?.supplierName || "—"}</td>
                       <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{moneyCad(p.landedCad)}</td>
                       <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{moneyCad(p.targetSellCad)}</td>
-                      <td style={tableCellStyle}>{p.marketReferenceCad ? moneyCad(p.marketReferenceCad) : <span style={{ color: C.dgray }}>Not tracked</span>}</td>
+                      <td style={tableCellStyle}>
+                        {p.marketReferenceCad ? (
+                          <div>
+                            <div style={{ fontWeight: 750 }}>{moneyCad(p.marketReferenceCad)}</div>
+                            {p.competitorReference && <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.competitorReference}</div>}
+                          </div>
+                        ) : <span style={{ color: C.dgray }}>Not tracked</span>}
+                      </td>
                     </tr>
                   );
                 })}
@@ -593,7 +647,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
         )}
 
         <div style={{ marginTop: 12, color: C.dgray, fontSize: 12 }}>
-          Landed cost estimate uses best quote × 1.38 FX + 6.5% duty + CAD 50 freight per unit. Target sell price uses estimated landed cost × 2.2. Market reference requires competitor price data to be added later.
+          Landed cost estimate uses best quote × 1.38 FX + 6.5% duty + CAD 50 freight per unit. Target sell uses the saved target price first, then target margin, then a default 2.2x estimate. Market reference comes from the product pricing fields.
         </div>
       </Card>
 
@@ -950,6 +1004,33 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
         </div>
         {product.notes && <div style={{ fontSize: 14, color: C.dgray, fontStyle: "italic" }}>{product.notes}</div>}
 
+        {(product.marketReferenceCad || product.targetSellPriceCad || product.targetMarginPct || product.competitorReference || product.pricingNotes) && (
+          <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 16 }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Market Ref. CAD</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.navy, marginTop: 2 }}>{product.marketReferenceCad ? moneyCad(product.marketReferenceCad) : "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Sell CAD</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.accent2, marginTop: 2 }}>{product.targetSellPriceCad ? moneyCad(product.targetSellPriceCad) : "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Margin</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.teal, marginTop: 2 }}>{product.targetMarginPct ? `${product.targetMarginPct}%` : "—"}</div>
+              </div>
+            </div>
+            {(product.competitorReference || product.competitorUrl || product.pricingNotes) && (
+              <div style={{ marginTop: 10, color: C.dgray, fontSize: 13 }}>
+                {product.competitorReference && <div><strong>Competitor:</strong> {product.competitorReference}</div>}
+                {product.competitorUrl && <div><strong>URL:</strong> {product.competitorUrl}</div>}
+                {product.pricingNotes && <div><strong>Notes:</strong> {product.pricingNotes}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Landed Cost Estimator */}
         <div style={{ background: "#fffbf0", border: `1px solid #f0d080`, borderRadius: 8, padding: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: C.navy, marginBottom: 12 }}>🧮 Landed Cost Estimator (per unit)</div>
@@ -973,8 +1054,8 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                 {[["Product (CAD)", `$${lc.cad}`], ["Duty", `$${lc.duty}`], ["GST (ITC)", `$${lc.gst}`], ["Freight", `CA$${freightCA}`], ["Total Landed", `CA$${lc.total}`]].map(([label, val], i) => (
                   <div key={label} style={{ background: i === 4 ? C.navy : "#fff", borderRadius: 6, padding: "8px 14px", border: `1px solid ${C.mgray}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: i === 4 ? C.mgray : C.dgray, textTransform: "uppercase" }}>{label}</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 4 ? C.amber : C.navy, marginTop: 2 }}>{val}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: i === 4 ? "#F4F5EF" : C.dgray, textTransform: "uppercase" }}>{label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 4 ? "#C8CF5A" : C.navy, marginTop: 2 }}>{val}</div>
                   </div>
                 ))}
               </div>
@@ -1039,7 +1120,25 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
 // PRODUCT MODAL
 // ════════════════════════════════════════════════════════════════
 function ProductModal({ onSave, onClose, editing }) {
-  const [form, setForm] = useState(editing || { skuId: "", productType: "", material: "", fitment: "", name: "", category: "", length: "", width: "", height: "", weight: "", notes: "" });
+  const [form, setForm] = useState(editing || {
+    skuId: "",
+    productType: "",
+    material: "",
+    fitment: "",
+    name: "",
+    category: "",
+    length: "",
+    width: "",
+    height: "",
+    weight: "",
+    notes: "",
+    marketReferenceCad: "",
+    targetSellPriceCad: "",
+    targetMarginPct: "",
+    competitorReference: "",
+    competitorUrl: "",
+    pricingNotes: "",
+  });
   const set = (k) => (v) => {
     setForm(f => {
       const u = { ...f, [k]: v };
@@ -1075,6 +1174,21 @@ function ProductModal({ onSave, onClose, editing }) {
           </div>
         </div>
         <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Optional notes" />
+
+        <div style={{ border: "1px solid rgba(132,140,56,0.25)", background: "#F7F9ED", borderRadius: 14, padding: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
+            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={set("targetSellPriceCad")} type="number" placeholder="e.g. 249.99" />
+            <Input label="Target Margin %" value={form.targetMarginPct} onChange={set("targetMarginPct")} type="number" placeholder="e.g. 35" />
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <Input label="Competitor Reference" value={form.competitorReference} onChange={set("competitorReference")} placeholder="e.g. Amazon, DV8, Extreme Terrain" />
+            <Input label="Competitor URL" value={form.competitorUrl} onChange={set("competitorUrl")} placeholder="Product link" />
+          </div>
+          <Input label="Pricing Notes" value={form.pricingNotes} onChange={set("pricingNotes")} placeholder="Notes about market price, competitor, margin strategy..." />
+        </div>
+
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn disabled={!valid} onClick={() => onSave(form)}>Save Product</Btn>
