@@ -387,17 +387,17 @@ export default function App() {
   ];
 
   return (
-    <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 210px, #F3F4EF 210px 100%)", minHeight: "100vh", color: C.navy }}>
-      <div style={{ minHeight: 110, padding: "14px 44px", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
-        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28 }}>
+    <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 250px, #F3F4EF 250px 100%)", minHeight: "100vh", color: C.navy }}>
+      <div style={{ minHeight: 125, padding: "18px 0", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95)), repeating-radial-gradient(ellipse at center, rgba(255,255,255,0.045) 0 1px, transparent 1px 16px)" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, width: "100%", padding: "0 44px" }}>
           <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
-            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "auto", width: 200, display: "block", objectFit: "contain" }} />
+            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "auto", width: 190, display: "block", objectFit: "contain" }} />
           </div>
         </div>
       </div>
 
       <div style={{ borderBottom: "1px solid rgba(132,139,55,0.22)", background: "linear-gradient(180deg, #D9DDD4, #CFD5CB)" }}>
-        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px,1fr))", gap: 12 }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px, 1fr))", gap: 12 }}>
           {TABS.map(t => {
             const Icon = t.Icon;
             return (
@@ -464,12 +464,19 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
   const maxQ = Math.max(1, ...enriched.map(x => x.qcount));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, marginBottom: 0 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 30, lineHeight: 1.15, fontWeight: 800, color: C.navy, letterSpacing: "-0.03em" }}>Product Sourcing</h1>
+          <p style={{ margin: "7px 0 0", color: C.dgray, fontSize: 15 }}>Track products, suppliers, quotes and RFQ exports.</p>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
         {kpis.map(k => (
-          <Card key={k.label} style={{ borderTop: `4px solid ${k.color}`, textAlign: "center" }}>
-            <div style={{ fontSize: 36, fontWeight: 900, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 13, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{k.label}</div>
+          <Card key={k.label} style={{ padding: 20 }}>
+            <div style={{ color: C.dgray, fontSize: 13 }}>{k.label}</div>
+            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 8, letterSpacing: "-0.04em", color: k.color }}>{k.value}</div>
           </Card>
         ))}
       </div>
