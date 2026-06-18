@@ -207,7 +207,7 @@ const Btn = ({ children, onClick, variant = "primary", small, disabled }) => {
       padding: small ? "7px 10px" : "11px 14px",
       minHeight: small ? 34 : 42,
       fontSize: small ? 13 : 14,
-      fontWeight: 700,
+      fontWeight: 600,
       cursor: disabled ? "not-allowed" : "pointer",
       opacity: disabled ? 0.5 : 1,
       transition: "all .15s",
@@ -375,7 +375,7 @@ export default function App() {
 
   // Map DB → UI
   const uiSuppliers = suppliers.map(s => ({ id: s.id, supId: s.sup_id, name: s.name, platform: s.platform, contact: s.contact, responseTime: s.response_time, rating: s.rating, status: s.status, notes: s.notes }));
-  const uiProducts  = products.map(p  => ({ id: p.id, skuId: p.sku_id, productType: p.product_type, material: p.material, fitment: p.fitment, name: p.name, category: p.category, length: p.length_cm, width: p.width_cm, height: p.height_cm, weight: p.weight_kg, notes: p.notes }));
+  const uiProducts  = products.map(p  => ({ id: p.id, skuId: p.sku_id, productType: p.product_type, material: p.material, fitment: p.fitment, name: p.name, category: p.category, length: p.length_cm, width: p.width_cm, height: p.height_cm, weight: p.weight_kg, notes: p.notes, marketReferenceCad: p.market_reference_cad || p.market_price_cad || p.competitor_price_cad || null }));
   const uiQuotes    = quotes.map(q    => ({ id: q.id, productId: q.product_id, supplierId: q.supplier_id, cgSku: q.cg_sku, productName: q.product_name, supplierSku: q.supplier_sku, supplierName: q.supplier_name, unitPrice: q.unit_price, moq: q.moq, incoterm: q.incoterm, shippingMethod: q.shipping_method, notes: q.notes, date: q.quote_date, quoteStatus: q.quote_status }));
 
   const TABS = [
@@ -388,8 +388,8 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 250px, #F3F4EF 250px 100%)", minHeight: "100vh", color: C.navy }}>
-      <div style={{ minHeight: 125, padding: "18px 0", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95)), repeating-radial-gradient(ellipse at center, rgba(255,255,255,0.045) 0 1px, transparent 1px 16px)" }}>
-        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, width: "100%", padding: "0 44px" }}>
+      <div style={{ minHeight: 125, padding: "18px 0", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, padding: "0 44px" }}>
           <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
             <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "auto", width: 190, display: "block", objectFit: "contain" }} />
           </div>
@@ -397,7 +397,7 @@ export default function App() {
       </div>
 
       <div style={{ borderBottom: "1px solid rgba(132,139,55,0.22)", background: "linear-gradient(180deg, #D9DDD4, #CFD5CB)" }}>
-        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px, 1fr))", gap: 12 }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px,1fr))", gap: 12 }}>
           {TABS.map(t => {
             const Icon = t.Icon;
             return (
@@ -409,7 +409,7 @@ export default function App() {
                 padding: "18px 18px",
                 minHeight: 68,
                 fontSize: 16,
-                fontWeight: 750,
+                fontWeight: 600,
                 cursor: "pointer",
                 transition: "all .15s",
                 boxShadow: tab === t.id ? "0 10px 24px rgba(114,122,48,0.24)" : "none",
@@ -448,80 +448,183 @@ export default function App() {
 // DASHBOARD
 // ════════════════════════════════════════════════════════════════
 function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
+  const FX_RATE = 1.38;
+  const FREIGHT_CAD_PER_UNIT = 50;
+  const DUTY_RATE = 0.065;
+  const TARGET_MARKUP = 2.2;
+
+  const moneyUsd = (value) => {
+    if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
+    return Number(value).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  };
+
+  const moneyCad = (value) => {
+    if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
+    return Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
+  };
+
+  const quoteText = (count) => `${count} ${count === 1 ? "quote" : "quotes"}`;
+
+  const estimatedLandedCad = (unitPriceUsd) => {
+    const price = Number(unitPriceUsd || 0);
+    if (!price) return null;
+    const productCad = price * FX_RATE;
+    const dutyCad = productCad * DUTY_RATE;
+    return productCad + dutyCad + FREIGHT_CAD_PER_UNIT;
+  };
+
+  const productRows = products.map(p => {
+    const pq = quotes.filter(q => q.productId === p.id && q.unitPrice != null && q.unitPrice !== "");
+    const sortedQuotes = [...pq].sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice));
+    const prices = sortedQuotes.map(q => Number(q.unitPrice)).filter(v => !Number.isNaN(v));
+    const bestQuote = sortedQuotes[0];
+    const bestPrice = prices.length ? Math.min(...prices) : null;
+    const highestPrice = prices.length ? Math.max(...prices) : null;
+    const landedCad = bestPrice ? estimatedLandedCad(bestPrice) : null;
+    const targetSellCad = landedCad ? landedCad * TARGET_MARKUP : null;
+    return {
+      ...p,
+      quoteCount: pq.length,
+      bestQuote,
+      bestPrice,
+      highestPrice,
+      landedCad,
+      targetSellCad,
+      marketReferenceCad: p.marketReferenceCad || null,
+    };
+  }).sort((a, b) => {
+    if (b.quoteCount !== a.quoteCount) return b.quoteCount - a.quoteCount;
+    return (a.bestPrice || 999999) - (b.bestPrice || 999999);
+  });
+
+  const avgQuotes = products.length ? (quotes.length / products.length).toFixed(1) : "—";
+  const quotedProducts = productRows.filter(p => p.quoteCount > 0).length;
+  const coveragePct = products.length ? Math.round((quotedProducts / products.length) * 100) : 0;
+
   const kpis = [
-    { label: "Products",             value: products.length,  color: C.blue  },
-    { label: "Suppliers",            value: suppliers.length, color: C.teal  },
-    { label: "Quotes",               value: quotes.length,    color: C.amber },
-    { label: "Avg Quotes / Product", value: products.length ? (quotes.length / products.length).toFixed(1) : "—", color: C.navy },
+    { label: "Products", value: products.length, sub: `${quotedProducts} with quotes` },
+    { label: "Suppliers", value: suppliers.length, sub: "Active sourcing base" },
+    { label: "Quotes", value: quotes.length, sub: `${coveragePct}% product coverage`, accent: true },
+    { label: "Avg Quotes / Product", value: avgQuotes, sub: "Across active products" },
   ];
 
-  const enriched = products.map(p => {
-    const pq     = quotes.filter(q => q.productId === p.id);
-    const prices = pq.map(q => parseFloat(q.unitPrice)).filter(Boolean);
-    return { ...p, qcount: pq.length, bestPrice: prices.length ? Math.min(...prices) : null };
-  }).sort((a, b) => b.qcount - a.qcount);
+  const tableHeaderStyle = {
+    padding: "13px 14px",
+    textAlign: "left",
+    color: "#4b5448",
+    fontSize: 12,
+    fontWeight: 700,
+    background: "#f5f7f1",
+    borderBottom: "1px solid rgba(50,56,42,0.07)",
+    whiteSpace: "nowrap",
+  };
 
-  const maxQ = Math.max(1, ...enriched.map(x => x.qcount));
+  const tableCellStyle = {
+    padding: "13px 14px",
+    color: "#253024",
+    fontSize: 14,
+    borderBottom: "1px solid rgba(50,56,42,0.07)",
+    background: "#ffffff",
+    verticalAlign: "top",
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, marginBottom: 0 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 30, lineHeight: 1.15, fontWeight: 800, color: C.navy, letterSpacing: "-0.03em" }}>Product Sourcing</h1>
-          <p style={{ margin: "7px 0 0", color: C.dgray, fontSize: 15 }}>Track products, suppliers, quotes and RFQ exports.</p>
+          <h1 style={{ margin: 0, letterSpacing: "-0.03em", color: "#20251f", fontSize: 32, lineHeight: 1.15, fontWeight: 800 }}>Product Sourcing</h1>
+          <p style={{ margin: "7px 0 0", color: C.dgray, fontSize: 16 }}>Track products, suppliers, quotes, estimated landed cost and pricing position.</p>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, marginBottom: 0 }}>
         {kpis.map(k => (
           <Card key={k.label} style={{ padding: 20 }}>
             <div style={{ color: C.dgray, fontSize: 13 }}>{k.label}</div>
-            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 8, letterSpacing: "-0.04em", color: k.color }}>{k.value}</div>
+            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 8, letterSpacing: "-0.04em", color: k.accent ? C.accent2 : "#20251f" }}>{k.value}</div>
+            <div style={{ color: C.dgray, marginTop: 4, fontSize: 13 }}>{k.sub}</div>
           </Card>
         ))}
       </div>
 
-      <Card>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, color: C.dgray }}>Product Quote Coverage</h3>
-        {products.length === 0 ? <Empty msg="No products yet." /> : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {enriched.map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => onOpenDetail(p.id)}>
-                <div style={{ width: 80, fontSize: 12, fontWeight: 700, color: C.amber, flexShrink: 0 }}>{p.skuId}</div>
-                <div style={{ flex: 1, fontSize: 13, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                <div style={{ width: 120, background: C.lgray, borderRadius: 4, height: 8, flexShrink: 0 }}>
-                  <div style={{ width: `${(p.qcount / maxQ) * 100}%`, background: p.qcount > 0 ? C.teal : C.mgray, height: "100%", borderRadius: 4 }} />
-                </div>
-                <div style={{ width: 60, textAlign: "right", fontSize: 13, fontWeight: 700, color: p.qcount > 0 ? C.teal : C.mgray }}>{p.qcount} q</div>
-                {p.bestPrice && <div style={{ width: 80, textAlign: "right", fontSize: 13, color: C.dgray }}>from ${p.bestPrice}</div>}
-              </div>
-            ))}
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em", color: C.navy }}>Product Cost Snapshot</h2>
+            <p style={{ margin: "4px 0 0", color: C.dgray }}>Quick view of quote range, estimated landed cost and indicative sell price.</p>
           </div>
-        )}
-      </Card>
+          <Badge label={`${coveragePct}% quoted`} color={C.teal} />
+        </div>
 
-      <Card>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, color: C.dgray }}>Recent Quotes</h3>
-        {quotes.length === 0 ? <Empty msg="No quotes yet." /> : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        {products.length === 0 ? <Empty msg="No products yet." /> : (
+          <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(50,56,42,0.09)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
               <thead>
-                <tr style={{ background: C.lgray }}>
-                  {["SKU","Product","Supplier","Price USD","Incoterm","Status","Date"].map(h => (
-                    <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 13, fontWeight: 700, color: C.dgray }}>{h}</th>
+                <tr>
+                  {["SKU", "Product", "Quotes Received", "Cost Range USD", "Best Supplier", "Est. Landed CAD", "Target Sell CAD", "Market Ref. CAD"].map(h => (
+                    <th key={h} style={tableHeaderStyle}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {quotes.slice(0, 10).map((q, i) => (
-                  <tr key={q.id} style={{ background: i % 2 === 0 ? "#fff" : C.lgray, borderBottom: `1px solid ${C.mgray}` }}>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, color: C.amber, fontSize: 13 }}>{q.cgSku || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13 }}>{q.supplierName || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, color: C.teal }}>{q.unitPrice ? `$${q.unitPrice}` : "—"}</td>
-                    <td style={{ padding: "8px 12px" }}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
-                    <td style={{ padding: "8px 12px" }}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 12, color: C.dgray }}>{q.date || "—"}</td>
+                {productRows.map(p => {
+                  const costRange = p.bestPrice && p.highestPrice && p.bestPrice !== p.highestPrice
+                    ? `${moneyUsd(p.bestPrice)} – ${moneyUsd(p.highestPrice)}`
+                    : moneyUsd(p.bestPrice);
+                  return (
+                    <tr key={p.id} onClick={() => onOpenDetail(p.id)} style={{ cursor: "pointer" }}>
+                      <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
+                      <td style={{ ...tableCellStyle, minWidth: 260 }}>
+                        <div style={{ fontWeight: 650, color: C.navy }}>{p.name}</div>
+                        <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.fitment || "Fitment TBD"}</div>
+                      </td>
+                      <td style={tableCellStyle}>{quoteText(p.quoteCount)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 700 }}>{costRange}</td>
+                      <td style={tableCellStyle}>{p.bestQuote?.supplierName || "—"}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{moneyCad(p.landedCad)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{moneyCad(p.targetSellCad)}</td>
+                      <td style={tableCellStyle}>{p.marketReferenceCad ? moneyCad(p.marketReferenceCad) : <span style={{ color: C.dgray }}>Not tracked</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, color: C.dgray, fontSize: 12 }}>
+          Landed cost estimate uses best quote × 1.38 FX + 6.5% duty + CAD 50 freight per unit. Target sell price uses estimated landed cost × 2.2. Market reference requires competitor price data to be added later.
+        </div>
+      </Card>
+
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em", color: C.navy }}>Recent Quotes</h2>
+            <p style={{ margin: "4px 0 0", color: C.dgray }}>Latest supplier pricing received.</p>
+          </div>
+        </div>
+
+        {quotes.length === 0 ? <Empty msg="No quotes yet." /> : (
+          <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(50,56,42,0.09)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+              <thead>
+                <tr>
+                  {["SKU", "Product", "Supplier", "Price USD", "Incoterm", "Status", "Date"].map(h => (
+                    <th key={h} style={tableHeaderStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {quotes.slice(0, 10).map(q => (
+                  <tr key={q.id}>
+                    <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace" }}>{q.cgSku || "—"}</td>
+                    <td style={{ ...tableCellStyle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
+                    <td style={tableCellStyle}>{q.supplierName || "—"}</td>
+                    <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{q.unitPrice ? moneyUsd(q.unitPrice) : "—"}</td>
+                    <td style={tableCellStyle}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
+                    <td style={tableCellStyle}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
+                    <td style={{ ...tableCellStyle, color: C.dgray }}>{q.date || "—"}</td>
                   </tr>
                 ))}
               </tbody>
