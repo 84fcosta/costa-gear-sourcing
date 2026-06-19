@@ -169,6 +169,23 @@ function exportRFQ(selectedProductIds, supplierId, products, quotes, suppliers) 
 
 function today() { return new Date().toISOString().slice(0,10); }
 
+
+function formatCad(value) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
+}
+
+function formatUsd(value) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
 // ── UI Primitives ────────────────────────────────────────────────
 const Badge = ({ label, color = C.blue }) => (
   <span style={{
@@ -1004,27 +1021,29 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
         </div>
         {product.notes && <div style={{ fontSize: 14, color: C.dgray, fontStyle: "italic" }}>{product.notes}</div>}
 
-        {(product.marketReferenceCad || product.targetSellPriceCad || product.targetMarginPct || product.competitorReference || product.pricingNotes) && (
+        {(product.marketReferenceCad || product.targetSellPriceCad || product.targetMarginPct || product.competitorReference || product.competitorUrl || product.pricingNotes) && (
           <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Market Ref. CAD</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.navy, marginTop: 2 }}>{product.marketReferenceCad ? moneyCad(product.marketReferenceCad) : "—"}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.navy, marginTop: 2 }}>{hasValue(product.marketReferenceCad) ? formatCad(product.marketReferenceCad) : "—"}</div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Sell CAD</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.accent2, marginTop: 2 }}>{product.targetSellPriceCad ? moneyCad(product.targetSellPriceCad) : "—"}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.accent2, marginTop: 2 }}>{hasValue(product.targetSellPriceCad) ? formatCad(product.targetSellPriceCad) : "—"}</div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Margin</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: C.teal, marginTop: 2 }}>{product.targetMarginPct ? `${product.targetMarginPct}%` : "—"}</div>
               </div>
             </div>
-            {(product.competitorReference || product.competitorUrl || product.pricingNotes) && (
+            {(product.competitorReference || product.competitorUrl || product.competitorUrl || product.pricingNotes) && (
               <div style={{ marginTop: 10, color: C.dgray, fontSize: 13 }}>
                 {product.competitorReference && <div><strong>Competitor:</strong> {product.competitorReference}</div>}
-                {product.competitorUrl && <div><strong>URL:</strong> {product.competitorUrl}</div>}
+                {product.competitorUrl && (
+                  <div><strong>URL:</strong> {String(product.competitorUrl).startsWith("http") ? <a href={product.competitorUrl} target="_blank" rel="noreferrer" style={{ color: C.teal, fontWeight: 700 }}>Open link</a> : product.competitorUrl}</div>
+                )}
                 {product.pricingNotes && <div><strong>Notes:</strong> {product.pricingNotes}</div>}
               </div>
             )}
