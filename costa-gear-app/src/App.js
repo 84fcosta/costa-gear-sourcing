@@ -36,6 +36,12 @@ const INCOTERMS  = ["DDP","FOB","EXW","DAP","CIF","TBD"];
 const PLATFORMS  = ["Alibaba","WeChat","WhatsApp","Email","Direct","Other"];
 const STATUSES   = ["Active","Inactive","Blocked"];
 const QSTATUSES  = ["Received","Sample Requested","Sample Received","Approved","Rejected","On Hold"];
+const SHIPPING_CURRENCIES = ["USD", "CAD"];
+const SHIPPING_COST_BASIS = ["Per Unit", "Total Quote", "Total Order", "Included in Unit Price", "Not Provided"];
+const SHIPPING_ALLOCATION_METHODS = ["Already Per Unit", "Manual", "By Weight", "By Volume", "Equal Split"];
+const DEFAULT_FX_RATE = 1.38;
+const DEFAULT_DUTY_RATE_PCT = 6.5;
+const DEFAULT_TARGET_MARKUP = 2.2;
 
 // ── Export helpers ───────────────────────────────────────────────
 function downloadXlsx(wb, filename) {
@@ -51,7 +57,16 @@ function exportAllQuotes(quotes) {
     "Unit Price USD":  q.unitPrice != null ? Number(q.unitPrice) : "",
     "MOQ":             q.moq || "",
     "Incoterm":        q.incoterm || "",
-    "Shipping":        q.shippingMethod || "",
+    "Shipping Method": q.shippingMethod || "",
+    "Shipping Cost":   q.shippingCost || "",
+    "Shipping Currency": q.shippingCurrency || "",
+    "Shipping Basis":  q.shippingCostBasis || "",
+    "Shipping CAD/unit": calcShippingCadPerUnit(q),
+    "FX Rate":         q.usdCadRate || "",
+    "Duty Rate %":     q.dutyRatePct || "",
+    "Brokerage CAD":   q.brokerageCad || "",
+    "Other Fees CAD":  q.otherFeesCad || "",
+    "Landed CAD/unit": calcQuoteLanded(q)?.totalCad || "",
     "Status":          q.quoteStatus || "",
     "Date":            q.date || "",
     "Notes":           q.notes || "",
@@ -184,6 +199,67 @@ function formatUsd(value) {
 
 function hasValue(value) {
   return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+function quoteQty(quote) {
+  const q = toNumber(quote?.moq);
+  return q && q > 0 ? q : 1;
+}
+
+function shippingCadAmount(quote) {
+  const amount = toNumber(quote?.shippingCost);
+  if (!amount) return 0;
+  const fx = toNumber(quote?.usdCadRate) || DEFAULT_FX_RATE;
+  const currency = quote?.shippingCurrency || "USD";
+  return currency === "USD" ? amount * fx : amount;
+}
+
+function calcShippingCadPerUnit(quote) {
+  const override = toNumber(quote?.shippingCostPerUnitCad);
+  if (override !== null) return override;
+
+  const basis = quote?.shippingCostBasis || "Per Unit";
+  if (basis === "Included in Unit Price" || basis === "Not Provided") return 0;
+
+  const totalCad = shippingCadAmount(quote);
+  if (!totalCad) return 0;
+
+  if (basis === "Per Unit") return totalCad;
+  return totalCad / quoteQty(quote);
+}
+
+function calcQuoteLanded(quote) {
+  const unitUsd = toNumber(quote?.unitPrice);
+  if (unitUsd === null) return null;
+
+  const fx = toNumber(quote?.usdCadRate) || DEFAULT_FX_RATE;
+  const productCad = unitUsd * fx;
+  const shippingCadPerUnit = calcShippingCadPerUnit(quote);
+  const incoterm = quote?.incoterm || "TBD";
+  const dutyPct = toNumber(quote?.dutyRatePct);
+  const effectiveDutyPct = dutyPct !== null ? dutyPct : (incoterm === "DDP" ? 0 : DEFAULT_DUTY_RATE_PCT);
+  const dutyCad = productCad * (effectiveDutyPct / 100);
+  const brokerageCadPerUnit = (toNumber(quote?.brokerageCad) || 0) / quoteQty(quote);
+  const otherFeesCadPerUnit = (toNumber(quote?.otherFeesCad) || 0) / quoteQty(quote);
+  const totalCad = productCad + shippingCadPerUnit + dutyCad + brokerageCadPerUnit + otherFeesCadPerUnit;
+
+  return { productCad, shippingCadPerUnit, dutyCad, brokerageCadPerUnit, otherFeesCadPerUnit, totalCad, fx, dutyPct: effectiveDutyPct, qty: quoteQty(quote) };
+}
+
+function targetSellCadForLanded(landedCad, product) {
+  if (!landedCad) return null;
+  if (hasValue(product?.targetSellPriceCad)) return Number(product.targetSellPriceCad);
+  if (hasValue(product?.targetMarginPct)) {
+    const margin = Number(product.targetMarginPct) / 100;
+    if (margin > 0 && margin < 0.95) return landedCad / (1 - margin);
+  }
+  return landedCad * DEFAULT_TARGET_MARKUP;
 }
 
 // ── UI Primitives ────────────────────────────────────────────────
@@ -400,7 +476,32 @@ export default function App() {
   const deleteProduct = async (id) => { await supabase.from("products").delete().eq("id", id); fetchAll(); };
 
   const saveQuote = async (f) => {
-    const row = { product_id: f.productId, supplier_id: f.supplierId, cg_sku: f.cgSku, product_name: f.productName, supplier_sku: f.supplierSku, supplier_name: f.supplierName, unit_price: f.unitPrice ? Number(f.unitPrice) : null, moq: f.moq || null, incoterm: f.incoterm || null, shipping_method: f.shippingMethod || null, notes: f.notes || null, quote_date: f.date || null, quote_status: f.quoteStatus || null };
+    const landed = calcQuoteLanded(f);
+    const row = {
+      product_id: f.productId,
+      supplier_id: f.supplierId,
+      cg_sku: f.cgSku,
+      product_name: f.productName,
+      supplier_sku: f.supplierSku,
+      supplier_name: f.supplierName,
+      unit_price: f.unitPrice ? Number(f.unitPrice) : null,
+      moq: f.moq || null,
+      incoterm: f.incoterm || null,
+      shipping_method: f.shippingMethod || null,
+      shipping_cost: f.shippingCost ? Number(f.shippingCost) : null,
+      shipping_currency: f.shippingCurrency || "USD",
+      shipping_cost_basis: f.shippingCostBasis || "Per Unit",
+      shipping_allocation_method: f.shippingAllocationMethod || "Already Per Unit",
+      shipping_cost_per_unit_cad: hasValue(f.shippingCostPerUnitCad) ? Number(f.shippingCostPerUnitCad) : null,
+      usd_cad_rate: f.usdCadRate ? Number(f.usdCadRate) : DEFAULT_FX_RATE,
+      duty_rate_pct: hasValue(f.dutyRatePct) ? Number(f.dutyRatePct) : null,
+      brokerage_cad: f.brokerageCad ? Number(f.brokerageCad) : null,
+      other_fees_cad: f.otherFeesCad ? Number(f.otherFeesCad) : null,
+      landed_cost_cad: landed ? Number(landed.totalCad.toFixed(2)) : null,
+      notes: f.notes || null,
+      quote_date: f.date || null,
+      quote_status: f.quoteStatus || null
+    };
     if (editing) await supabase.from("quotes").update(row).eq("id", editing.id);
     else         await supabase.from("quotes").insert(row);
     closeModal(); fetchAll();
@@ -430,7 +531,32 @@ export default function App() {
     competitorUrl: p.competitor_url || "",
     pricingNotes: p.pricing_notes || "",
   }));
-  const uiQuotes    = quotes.map(q    => ({ id: q.id, productId: q.product_id, supplierId: q.supplier_id, cgSku: q.cg_sku, productName: q.product_name, supplierSku: q.supplier_sku, supplierName: q.supplier_name, unitPrice: q.unit_price, moq: q.moq, incoterm: q.incoterm, shippingMethod: q.shipping_method, notes: q.notes, date: q.quote_date, quoteStatus: q.quote_status }));
+  const uiQuotes    = quotes.map(q    => ({
+    id: q.id,
+    productId: q.product_id,
+    supplierId: q.supplier_id,
+    cgSku: q.cg_sku,
+    productName: q.product_name,
+    supplierSku: q.supplier_sku,
+    supplierName: q.supplier_name,
+    unitPrice: q.unit_price,
+    moq: q.moq,
+    incoterm: q.incoterm,
+    shippingMethod: q.shipping_method,
+    shippingCost: q.shipping_cost,
+    shippingCurrency: q.shipping_currency || "USD",
+    shippingCostBasis: q.shipping_cost_basis || "Per Unit",
+    shippingAllocationMethod: q.shipping_allocation_method || "Already Per Unit",
+    shippingCostPerUnitCad: q.shipping_cost_per_unit_cad,
+    usdCadRate: q.usd_cad_rate || DEFAULT_FX_RATE,
+    dutyRatePct: q.duty_rate_pct,
+    brokerageCad: q.brokerage_cad,
+    otherFeesCad: q.other_fees_cad,
+    landedCostCad: q.landed_cost_cad,
+    notes: q.notes,
+    date: q.quote_date,
+    quoteStatus: q.quote_status
+  }));
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -502,50 +628,23 @@ export default function App() {
 // DASHBOARD
 // ════════════════════════════════════════════════════════════════
 function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
-  const FX_RATE = 1.38;
-  const FREIGHT_CAD_PER_UNIT = 50;
-  const DUTY_RATE = 0.065;
-  const TARGET_MARKUP = 2.2;
-
-  const moneyUsd = (value) => {
-    if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
-    return Number(value).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
-  };
-
-  const moneyCad = (value) => {
-    if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
-    return Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
-  };
-
   const quoteText = (count) => `${count} ${count === 1 ? "quote" : "quotes"}`;
-
-  const estimatedLandedCad = (unitPriceUsd) => {
-    const price = Number(unitPriceUsd || 0);
-    if (!price) return null;
-    const productCad = price * FX_RATE;
-    const dutyCad = productCad * DUTY_RATE;
-    return productCad + dutyCad + FREIGHT_CAD_PER_UNIT;
-  };
-
-  const targetSellCadFor = (landedCad, product) => {
-    if (!landedCad) return null;
-    if (product.targetSellPriceCad) return Number(product.targetSellPriceCad);
-    if (product.targetMarginPct) {
-      const margin = Number(product.targetMarginPct) / 100;
-      if (margin > 0 && margin < 0.95) return landedCad / (1 - margin);
-    }
-    return landedCad * TARGET_MARKUP;
-  };
 
   const productRows = products.map(p => {
     const pq = quotes.filter(q => q.productId === p.id && q.unitPrice != null && q.unitPrice !== "");
-    const sortedQuotes = [...pq].sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice));
+    const sortedQuotes = [...pq].sort((a, b) => {
+      const la = calcQuoteLanded(a)?.totalCad ?? 999999;
+      const lb = calcQuoteLanded(b)?.totalCad ?? 999999;
+      return la - lb;
+    });
     const prices = sortedQuotes.map(q => Number(q.unitPrice)).filter(v => !Number.isNaN(v));
     const bestQuote = sortedQuotes[0];
     const bestPrice = prices.length ? Math.min(...prices) : null;
     const highestPrice = prices.length ? Math.max(...prices) : null;
-    const landedCad = bestPrice ? estimatedLandedCad(bestPrice) : null;
-    const targetSellCad = targetSellCadFor(landedCad, p);
+    const landed = bestQuote ? calcQuoteLanded(bestQuote) : null;
+    const landedCad = landed?.totalCad ?? null;
+    const shippingCadPerUnit = landed?.shippingCadPerUnit ?? null;
+    const targetSellCad = targetSellCadForLanded(landedCad, p);
     return {
       ...p,
       quoteCount: pq.length,
@@ -553,6 +652,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
       bestPrice,
       highestPrice,
       landedCad,
+      shippingCadPerUnit,
       targetSellCad,
       marketReferenceCad: p.marketReferenceCad || null,
     };
@@ -622,10 +722,10 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
 
         {products.length === 0 ? <Empty msg="No products yet." /> : (
           <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(50,56,42,0.09)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1280 }}>
               <thead>
                 <tr>
-                  {["SKU", "Product", "Quotes Received", "Cost Range USD", "Best Supplier", "Est. Landed CAD", "Target Sell CAD", "Market Ref. CAD"].map(h => (
+                  {["SKU", "Product", "Quotes Received", "Cost Range USD", "Shipping/unit CAD", "Best Supplier", "Est. Landed CAD", "Target Sell CAD", "Market Ref. CAD"].map(h => (
                     <th key={h} style={tableHeaderStyle}>{h}</th>
                   ))}
                 </tr>
@@ -633,8 +733,8 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
               <tbody>
                 {productRows.map(p => {
                   const costRange = p.bestPrice && p.highestPrice && p.bestPrice !== p.highestPrice
-                    ? `${moneyUsd(p.bestPrice)} – ${moneyUsd(p.highestPrice)}`
-                    : moneyUsd(p.bestPrice);
+                    ? `${formatUsd(p.bestPrice)} – ${formatUsd(p.highestPrice)}`
+                    : formatUsd(p.bestPrice);
                   return (
                     <tr key={p.id} onClick={() => onOpenDetail(p.id)} style={{ cursor: "pointer" }}>
                       <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
@@ -644,13 +744,14 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
                       </td>
                       <td style={tableCellStyle}>{quoteText(p.quoteCount)}</td>
                       <td style={{ ...tableCellStyle, fontWeight: 700 }}>{costRange}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.blue }}>{formatCad(p.shippingCadPerUnit)}</td>
                       <td style={tableCellStyle}>{p.bestQuote?.supplierName || "—"}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{moneyCad(p.landedCad)}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{moneyCad(p.targetSellCad)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{formatCad(p.landedCad)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{formatCad(p.targetSellCad)}</td>
                       <td style={tableCellStyle}>
                         {p.marketReferenceCad ? (
                           <div>
-                            <div style={{ fontWeight: 750 }}>{moneyCad(p.marketReferenceCad)}</div>
+                            <div style={{ fontWeight: 750 }}>{formatCad(p.marketReferenceCad)}</div>
                             {p.competitorReference && <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.competitorReference}</div>}
                           </div>
                         ) : <span style={{ color: C.dgray }}>Not tracked</span>}
@@ -664,7 +765,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
         )}
 
         <div style={{ marginTop: 12, color: C.dgray, fontSize: 12 }}>
-          Landed cost estimate uses best quote × 1.38 FX + 6.5% duty + CAD 50 freight per unit. Target sell uses the saved target price first, then target margin, then a default 2.2x estimate. Market reference comes from the product pricing fields.
+          Landed cost uses quote-level assumptions: unit price, FX, shipping cost allocation, Incoterm, duty, brokerage and other fees. DDP defaults duty to 0 unless manually entered.
         </div>
       </Card>
 
@@ -692,7 +793,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
                     <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace" }}>{q.cgSku || "—"}</td>
                     <td style={{ ...tableCellStyle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
                     <td style={tableCellStyle}>{q.supplierName || "—"}</td>
-                    <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{q.unitPrice ? moneyUsd(q.unitPrice) : "—"}</td>
+                    <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{q.unitPrice ? formatUsd(q.unitPrice) : "—"}</td>
                     <td style={tableCellStyle}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
                     <td style={tableCellStyle}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
                     <td style={{ ...tableCellStyle, color: C.dgray }}>{q.date || "—"}</td>
@@ -985,20 +1086,12 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
   const prices  = pquotes.map(q => parseFloat(q.unitPrice)).filter(Boolean);
   const best    = prices.length ? Math.min(...prices) : null;
 
-  // Simple landed cost estimator state
-  const [fxRate,    setFxRate]    = useState("1.38"); // USD→CAD
-  const [freightCA, setFreightCA] = useState("50");   // CAD per unit
-  const [dutyPct,   setDutyPct]   = useState("6.5");  // % customs duty
-
-  const calcLanded = (priceUSD) => {
-    const fx      = parseFloat(fxRate)    || 0;
-    const freight = parseFloat(freightCA) || 0;
-    const duty    = parseFloat(dutyPct)   || 0;
-    const cad     = priceUSD * fx;
-    const dutyAmt = cad * (duty / 100);
-    const gst     = (cad + dutyAmt) * 0.05; // 5% GST recoverable as ITC
-    return { cad: cad.toFixed(2), duty: dutyAmt.toFixed(2), gst: gst.toFixed(2), total: (cad + dutyAmt + freight).toFixed(2) };
-  };
+  const bestQuote = [...pquotes].sort((a, b) => {
+    const la = calcQuoteLanded(a)?.totalCad ?? 999999;
+    const lb = calcQuoteLanded(b)?.totalCad ?? 999999;
+    return la - lb;
+  })[0];
+  const bestLanded = bestQuote ? calcQuoteLanded(bestQuote) : null;
 
   return (
     <Modal title={`${product.skuId} — ${product.name}`} onClose={onClose} wide>
@@ -1050,38 +1143,31 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
           </div>
         )}
 
-        {/* Landed Cost Estimator */}
+        {/* Landed Cost Summary */}
         <div style={{ background: "#fffbf0", border: `1px solid #f0d080`, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: C.navy, marginBottom: 12 }}>🧮 Landed Cost Estimator (per unit)</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>USD → CAD Rate</label>
-              <input value={fxRate}    onChange={e => setFxRate(e.target.value)}    style={{ ...inputStyle, width: "100%" }} placeholder="1.38" />
-            </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Freight (CAD/unit)</label>
-              <input value={freightCA} onChange={e => setFreightCA(e.target.value)} style={{ ...inputStyle, width: "100%" }} placeholder="50" />
-            </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Duty Rate (%)</label>
-              <input value={dutyPct}   onChange={e => setDutyPct(e.target.value)}   style={{ ...inputStyle, width: "100%" }} placeholder="6.5" />
-            </div>
-          </div>
-          {best !== null && (() => {
-            const lc = calcLanded(best);
-            return (
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.navy, marginBottom: 12 }}>🧮 Landed Cost Summary, best quote</div>
+          {bestLanded ? (
+            <>
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {[["Product (CAD)", `$${lc.cad}`], ["Duty", `$${lc.duty}`], ["GST (ITC)", `$${lc.gst}`], ["Freight", `CA$${freightCA}`], ["Total Landed", `CA$${lc.total}`]].map(([label, val], i) => (
-                  <div key={label} style={{ background: i === 4 ? C.navy : "#fff", borderRadius: 6, padding: "8px 14px", border: `1px solid ${C.mgray}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: i === 4 ? "#F4F5EF" : C.dgray, textTransform: "uppercase" }}>{label}</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 4 ? "#C8CF5A" : C.navy, marginTop: 2 }}>{val}</div>
+                {[
+                  ["Product (CAD)", formatCad(bestLanded.productCad)],
+                  ["Shipping/unit", formatCad(bestLanded.shippingCadPerUnit)],
+                  ["Duty", formatCad(bestLanded.dutyCad)],
+                  ["Brokerage/unit", formatCad(bestLanded.brokerageCadPerUnit)],
+                  ["Other/unit", formatCad(bestLanded.otherFeesCadPerUnit)],
+                  ["Total Landed", formatCad(bestLanded.totalCad)],
+                ].map(([label, val], i) => (
+                  <div key={label} style={{ background: i === 5 ? C.navy : "#fff", borderRadius: 6, padding: "8px 14px", border: `1px solid ${C.mgray}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: i === 5 ? "#F4F5EF" : C.dgray, textTransform: "uppercase" }}>{label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 5 ? "#C8CF5A" : C.navy, marginTop: 2 }}>{val}</div>
                   </div>
                 ))}
               </div>
-            );
-          })()}
-          {best === null && <div style={{ fontSize: 13, color: C.dgray }}>Add at least one quote to see the calculation.</div>}
-          <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>GST shown as reference — recoverable as ITC (FOB/EXW orders only).</div>
+              <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>Based on {bestQuote.supplierName}, {bestQuote.incoterm || "Incoterm TBD"}, FX {bestLanded.fx}, duty {bestLanded.dutyPct}%, quantity basis {bestLanded.qty}.</div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: C.dgray }}>Add at least one quote to see the calculation.</div>
+          )}
         </div>
 
         {/* Quotes */}
@@ -1095,7 +1181,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {pquotes.sort((a, b) => (parseFloat(a.unitPrice) || 999) - (parseFloat(b.unitPrice) || 999)).map(q => {
                 const isBest = parseFloat(q.unitPrice) === best;
-                const lc = q.unitPrice ? calcLanded(parseFloat(q.unitPrice)) : null;
+                const lc = q.unitPrice ? calcQuoteLanded(q) : null;
                 return (
                   <div key={q.id} style={{ border: `2px solid ${isBest ? C.teal : C.mgray}`, borderRadius: 8, padding: "12px 16px", background: isBest ? "#f0faf9" : "#fff" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1113,7 +1199,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
                           {q.date && ` · ${q.date}`}
                         </div>
                         {q.notes && <div style={{ fontSize: 13, color: C.dgray, marginTop: 4, fontStyle: "italic" }}>{q.notes}</div>}
-                        {lc && <div style={{ fontSize: 12, color: C.purple, marginTop: 4, fontWeight: 600 }}>Est. landed: CA${lc.total} (excl. GST)</div>}
+                        {lc && <div style={{ fontSize: 12, color: C.purple, marginTop: 4, fontWeight: 600 }}>Est. landed: {formatCad(lc.totalCad)}</div>}
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
                         <div style={{ fontSize: 22, fontWeight: 900, color: isBest ? C.teal : C.navy }}>${q.unitPrice || "—"}</div>
@@ -1255,11 +1341,37 @@ function SupplierModal({ onSave, onClose, editing }) {
 // ════════════════════════════════════════════════════════════════
 function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState(editing || { productId: "", supplierId: "", supplierSku: "", cgSku: "", productName: "", supplierName: "", unitPrice: "", moq: "", incoterm: "", shippingMethod: "", notes: "", date: todayStr, quoteStatus: "Received" });
+  const [form, setForm] = useState(editing || {
+    productId: "",
+    supplierId: "",
+    supplierSku: "",
+    cgSku: "",
+    productName: "",
+    supplierName: "",
+    unitPrice: "",
+    moq: "",
+    incoterm: "DDP",
+    shippingMethod: "",
+    shippingCost: "",
+    shippingCurrency: "USD",
+    shippingCostBasis: "Per Unit",
+    shippingAllocationMethod: "Already Per Unit",
+    shippingCostPerUnitCad: "",
+    usdCadRate: DEFAULT_FX_RATE,
+    dutyRatePct: "",
+    brokerageCad: "",
+    otherFeesCad: "",
+    notes: "",
+    date: todayStr,
+    quoteStatus: "Received"
+  });
+
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
   const selectProduct  = (id) => { const p = products.find(x => x.id === id);  setForm(f => ({ ...f, productId: id,  cgSku: p?.skuId || "", productName: p?.name || "" })); };
   const selectSupplier = (id) => { const s = suppliers.find(x => x.id === id); setForm(f => ({ ...f, supplierId: id, supplierName: s?.name || "" })); };
   const valid = form.productId && form.supplierId;
+  const landed = calcQuoteLanded(form);
+
   return (
     <Modal title={editing ? "Edit Quote" : "Add Quote"} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1277,23 +1389,45 @@ function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.supId} — {s.name}</option>)}
           </select>
         </div>
+
         <Input label="Supplier's SKU" value={form.supplierSku} onChange={set("supplierSku")} placeholder="e.g. SKJLM001" />
+
         <div style={{ display: "flex", gap: 12 }}>
           <Input label="Unit Price (USD)" value={form.unitPrice} onChange={set("unitPrice")} type="number" placeholder="e.g. 48" />
-          <Input label="MOQ (units)"      value={form.moq}       onChange={set("moq")}       placeholder="e.g. 10" />
+          <Input label="MOQ / Quantity Basis" value={form.moq} onChange={set("moq")} placeholder="e.g. 10" />
         </div>
+
         <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Incoterm"        value={form.incoterm}       onChange={set("incoterm")}       options={INCOTERMS} />
-          <Input label="Shipping Method" value={form.shippingMethod} onChange={set("shippingMethod")} placeholder="e.g. DHL Express" />
-          <Input label="Date"            value={form.date}           onChange={set("date")}           type="date" />
+          <Input label="Incoterm" value={form.incoterm} onChange={set("incoterm")} options={INCOTERMS} />
+          <Input label="Shipping Method" value={form.shippingMethod} onChange={set("shippingMethod")} placeholder="e.g. DDP sea, DHL, UPS" />
+          <Input label="Date" value={form.date} onChange={set("date")} type="date" />
         </div>
+
+        <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 12 }}>Shipping and Landed Cost</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <Input label="Shipping Cost" value={form.shippingCost} onChange={set("shippingCost")} type="number" placeholder="e.g. 12 or 300" />
+            <Input label="Shipping Currency" value={form.shippingCurrency} onChange={set("shippingCurrency")} options={SHIPPING_CURRENCIES} />
+            <Input label="Shipping Cost Basis" value={form.shippingCostBasis} onChange={set("shippingCostBasis")} options={SHIPPING_COST_BASIS} />
+            <Input label="Allocation Method" value={form.shippingAllocationMethod} onChange={set("shippingAllocationMethod")} options={SHIPPING_ALLOCATION_METHODS} />
+            <Input label="Manual Shipping CAD/unit" value={form.shippingCostPerUnitCad} onChange={set("shippingCostPerUnitCad")} type="number" placeholder="optional override" />
+            <Input label="USD → CAD Rate" value={form.usdCadRate} onChange={set("usdCadRate")} type="number" placeholder="1.38" />
+            <Input label="Duty Rate %" value={form.dutyRatePct} onChange={set("dutyRatePct")} type="number" placeholder={form.incoterm === "DDP" ? "0 if included" : "6.5"} />
+            <Input label="Brokerage CAD total" value={form.brokerageCad} onChange={set("brokerageCad")} type="number" placeholder="optional" />
+            <Input label="Other Fees CAD total" value={form.otherFeesCad} onChange={set("otherFeesCad")} type="number" placeholder="optional" />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginTop: 12 }}>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Product CAD</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.productCad)}</div></div>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Shipping/unit</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.shippingCadPerUnit)}</div></div>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Duty</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.dutyCad)}</div></div>
+            <div style={{ background: C.navy, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: "#F4F5EF", textTransform: "uppercase" }}>Total Landed</div><div style={{ fontWeight: 900, color: "#C8CF5A" }}>{formatCad(landed?.totalCad)}</div></div>
+          </div>
+          <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>For DDP, duty normally defaults to 0 unless you enter a value. Shipping is still tracked separately for historical comparison.</div>
+        </div>
+
         <Input label="Quote Status" value={form.quoteStatus} onChange={set("quoteStatus")} options={QSTATUSES} />
         <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="e.g. Steel, blade style. 197×25×22.5 cm, 15.9 kg." />
-        {form.incoterm === "DDP" && (
-          <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#856404" }}>
-            ⚠️ <strong>DDP</strong> — supplier acts as importer of record. You cannot recover GST as ITC. Request FOB or DHL Express (DAP) instead.
-          </div>
-        )}
+
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn disabled={!valid} onClick={() => onSave(form)}>Save Quote</Btn>
