@@ -37,8 +37,6 @@ const PLATFORMS  = ["Alibaba","WeChat","WhatsApp","Email","Direct","Other"];
 const STATUSES   = ["Active","Inactive","Blocked"];
 const QSTATUSES  = ["Received","Sample Requested","Sample Received","Approved","Rejected","On Hold"];
 const SHIPPING_CURRENCIES = ["USD", "CAD"];
-const SHIPPING_COST_BASIS = ["Per Unit", "Total Quote", "Total Order", "Included in Unit Price", "Not Provided"];
-const SHIPPING_ALLOCATION_METHODS = ["Already Per Unit", "Manual", "By Weight", "By Volume", "Equal Split"];
 const DEFAULT_FX_RATE = 1.38;
 const DEFAULT_DUTY_RATE_PCT = 6.5;
 const DEFAULT_TARGET_MARKUP = 2.2;
@@ -58,9 +56,8 @@ function exportAllQuotes(quotes) {
     "MOQ":             q.moq || "",
     "Incoterm":        q.incoterm || "",
     "Shipping Method": q.shippingMethod || "",
-    "Shipping Cost":   q.shippingCost || "",
+    "Shipping per Unit": q.shippingCost || "",
     "Shipping Currency": q.shippingCurrency || "",
-    "Shipping Basis":  q.shippingCostBasis || "",
     "Shipping CAD/unit": calcShippingCadPerUnit(q),
     "FX Rate":         q.usdCadRate || "",
     "Duty Rate %":     q.dutyRatePct || "",
@@ -221,17 +218,10 @@ function shippingCadAmount(quote) {
 }
 
 function calcShippingCadPerUnit(quote) {
-  const override = toNumber(quote?.shippingCostPerUnitCad);
-  if (override !== null) return override;
-
-  const basis = quote?.shippingCostBasis || "Per Unit";
-  if (basis === "Included in Unit Price" || basis === "Not Provided") return 0;
-
+  // Simplified model: shippingCost is the allocated shipping cost per unit.
+  // If the supplier gives total shipping for an order, calculate the product's per-unit share manually and enter that value here.
   const totalCad = shippingCadAmount(quote);
-  if (!totalCad) return 0;
-
-  if (basis === "Per Unit") return totalCad;
-  return totalCad / quoteQty(quote);
+  return totalCad || 0;
 }
 
 function calcQuoteLanded(quote) {
@@ -245,8 +235,8 @@ function calcQuoteLanded(quote) {
   const dutyPct = toNumber(quote?.dutyRatePct);
   const effectiveDutyPct = dutyPct !== null ? dutyPct : (incoterm === "DDP" ? 0 : DEFAULT_DUTY_RATE_PCT);
   const dutyCad = productCad * (effectiveDutyPct / 100);
-  const brokerageCadPerUnit = (toNumber(quote?.brokerageCad) || 0) / quoteQty(quote);
-  const otherFeesCadPerUnit = (toNumber(quote?.otherFeesCad) || 0) / quoteQty(quote);
+  const brokerageCadPerUnit = toNumber(quote?.brokerageCad) || 0;
+  const otherFeesCadPerUnit = toNumber(quote?.otherFeesCad) || 0;
   const totalCad = productCad + shippingCadPerUnit + dutyCad + brokerageCadPerUnit + otherFeesCadPerUnit;
 
   return { productCad, shippingCadPerUnit, dutyCad, brokerageCadPerUnit, otherFeesCadPerUnit, totalCad, fx, dutyPct: effectiveDutyPct, qty: quoteQty(quote) };
@@ -490,9 +480,9 @@ export default function App() {
       shipping_method: f.shippingMethod || null,
       shipping_cost: f.shippingCost ? Number(f.shippingCost) : null,
       shipping_currency: f.shippingCurrency || "USD",
-      shipping_cost_basis: f.shippingCostBasis || "Per Unit",
-      shipping_allocation_method: f.shippingAllocationMethod || "Already Per Unit",
-      shipping_cost_per_unit_cad: hasValue(f.shippingCostPerUnitCad) ? Number(f.shippingCostPerUnitCad) : null,
+      shipping_cost_basis: "Per Unit",
+      shipping_allocation_method: "Already Per Unit",
+      shipping_cost_per_unit_cad: null,
       usd_cad_rate: f.usdCadRate ? Number(f.usdCadRate) : DEFAULT_FX_RATE,
       duty_rate_pct: hasValue(f.dutyRatePct) ? Number(f.dutyRatePct) : null,
       brokerage_cad: f.brokerageCad ? Number(f.brokerageCad) : null,
@@ -765,7 +755,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
         )}
 
         <div style={{ marginTop: 12, color: C.dgray, fontSize: 12 }}>
-          Landed cost uses quote-level assumptions: unit price, FX, shipping cost allocation, Incoterm, duty, brokerage and other fees. DDP defaults duty to 0 unless manually entered.
+          Landed cost uses quote-level assumptions: unit price, FX, allocated shipping per unit, Incoterm, duty, brokerage and other fees. DDP defaults duty to 0 unless manually entered.
         </div>
       </Card>
 
@@ -1354,9 +1344,6 @@ function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
     shippingMethod: "",
     shippingCost: "",
     shippingCurrency: "USD",
-    shippingCostBasis: "Per Unit",
-    shippingAllocationMethod: "Already Per Unit",
-    shippingCostPerUnitCad: "",
     usdCadRate: DEFAULT_FX_RATE,
     dutyRatePct: "",
     brokerageCad: "",
@@ -1404,17 +1391,17 @@ function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
         </div>
 
         <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 12 }}>Shipping and Landed Cost</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 6 }}>Shipping and Landed Cost</div>
+          <div style={{ fontSize: 12, color: C.dgray, marginBottom: 12 }}>
+            Enter the allocated shipping cost per unit. If the supplier gave one total shipping amount, calculate this product's per-unit share manually first.
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-            <Input label="Shipping Cost" value={form.shippingCost} onChange={set("shippingCost")} type="number" placeholder="e.g. 12 or 300" />
+            <Input label="Shipping per Unit" value={form.shippingCost} onChange={set("shippingCost")} type="number" placeholder="allocated per-unit shipping" />
             <Input label="Shipping Currency" value={form.shippingCurrency} onChange={set("shippingCurrency")} options={SHIPPING_CURRENCIES} />
-            <Input label="Shipping Cost Basis" value={form.shippingCostBasis} onChange={set("shippingCostBasis")} options={SHIPPING_COST_BASIS} />
-            <Input label="Allocation Method" value={form.shippingAllocationMethod} onChange={set("shippingAllocationMethod")} options={SHIPPING_ALLOCATION_METHODS} />
-            <Input label="Manual Shipping CAD/unit" value={form.shippingCostPerUnitCad} onChange={set("shippingCostPerUnitCad")} type="number" placeholder="optional override" />
             <Input label="USD → CAD Rate" value={form.usdCadRate} onChange={set("usdCadRate")} type="number" placeholder="1.38" />
             <Input label="Duty Rate %" value={form.dutyRatePct} onChange={set("dutyRatePct")} type="number" placeholder={form.incoterm === "DDP" ? "0 if included" : "6.5"} />
-            <Input label="Brokerage CAD total" value={form.brokerageCad} onChange={set("brokerageCad")} type="number" placeholder="optional" />
-            <Input label="Other Fees CAD total" value={form.otherFeesCad} onChange={set("otherFeesCad")} type="number" placeholder="optional" />
+            <Input label="Brokerage CAD/unit" value={form.brokerageCad} onChange={set("brokerageCad")} type="number" placeholder="optional" />
+            <Input label="Other Fees CAD/unit" value={form.otherFeesCad} onChange={set("otherFeesCad")} type="number" placeholder="optional" />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginTop: 12 }}>
             <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Product CAD</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.productCad)}</div></div>
@@ -1422,7 +1409,7 @@ function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
             <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Duty</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.dutyCad)}</div></div>
             <div style={{ background: C.navy, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: "#F4F5EF", textTransform: "uppercase" }}>Total Landed</div><div style={{ fontWeight: 900, color: "#C8CF5A" }}>{formatCad(landed?.totalCad)}</div></div>
           </div>
-          <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>For DDP, duty normally defaults to 0 unless you enter a value. Shipping is still tracked separately for historical comparison.</div>
+          <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>For DDP, duty normally defaults to 0 unless you enter a value. Shipping is tracked separately as allocated per-unit shipping for historical comparison.</div>
         </div>
 
         <Input label="Quote Status" value={form.quoteStatus} onChange={set("quoteStatus")} options={QSTATUSES} />
