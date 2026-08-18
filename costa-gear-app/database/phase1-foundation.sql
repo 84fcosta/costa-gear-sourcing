@@ -9,16 +9,15 @@ create table if not exists public.app_members (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.app_allowed_emails (
+create table if not exists app_private.allowed_emails (
   email text primary key,
   role text not null default 'viewer' check (role in ('owner','admin','editor','viewer')),
   created_at timestamptz not null default now()
 );
 
 alter table public.app_members enable row level security;
-alter table public.app_allowed_emails enable row level security;
 
-insert into public.app_allowed_emails(email, role)
+insert into app_private.allowed_emails(email, role)
 values ('84.fcosta@gmail.com', 'owner')
 on conflict (email) do update set role = excluded.role;
 
@@ -32,7 +31,7 @@ declare
   allowed_role text;
 begin
   select a.role into allowed_role
-  from public.app_allowed_emails a
+  from app_private.allowed_emails a
   where lower(a.email) = lower(new.email)
   limit 1;
 
@@ -82,8 +81,6 @@ on public.quotes for all
 to authenticated
 using (exists (select 1 from public.app_members m where m.user_id = (select auth.uid())))
 with check (exists (select 1 from public.app_members m where m.user_id = (select auth.uid())));
-
-revoke all on table public.app_allowed_emails from anon, authenticated;
 
 create index if not exists idx_quotes_product_id on public.quotes(product_id);
 create index if not exists idx_quotes_supplier_id on public.quotes(supplier_id);
