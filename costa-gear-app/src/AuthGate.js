@@ -64,7 +64,7 @@ function LoginScreen({ onAuthenticated }) {
         <div style={{ fontSize: 12, color: palette.olive, fontWeight: 800, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 8 }}>Costa Gear</div>
         <h1 style={{ margin: 0, color: palette.ink, fontSize: 29, letterSpacing: "-0.03em" }}>Sourcing Operations</h1>
         <p style={{ color: palette.muted, fontSize: 14, lineHeight: 1.55, margin: "10px 0 22px" }}>
-          {mode === "login" ? "Sign in to access products, suppliers, quotes and sourcing data." : "Create the initial Costa Gear account. The first registered account becomes the system owner."}
+          {mode === "login" ? "Sign in to access products, suppliers, quotes and sourcing data." : "Create your Costa Gear account using an approved email address."}
         </p>
 
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
