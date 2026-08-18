@@ -23,34 +23,20 @@ const fieldStyle = {
 };
 
 function LoginScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
-    setMessage("");
     setError("");
 
     try {
-      if (mode === "login") {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-        if (authError) throw authError;
-        if (data?.session) onAuthenticated(data.session);
-      } else {
-        const { data, error: authError } = await supabase.auth.signUp({ email, password });
-        if (authError) throw authError;
-        if (data?.session) {
-          onAuthenticated(data.session);
-        } else {
-          setMessage("Account created. Check your email to confirm the account, then sign in.");
-          setMode("login");
-        }
-      }
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
+      if (data?.session) onAuthenticated(data.session);
     } catch (err) {
       setError(err?.message || "Authentication failed.");
     } finally {
@@ -64,7 +50,7 @@ function LoginScreen({ onAuthenticated }) {
         <div style={{ fontSize: 12, color: palette.olive, fontWeight: 800, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 8 }}>Costa Gear</div>
         <h1 style={{ margin: 0, color: palette.ink, fontSize: 29, letterSpacing: "-0.03em" }}>Sourcing Operations</h1>
         <p style={{ color: palette.muted, fontSize: 14, lineHeight: 1.55, margin: "10px 0 22px" }}>
-          {mode === "login" ? "Sign in to access products, suppliers, quotes and sourcing data." : "Create your Costa Gear account using an approved email address."}
+          Sign in with an authorized Costa Gear account. Access is invite-only.
         </p>
 
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
@@ -74,20 +60,19 @@ function LoginScreen({ onAuthenticated }) {
           </label>
           <label style={{ display: "grid", gap: 5, fontSize: 13, color: palette.muted, fontWeight: 700 }}>
             Password
-            <input type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} />
+            <input type="password" required minLength={8} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} />
           </label>
 
           {error && <div style={{ color: palette.red, background: "#FFF4F2", borderRadius: 10, padding: 11, fontSize: 13 }}>{error}</div>}
-          {message && <div style={{ color: palette.green, background: "#F2F8F2", borderRadius: 10, padding: 11, fontSize: 13 }}>{message}</div>}
 
           <button disabled={busy} type="submit" style={{ border: 0, borderRadius: 12, minHeight: 44, padding: "11px 14px", background: "linear-gradient(180deg,#929A44,#747B31)", color: "white", fontSize: 14, fontWeight: 800, cursor: busy ? "wait" : "pointer", opacity: busy ? 0.65 : 1 }}>
-            {busy ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
+            {busy ? "Working..." : "Sign in"}
           </button>
         </form>
 
-        <button type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setMessage(""); }} style={{ width: "100%", marginTop: 12, border: 0, background: "transparent", color: palette.muted, cursor: "pointer", padding: 8, fontSize: 13 }}>
-          {mode === "login" ? "First time here? Create account" : "Already have an account? Sign in"}
-        </button>
+        <div style={{ marginTop: 14, color: palette.muted, fontSize: 12, lineHeight: 1.5, textAlign: "center" }}>
+          Need access? Contact the Costa Gear administrator for an invitation.
+        </div>
       </div>
     </div>
   );
