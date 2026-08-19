@@ -135,14 +135,17 @@ function recommendationFor({ currentPrice, marketPrice, unitCost, targetMarginPc
   return { action, recommendedPrice: roundMoney(recommendedPrice), rationale, floor, currentMargin };
 }
 
-function confidenceFor({ currentPrice, marketPrice, marketAgeDays, unitCost, targetMarginPct, availableUnits }) {
+function confidenceFor({ currentPrice, marketPrice, marketAgeDays, marketIsDated, unitCost, targetMarginPct, availableUnits }) {
   let score = 0;
   if (finite(currentPrice)) score += 2;
   if (finite(unitCost)) score += 2;
   if (finite(targetMarginPct)) score += 1;
-  if (finite(marketPrice)) score += marketAgeDays !== null && marketAgeDays > 120 ? 0.5 : 2;
+  if (finite(marketPrice)) {
+    if (!marketIsDated) score += 1;
+    else score += marketAgeDays !== null && marketAgeDays > 120 ? 0.5 : 2;
+  }
   if (Number(availableUnits || 0) > 0) score += 1;
-  if (score >= 7) return "High";
+  if (score >= 7 && finite(targetMarginPct) && finite(unitCost) && finite(marketPrice)) return "High";
   if (score >= 4) return "Medium";
   return "Low";
 }
@@ -194,7 +197,7 @@ export function buildPricingIntelligence(data, asOfInput = new Date()) {
     const priceGapToMarketPct = finite(currentPrice) && finite(marketPrice) && Number(marketPrice) > 0
       ? (Number(currentPrice) - Number(marketPrice)) / Number(marketPrice) * 100
       : null;
-    const confidence = confidenceFor({ currentPrice, marketPrice, marketAgeDays, unitCost, targetMarginPct, availableUnits: perf?.availableUnits });
+    const confidence = confidenceFor({ currentPrice, marketPrice, marketAgeDays, marketIsDated: !!marketRow, unitCost, targetMarginPct, availableUnits: perf?.availableUnits });
     const missing = [];
     if (!finite(currentPrice)) missing.push("target price");
     if (!finite(unitCost)) missing.push("landed cost");
