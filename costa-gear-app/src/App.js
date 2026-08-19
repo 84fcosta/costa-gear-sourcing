@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  BarChart3,
   Boxes,
   DollarSign,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import SalesWorkspace from "./components/SalesWorkspace";
+import PerformanceWorkspace from "./components/PerformanceWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import "./brand.css";
 import "./legacy-overrides.css";
@@ -24,6 +26,7 @@ const primaryNav = [
   { id: "logistics", label: "Logistics", Icon: Truck },
   { id: "receiving", label: "Inventory", Icon: Boxes },
   { id: "sales", label: "Sales", Icon: DollarSign },
+  { id: "performance", label: "Performance", Icon: BarChart3 },
 ];
 
 const pageMeta = {
@@ -33,6 +36,7 @@ const pageMeta = {
   logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
   receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
   sales: ["Sales & Performance", "Capture sales, reserve inventory and measure realized margin by SKU."],
+  performance: ["Inventory Aging & SKU Profitability", "Track capital tied up in stock, aging exposure, slow-moving inventory and realized commercial performance."],
 };
 
 export default function App() {
@@ -96,7 +100,8 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : <SalesWorkspace />}
+          : workspace === "sales" ? <SalesWorkspace />
+          : <PerformanceWorkspace />}
       </div>
     </main>
   </div>;
