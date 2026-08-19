@@ -9,6 +9,7 @@ export async function listShipments() {
 export async function createShipment(record) {
   const row = {
     shipment_ref: record.shipmentRef,
+    purchase_order_id: record.purchaseOrderId || null,
     supplier_id: record.supplierId || null,
     status: record.status || "Planning",
     shipping_method: record.shippingMethod || null,
@@ -30,6 +31,7 @@ export async function createShipment(record) {
 
 export async function updateShipment(id, record) {
   const row = {
+    purchase_order_id: record.purchaseOrderId || null,
     supplier_id: record.supplierId || null,
     status: record.status,
     shipping_method: record.shippingMethod || null,
@@ -119,9 +121,7 @@ export async function applyImportCostsToQuotes(rows) {
       other_fees_cad: Number((row.otherPerUnitCad || 0).toFixed(2)),
       landed_cost_cad: null,
     };
-    if (row.duty_rate_pct !== null && row.duty_rate_pct !== undefined && row.duty_rate_pct !== "") {
-      payload.duty_rate_pct = Number(row.duty_rate_pct);
-    }
+    if (row.duty_rate_pct !== null && row.duty_rate_pct !== undefined && row.duty_rate_pct !== "") payload.duty_rate_pct = Number(row.duty_rate_pct);
     const { error } = await supabase.from("quotes").update(payload).eq("id", row.quote_id);
     if (error) throw error;
   }
