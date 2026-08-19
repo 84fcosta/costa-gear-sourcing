@@ -38,7 +38,7 @@ function LoginScreen({ onAuthenticated }) {
         <label style={{display:"grid",gap:5,fontSize:12,color:palette.muted,fontWeight:700}}>Email<input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} style={fieldStyle}/></label>
         <label style={{display:"grid",gap:5,fontSize:12,color:palette.muted,fontWeight:700}}>Password<input type="password" required minLength={8} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} style={fieldStyle}/></label>
         {error&&<div style={{color:palette.red,background:"#FFF4F2",borderRadius:9,padding:10,fontSize:12}}>{error}</div>}
-        <button disabled={busy} type="submit" style={{border:0,borderRadius:9,minHeight:42,padding:"10px 14px",background:"linear-gradient(180deg,#929A44,#747B31)",color:"white",fontSize:13,fontWeight:800,cursor:busy?"wait":"pointer",opacity:busy?.65:1}}>{busy?"Working...":"Sign in"}</button>
+        <button disabled={busy} type="submit" style={{border:0,borderRadius:9,minHeight:42,padding:"10px 14px",background:"linear-gradient(180deg,#929A44,#747B31)",color:"white",fontSize:13,fontWeight:800,cursor:busy?"wait":"pointer",opacity:busy ? .65 : 1}}>{busy?"Working...":"Sign in"}</button>
       </form>
       <div style={{marginTop:14,color:palette.muted,fontSize:11.5,lineHeight:1.5,textAlign:"center"}}>Need access? Contact the Costa Gear administrator for an invitation.</div>
     </div>
