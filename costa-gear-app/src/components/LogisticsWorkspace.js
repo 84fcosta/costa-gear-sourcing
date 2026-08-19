@@ -12,7 +12,7 @@ const tabStyle = active => ({
   cursor: "pointer"
 });
 
-export default function LogisticsWorkspace({ initialView="shipments" }) {
+export default function LogisticsWorkspace({ initialView="shipments", handoff, onHandoffConsumed }) {
   const [view, setView] = useState(initialView);
   return <div>
     <div style={{background:"#F3F4EF",borderBottom:"1px solid rgba(50,56,42,.10)",padding:"14px 18px"}}>
@@ -27,6 +27,6 @@ export default function LogisticsWorkspace({ initialView="shipments" }) {
         </div>
       </div>
     </div>
-    {view==="shipments" ? <ShipmentAllocationWorkspace/> : <ImportCostWorkspace/>}
+    {view==="shipments" ? <ShipmentAllocationWorkspace handoff={handoff} onHandoffConsumed={onHandoffConsumed}/> : <ImportCostWorkspace/>}
   </div>;
 }
