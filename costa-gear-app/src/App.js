@@ -1,16 +1,10 @@
 import { useState } from "react";
 import {
-  BarChart3,
   Boxes,
-  ClipboardList,
-  FileSpreadsheet,
   LayoutDashboard,
   PackageSearch,
-  ReceiptText,
   ShoppingCart,
-  Tags,
   Truck,
-  Warehouse,
 } from "lucide-react";
 import BuyingDecisionWorkspace from "./components/BuyingDecisionWorkspace";
 import ReceivingInventoryWorkspace from "./components/ReceivingInventoryWorkspace";
@@ -36,13 +30,6 @@ const pageMeta = {
   logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
   receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
 };
-
-function SidebarButton({ active, Icon, label, onClick }) {
-  return <button className={`cg-side-link ${active ? "active" : ""}`} onClick={onClick}>
-    <Icon size={17} strokeWidth={1.9} />
-    <span>{label}</span>
-  </button>;
-}
 
 export default function App() {
   const [workspace, setWorkspace] = useState("dashboard");
@@ -89,61 +76,23 @@ export default function App() {
       </div>
     </header>
 
-    <div className="cg-layout">
-      <aside className="cg-sidebar">
-        <div className="cg-sidebar-scroll">
-          <div className="cg-side-section">
-            <SidebarButton active={workspace === "dashboard"} Icon={LayoutDashboard} label="Overview" onClick={() => navigate("dashboard")} />
-          </div>
-
-          <div className="cg-side-section">
-            <div className="cg-side-label">Sourcing</div>
-            <SidebarButton active={workspace === "sourcing" && sourcingView === "master"} Icon={Tags} label="Products & Quotes" onClick={() => navigate("operations")} />
-            <SidebarButton active={workspace === "sourcing" && sourcingView === "analysis"} Icon={BarChart3} label="Decision Lab" onClick={() => navigate("intelligence")} />
-          </div>
-
-          <div className="cg-side-section">
-            <div className="cg-side-label">Buying</div>
-            <SidebarButton active={workspace === "buying"} Icon={ClipboardList} label="Buying Decisions" onClick={() => navigate("buying")} />
-          </div>
-
-          <div className="cg-side-section">
-            <div className="cg-side-label">Logistics</div>
-            <SidebarButton active={workspace === "logistics" && logisticsView === "shipments"} Icon={Truck} label="Shipments" onClick={() => navigate("shipments")} />
-            <SidebarButton active={workspace === "logistics" && logisticsView === "costs"} Icon={FileSpreadsheet} label="Import Costs" onClick={() => navigate("importcosts")} />
-          </div>
-
-          <div className="cg-side-section">
-            <div className="cg-side-label">Inventory</div>
-            <SidebarButton active={workspace === "receiving"} Icon={ReceiptText} label="Receiving" onClick={() => navigate("receiving")} />
-            <SidebarButton active={workspace === "receiving"} Icon={Warehouse} label="On-hand Inventory" onClick={() => navigate("receiving")} />
-          </div>
+    <main className="cg-main-area">
+      <div className="cg-page-header">
+        <div>
+          <div className="cg-page-eyebrow">Costa Gear Operations</div>
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
         </div>
+      </div>
 
-        <div className="cg-sidebar-footer">
-          <div className="cg-sidebar-mark">CG</div>
-          <div><strong>Costa Gear Co.</strong><span>Off-Road Accessories</span></div>
-        </div>
-      </aside>
-
-      <section className="cg-main-area">
-        <div className="cg-page-header">
-          <div>
-            <div className="cg-page-eyebrow">Costa Gear Operations</div>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
-          </div>
-        </div>
-
-        <div className="cg-page-content">
-          {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
-          {workspace === "dashboard" ? <div className="cg-module-embedded"><OperationalDashboard onNavigate={navigate} /></div>
-            : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
-            : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
-            : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
-            : <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>}
-        </div>
-      </section>
-    </div>
+      <div className="cg-page-content">
+        {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
+        {workspace === "dashboard" ? <div className="cg-module-embedded"><OperationalDashboard onNavigate={navigate} /></div>
+          : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
+          : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
+          : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
+          : <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>}
+      </div>
+    </main>
   </div>;
 }

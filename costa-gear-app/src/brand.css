@@ -28,7 +28,7 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
 
 .cg-app-shell{min-height:100vh;background:var(--cg-bg);color:var(--cg-ink)}
 
-/* ── Global black top bar ───────────────────────────────────── */
+/* Global black navigation bar */
 .cg-topbar{height:82px;background:linear-gradient(180deg,#070807,#0d0f0c);border-bottom:1px solid rgba(133,140,56,.32);position:sticky;top:0;z-index:400;box-shadow:0 5px 18px rgba(0,0,0,.18)}
 .cg-topbar-inner{height:100%;padding:0 28px;display:flex;align-items:center;gap:34px;width:100%}
 .cg-logo-button{border:0;background:transparent;padding:0;display:flex;align-items:center;cursor:pointer;flex:0 0 auto}
@@ -40,31 +40,16 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
 .cg-nav-button.active{background:linear-gradient(180deg,rgba(146,154,68,.92),rgba(116,123,49,.96));color:#fff;box-shadow:inset 0 -2px 0 rgba(255,255,255,.08)}
 .cg-nav-button.active:after{content:"";position:absolute;left:18px;right:18px;bottom:0;height:2px;background:#b7bd68}
 
-/* ── App frame / sidebar ───────────────────────────────────── */
-.cg-layout{display:grid;grid-template-columns:222px minmax(0,1fr);min-height:calc(100vh - 82px)}
-.cg-sidebar{background:linear-gradient(180deg,#151815,#111310);border-right:1px solid rgba(255,255,255,.07);color:#e9ece7;position:sticky;top:82px;height:calc(100vh - 82px);display:flex;flex-direction:column;z-index:160}
-.cg-sidebar-scroll{padding:18px 12px 20px;overflow-y:auto;flex:1}
-.cg-side-section{display:grid;gap:4px;margin-bottom:22px}
-.cg-side-label{padding:0 10px 7px;font-size:9px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#8f998c}
-.cg-side-link{border:0;background:transparent;color:#d8ddd5;border-radius:8px;padding:10px 11px;display:flex;align-items:center;gap:11px;text-align:left;font-size:12px;font-weight:650;cursor:pointer;width:100%}
-.cg-side-link:hover{background:rgba(255,255,255,.055);color:#fff}
-.cg-side-link.active{background:linear-gradient(90deg,#7f8635,#737a31);color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.18)}
-.cg-side-link.active:before{content:"";width:3px;align-self:stretch;background:#b2b95f;border-radius:2px;margin-left:-11px}
-.cg-sidebar-footer{border-top:1px solid rgba(255,255,255,.08);padding:16px 14px;display:flex;align-items:center;gap:10px;color:#dfe3dc}
-.cg-sidebar-footer strong{display:block;font-size:11px}
-.cg-sidebar-footer span{display:block;font-size:9px;color:#8f998c;margin-top:2px}
-.cg-sidebar-mark{width:34px;height:34px;border:1px solid rgba(164,170,85,.45);color:#a4aa55;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:900;letter-spacing:.06em}
-
-/* ── Main content / page title ─────────────────────────────── */
-.cg-main-area{min-width:0;background:var(--cg-bg)}
-.cg-page-header{padding:26px 28px 18px;border-bottom:1px solid var(--cg-line);background:linear-gradient(180deg,#fafbf8,#f4f5f1)}
-.cg-page-header>div{max-width:1480px;margin:0 auto}
+/* Full-width application content */
+.cg-main-area{min-width:0;min-height:calc(100vh - 82px);background:var(--cg-bg)}
+.cg-page-header{padding:24px 30px 17px;border-bottom:1px solid var(--cg-line);background:linear-gradient(180deg,#fafbf8,#f4f5f1)}
+.cg-page-header>div{width:100%;margin:0}
 .cg-page-eyebrow{font-size:10px;font-weight:850;letter-spacing:.14em;text-transform:uppercase;color:var(--cg-olive-dark);margin-bottom:5px}
 .cg-page-header h1{margin:0;font-size:28px;line-height:1.12;letter-spacing:-.035em;font-weight:800;color:var(--cg-ink)}
-.cg-page-header p{margin:6px 0 0;max-width:760px;font-size:12.5px;line-height:1.55;color:var(--cg-muted)}
-.cg-page-content{max-width:1536px;margin:0 auto;padding:20px 28px 42px}
+.cg-page-header p{margin:6px 0 0;max-width:840px;font-size:12.5px;line-height:1.55;color:var(--cg-muted)}
+.cg-page-content{width:100%;max-width:none;margin:0;padding:18px 30px 42px}
 
-/* ── Typography rules for every workspace ─────────────────── */
+/* Typography rules for every workspace */
 .cg-main-area,.cg-main-area *{font-family:var(--cg-font)!important}
 .cg-main-area h1,.cg-main-area h2,.cg-main-area h3,.cg-main-area h4{font-family:var(--cg-font)!important;color:var(--cg-ink);letter-spacing:-.025em}
 .cg-main-area h1{font-size:27px!important;font-weight:800!important;line-height:1.15!important}
@@ -72,7 +57,7 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
 .cg-main-area h3{font-size:16px!important;font-weight:800!important;line-height:1.25!important}
 .cg-main-area p,.cg-main-area label,.cg-main-area td,.cg-main-area th{font-family:var(--cg-font)!important}
 
-/* ── Shared controls ───────────────────────────────────────── */
+/* Shared controls */
 .cg-main-area input,.cg-main-area select,.cg-main-area textarea{border:1px solid var(--cg-line)!important;border-radius:9px!important;background:#fff!important;color:var(--cg-ink)!important;box-shadow:none!important;min-height:38px}
 .cg-main-area input:focus,.cg-main-area select:focus,.cg-main-area textarea:focus{outline:3px solid rgba(133,140,56,.11)!important;border-color:rgba(133,140,56,.60)!important}
 .cg-main-area button{font-family:var(--cg-font)!important}
@@ -80,7 +65,7 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
 .cg-main-area th{font-size:10.5px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.04em!important;color:#5d675b!important;background:#f5f6f2!important}
 .cg-main-area th,.cg-main-area td{border-color:var(--cg-line)!important}
 
-/* ── Secondary workspace navigation ───────────────────────── */
+/* Secondary navigation remains local to its module */
 .cg-subworkspace-header{margin:0 0 16px;background:transparent;border:0;padding:0}
 .cg-subworkspace-inner{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap}
 .cg-subworkspace-title,.cg-subworkspace-copy{display:none}
@@ -89,27 +74,23 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
 .cg-segmented button:hover{background:#f2f3ed;color:var(--cg-ink)}
 .cg-segmented button.active{background:linear-gradient(180deg,#929a44,var(--cg-olive-dark));color:#fff;box-shadow:0 4px 10px rgba(116,123,49,.16)}
 
-/* ── Embed legacy/new modules inside one visual system ────── */
+/* Embed legacy/new modules inside one visual system */
 .cg-module-embedded>div,.cg-legacy-embedded>div{min-height:0!important;background:transparent!important;color:var(--cg-ink)!important}
 .cg-module-embedded>div>div:first-child{display:none!important}
 .cg-module-embedded>div>div:nth-child(2){max-width:none!important;margin:0!important;padding:0!important;gap:16px!important}
 .cg-legacy-embedded>div>div:first-child{display:none!important}
 .cg-legacy-embedded>div>div:nth-child(2){position:relative!important;top:auto!important;z-index:30!important;border:1px solid var(--cg-line)!important;border-radius:12px!important;margin-bottom:18px!important;background:linear-gradient(180deg,#f1f3ed,#e8ece5)!important;box-shadow:none!important}
 
-/* Normalize top-level cards coming from older inline-styled modules. */
 .cg-module-embedded>div>div:nth-child(2)>div,
 .cg-legacy-embedded>div>div:nth-child(n+3){box-shadow:none!important}
 .cg-module-embedded>div>div:nth-child(2)>div[style*="background: rgb(255"],
 .cg-module-embedded>div>div:nth-child(2)>div[style*="background: #fff"]{border-color:var(--cg-line)!important;border-radius:13px!important}
 
-/* Cleaner feedback banners */
 .cg-page-content>div[style*="FFF1EF"],.cg-page-content>div[style*="EDF7EE"]{border-radius:10px!important;border:1px solid var(--cg-line)!important}
 
-/* ── Responsive behavior ───────────────────────────────────── */
 @media(max-width:1180px){
   .cg-primary-nav{margin-left:10px;margin-right:170px}
   .cg-nav-button{min-width:78px;padding-left:10px;padding-right:10px}
-  .cg-layout{grid-template-columns:196px minmax(0,1fr)}
 }
 @media(max-width:960px){
   .cg-topbar{height:72px}
@@ -117,8 +98,7 @@ button{transition:background .15s ease,border-color .15s ease,color .15s ease,tr
   .cg-brand-logo{width:96px;max-height:54px}
   .cg-primary-nav{margin:0 130px 0 auto}
   .cg-nav-button{min-width:58px;padding:8px 8px;font-size:10px}
-  .cg-layout{display:block;min-height:calc(100vh - 72px)}
-  .cg-sidebar{display:none}
+  .cg-main-area{min-height:calc(100vh - 72px)}
   .cg-page-header{padding:20px 18px 14px}
   .cg-page-content{padding:16px 18px 34px}
 }
