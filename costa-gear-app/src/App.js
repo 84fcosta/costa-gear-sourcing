@@ -19,6 +19,7 @@ import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import "./brand.css";
+import "./legacy-overrides.css";
 
 const primaryNav = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
