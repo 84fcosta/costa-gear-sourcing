@@ -4,6 +4,7 @@ import SourcingIntelligencePanel from "./components/SourcingIntelligencePanel";
 import SourcingDecisionLab from "./components/SourcingDecisionLab";
 import ShipmentAllocationWorkspace from "./components/ShipmentAllocationWorkspace";
 import ImportCostWorkspace from "./components/ImportCostWorkspace";
+import BuyingDecisionWorkspace from "./components/BuyingDecisionWorkspace";
 
 const navButton = (active) => ({
   border: active ? "1px solid rgba(116,123,49,.7)" : "1px solid rgba(50,56,42,.12)",
@@ -23,11 +24,12 @@ export default function App() {
     <div>
       <div style={{ position: "sticky", top: 0, zIndex: 150, background: "rgba(243,244,239,.96)", backdropFilter: "blur(10px)", borderBottom: "1px solid rgba(50,56,42,.12)", padding: "9px 18px" }}>
         <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 12, color: "#647062" }}><strong style={{ color: "#20251F" }}>Costa Gear Sourcing</strong> · Operations, logistics and decision support</div>
+          <div style={{ fontSize: 12, color: "#647062" }}><strong style={{ color: "#20251F" }}>Costa Gear Sourcing</strong> · Operations, logistics, buying and decision support</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={navButton(workspace === "operations")} onClick={() => setWorkspace("operations")}>Operations</button>
             <button style={navButton(workspace === "shipments")} onClick={() => setWorkspace("shipments")}>Shipments</button>
             <button style={navButton(workspace === "importcosts")} onClick={() => setWorkspace("importcosts")}>Import Costs</button>
+            <button style={navButton(workspace === "buying")} onClick={() => setWorkspace("buying")}>Buying Decisions</button>
             <button style={navButton(workspace === "intelligence")} onClick={() => setWorkspace("intelligence")}>Sourcing Intelligence</button>
           </div>
         </div>
@@ -42,6 +44,8 @@ export default function App() {
         <ShipmentAllocationWorkspace />
       ) : workspace === "importcosts" ? (
         <ImportCostWorkspace />
+      ) : workspace === "buying" ? (
+        <BuyingDecisionWorkspace />
       ) : (
         <SourcingDecisionLab />
       )}
