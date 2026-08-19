@@ -52,6 +52,6 @@ export default function SourcingWorkspace({ onNavigate }) {
         </div>
       </div>
     </div>
-    {view === "master" ? <div className="cg-legacy-embedded"><LegacyApp /></div> : <SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} />}
+    {view === "master" ? <div className="cg-legacy-embedded"><LegacyApp /></div> : <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
 }
