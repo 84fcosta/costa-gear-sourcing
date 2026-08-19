@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
+import "./auth.css";
 
 const palette = {
   ink: "#20251F",
