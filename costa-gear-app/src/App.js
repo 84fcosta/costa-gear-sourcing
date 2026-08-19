@@ -3,6 +3,7 @@ import LegacyApp from "./LegacyApp";
 import SourcingIntelligencePanel from "./components/SourcingIntelligencePanel";
 import SourcingDecisionLab from "./components/SourcingDecisionLab";
 import ShipmentAllocationWorkspace from "./components/ShipmentAllocationWorkspace";
+import ImportCostWorkspace from "./components/ImportCostWorkspace";
 
 const navButton = (active) => ({
   border: active ? "1px solid rgba(116,123,49,.7)" : "1px solid rgba(50,56,42,.12)",
@@ -26,6 +27,7 @@ export default function App() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={navButton(workspace === "operations")} onClick={() => setWorkspace("operations")}>Operations</button>
             <button style={navButton(workspace === "shipments")} onClick={() => setWorkspace("shipments")}>Shipments</button>
+            <button style={navButton(workspace === "importcosts")} onClick={() => setWorkspace("importcosts")}>Import Costs</button>
             <button style={navButton(workspace === "intelligence")} onClick={() => setWorkspace("intelligence")}>Sourcing Intelligence</button>
           </div>
         </div>
@@ -38,6 +40,8 @@ export default function App() {
         </>
       ) : workspace === "shipments" ? (
         <ShipmentAllocationWorkspace />
+      ) : workspace === "importcosts" ? (
+        <ImportCostWorkspace />
       ) : (
         <SourcingDecisionLab />
       )}
