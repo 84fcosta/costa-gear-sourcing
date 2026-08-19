@@ -52,7 +52,7 @@ export default function App() {
       </div>
     </div>
     {workspace==="dashboard" ? <OperationalDashboard onNavigate={navigate}/>
-      : workspace==="sourcing" ? <SourcingWorkspace/>
+      : workspace==="sourcing" ? <SourcingWorkspace onNavigate={navigate}/>
       : workspace==="buying" ? <BuyingDecisionWorkspace/>
       : workspace==="logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView}/>
       : <ReceivingInventoryWorkspace/>}
