@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ShipmentAllocationWorkspace from "./ShipmentAllocationWorkspace";
 import ImportCostWorkspace from "./ImportCostWorkspace";
 
 export default function LogisticsWorkspace({ initialView="shipments" }) {
   const [view, setView] = useState(initialView);
-  return <div>
+  useEffect(() => setView(initialView), [initialView]);
+  return <div className="cg-logistics-workspace">
     <div className="cg-subworkspace-header">
       <div className="cg-subworkspace-inner">
         <div>

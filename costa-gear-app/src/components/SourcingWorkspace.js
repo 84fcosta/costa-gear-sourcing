@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LegacyApp from "../LegacyApp";
 import SourcingDecisionLab from "./SourcingDecisionLab";
 import { supabase } from "../supabase";
@@ -8,10 +8,12 @@ import { createPurchaseOrder, addPurchaseOrderItem } from "../services/purchaseO
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
 const makePoRef = () => { const d = new Date(); return `PO-${d.toISOString().slice(0,10).replaceAll("-","")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}${String(d.getSeconds()).padStart(2,"0")}`; };
 
-export default function SourcingWorkspace({ onNavigate }) {
-  const [view, setView] = useState("master");
+export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
+  const [view, setView] = useState(initialView);
   const [handoffError, setHandoffError] = useState("");
   const [handoffBusy, setHandoffBusy] = useState(false);
+
+  useEffect(() => setView(initialView), [initialView]);
 
   const createBuyingDraft = async context => {
     if (!context?.quoteId || handoffBusy) return;
@@ -38,8 +40,8 @@ export default function SourcingWorkspace({ onNavigate }) {
     finally { setHandoffBusy(false); }
   };
 
-  return <div>
-    {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12}}>{handoffError}</div>}
+  return <div className="cg-sourcing-workspace">
+    {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
     <div className="cg-subworkspace-header">
       <div className="cg-subworkspace-inner">
         <div>
