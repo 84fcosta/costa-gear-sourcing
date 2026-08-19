@@ -12,7 +12,7 @@ import ReceivingInventoryWorkspace from "./components/ReceivingInventoryWorkspac
 import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
-import SalesWorkspace from "./components/SalesWorkspace";
+import CommercialWorkspace from "./components/CommercialWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import "./brand.css";
 import "./legacy-overrides.css";
@@ -39,6 +39,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState("dashboard");
   const [sourcingView, setSourcingView] = useState("master");
   const [logisticsView, setLogisticsView] = useState("shipments");
+  const [salesView, setSalesView] = useState("orders");
   const [handoff, setHandoff] = useState(null);
 
   const navigate = (destination, context = null) => {
@@ -56,6 +57,12 @@ export default function App() {
     } else if (destination === "importcosts") {
       setLogisticsView("costs");
       setWorkspace("logistics");
+    } else if (destination === "performance") {
+      setSalesView("performance");
+      setWorkspace("sales");
+    } else if (destination === "sales") {
+      setSalesView("orders");
+      setWorkspace("sales");
     } else {
       setWorkspace(destination);
     }
@@ -96,7 +103,7 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : <SalesWorkspace />}
+          : <CommercialWorkspace key={salesView} initialView={salesView} />}
       </div>
     </main>
   </div>;
