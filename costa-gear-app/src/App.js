@@ -27,21 +27,22 @@ export default function App() {
     if (destination === "importcosts") { setLogisticsView("costs"); setWorkspace("logistics"); return; }
     if (destination === "operations" || destination === "intelligence") { setWorkspace("sourcing"); return; }
     setWorkspace(destination);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return <div className="cg-app-shell">
     <header className="cg-brand-header">
       <div className="cg-brand-header-inner">
-        <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
+        <button onClick={() => navigate("dashboard")} aria-label="Costa Gear dashboard" style={{border:0,background:"transparent",padding:0,cursor:"pointer",display:"flex",alignItems:"center"}}>
+          <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
+        </button>
+        <nav className="cg-primary-nav" aria-label="Costa Gear operations navigation">
+          {navItems.map(({ id, label, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)}>
+            <Icon size={18} strokeWidth={1.9} /><span>{label}</span>
+          </button>)}
+        </nav>
       </div>
     </header>
-    <nav className="cg-primary-nav" aria-label="Costa Gear operations navigation">
-      <div className="cg-primary-nav-inner">
-        {navItems.map(({ id, label, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)}>
-          <Icon size={19} strokeWidth={2} /><span>{label}</span>
-        </button>)}
-      </div>
-    </nav>
     <main className="cg-workspace">
       {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
       {workspace === "dashboard" ? <div className="cg-module-embedded"><OperationalDashboard onNavigate={navigate} /></div>
