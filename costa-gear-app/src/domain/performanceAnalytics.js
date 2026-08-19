@@ -6,7 +6,7 @@ export const AGE_BUCKETS = [
   { key: "d31_60", label: "31–60 days", min: 31, max: 60 },
   { key: "d61_90", label: "61–90 days", min: 61, max: 90 },
   { key: "d91_180", label: "91–180 days", min: 91, max: 180 },
-  { key: "d181_plus", label: "180+ days", min: 181, max: Infinity },
+  { key: "d181_plus", label: "181+ days", min: 181, max: Infinity },
 ];
 
 const toDate = value => {
@@ -83,16 +83,18 @@ export function buildInventoryAging(data, now = new Date()) {
     const available = remainingLots.reduce((sum, lot) => sum + lot.remainingQty, 0);
     const committed = Math.max(0, onHand - available);
     const capital = remainingLots.reduce((sum, lot) => sum + (lot.unitCost === null ? 0 : lot.unitCost * lot.remainingQty), 0);
+    const unpricedUnits = remainingLots.reduce((sum, lot) => sum + (lot.unitCost === null ? lot.remainingQty : 0), 0);
     const weightedAge = available > 0 ? remainingLots.reduce((sum, lot) => sum + lot.ageDays * lot.remainingQty, 0) / available : null;
     const oldestAge = remainingLots.length ? Math.max(...remainingLots.map(lot => lot.ageDays)) : null;
     const lastSaleDate = lastSaleByProduct.get(product.id) || null;
     const daysSinceLastSale = lastSaleDate ? daysBetween(lastSaleDate, now) : null;
 
-    const buckets = Object.fromEntries(AGE_BUCKETS.map(b => [b.key, { qty: 0, capital: 0 }]));
+    const buckets = Object.fromEntries(AGE_BUCKETS.map(b => [b.key, { qty: 0, capital: 0, unpricedQty: 0 }]));
     for (const lot of remainingLots) {
       const bucket = bucketForAge(lot.ageDays);
       buckets[bucket.key].qty += lot.remainingQty;
       if (lot.unitCost !== null) buckets[bucket.key].capital += lot.unitCost * lot.remainingQty;
+      else buckets[bucket.key].unpricedQty += lot.remainingQty;
     }
 
     let risk = "Healthy";
@@ -108,6 +110,7 @@ export function buildInventoryAging(data, now = new Date()) {
       committed,
       available,
       capital,
+      unpricedUnits,
       weightedAge,
       oldestAge,
       lastSaleDate,
@@ -122,9 +125,10 @@ export function buildInventoryAging(data, now = new Date()) {
   const summary = {
     availableUnits: rows.reduce((s, r) => s + r.available, 0),
     inventoryCapital: rows.reduce((s, r) => s + r.capital, 0),
+    unpricedUnits: rows.reduce((s, r) => s + r.unpricedUnits, 0),
     agedCapital90: rows.reduce((s, r) => s + r.buckets.d91_180.capital + r.buckets.d181_plus.capital, 0),
     agedUnits90: rows.reduce((s, r) => s + r.buckets.d91_180.qty + r.buckets.d181_plus.qty, 0),
-    longAgedCapital180: rows.reduce((s, r) => s + r.buckets.d181_plus.capital, 0),
+    longAgedCapital181: rows.reduce((s, r) => s + r.buckets.d181_plus.capital, 0),
     slowMovingSkus: rows.filter(r => r.slowMoving).length,
   };
 
@@ -133,7 +137,6 @@ export function buildInventoryAging(data, now = new Date()) {
 
 export function buildSkuProfitability(data, inventoryRows, periodDays = null, now = new Date()) {
   const cutoff = periodDays ? new Date(now.getTime() - periodDays * 86400000) : null;
-  const orderMap = new Map(data.salesOrders.map(o => [o.id, o]));
   const itemsByOrder = new Map();
   for (const item of data.salesOrderItems) {
     if (!itemsByOrder.has(item.sales_order_id)) itemsByOrder.set(item.sales_order_id, []);
@@ -141,8 +144,18 @@ export function buildSkuProfitability(data, inventoryRows, periodDays = null, no
   }
 
   const metrics = new Map(data.products.map(p => [p.id, {
-    product: p, unitsSold: 0, revenue: 0, cogs: 0, allocatedSellingCosts: 0, profit: 0, margin: null,
-    avgSellPrice: null, profitPerUnit: null, lastSaleDate: null,
+    product: p,
+    unitsSold: 0,
+    revenue: 0,
+    cogs: 0,
+    allocatedSellingCosts: 0,
+    profit: null,
+    margin: null,
+    avgSellPrice: null,
+    profitPerUnit: null,
+    lastSaleDate: null,
+    missingCostUnits: 0,
+    costComplete: true,
   }]));
 
   for (const order of data.salesOrders) {
@@ -160,13 +173,13 @@ export function buildSkuProfitability(data, inventoryRows, periodDays = null, no
       if (!m) return;
       const qty = Number(item.quantity || 0);
       const net = lineNets[index];
-      const cogs = Number(item.unit_cost_cad || 0) * qty;
+      const hasCost = item.unit_cost_cad !== null && item.unit_cost_cad !== undefined;
       const allocated = orderNet > 0 ? orderCosts * (net / orderNet) : orderCosts / orderItems.length;
       m.unitsSold += qty;
       m.revenue += net;
-      m.cogs += cogs;
+      if (hasCost) m.cogs += Number(item.unit_cost_cad) * qty;
+      else m.missingCostUnits += qty;
       m.allocatedSellingCosts += allocated;
-      m.profit += net - cogs - allocated;
       if (saleDate && (!m.lastSaleDate || saleDate > m.lastSaleDate)) m.lastSaleDate = saleDate;
     });
   }
@@ -174,25 +187,32 @@ export function buildSkuProfitability(data, inventoryRows, periodDays = null, no
   const inventoryByProduct = new Map(inventoryRows.map(r => [r.product.id, r]));
   const rows = [...metrics.values()].map(m => {
     const inventory = inventoryByProduct.get(m.product.id);
-    m.margin = m.revenue > 0 ? m.profit / m.revenue * 100 : null;
+    m.costComplete = m.missingCostUnits === 0;
+    m.profit = m.costComplete ? m.revenue - m.cogs - m.allocatedSellingCosts : null;
+    m.margin = m.costComplete && m.revenue > 0 ? m.profit / m.revenue * 100 : null;
     m.avgSellPrice = m.unitsSold > 0 ? m.revenue / m.unitsSold : null;
-    m.profitPerUnit = m.unitsSold > 0 ? m.profit / m.unitsSold : null;
+    m.profitPerUnit = m.costComplete && m.unitsSold > 0 ? m.profit / m.unitsSold : null;
     m.available = inventory?.available || 0;
     m.inventoryCapital = inventory?.capital || 0;
+    m.unpricedInventoryUnits = inventory?.unpricedUnits || 0;
     m.weightedAge = inventory?.weightedAge ?? null;
     return m;
   });
 
+  const measuredRows = rows.filter(r => r.unitsSold > 0 && r.costComplete);
   const revenue = rows.reduce((s, r) => s + r.revenue, 0);
-  const profit = rows.reduce((s, r) => s + r.profit, 0);
+  const measuredRevenue = measuredRows.reduce((s, r) => s + r.revenue, 0);
+  const profit = measuredRows.reduce((s, r) => s + Number(r.profit || 0), 0);
   const summary = {
     revenue,
+    measuredRevenue,
     profit,
-    margin: revenue > 0 ? profit / revenue * 100 : null,
+    margin: measuredRevenue > 0 ? profit / measuredRevenue * 100 : null,
     unitsSold: rows.reduce((s, r) => s + r.unitsSold, 0),
+    missingCostUnits: rows.reduce((s, r) => s + r.missingCostUnits, 0),
     sellingCosts: rows.reduce((s, r) => s + r.allocatedSellingCosts, 0),
-    profitableSkus: rows.filter(r => r.profit > 0).length,
-    lossSkus: rows.filter(r => r.profit < 0).length,
+    profitableSkus: measuredRows.filter(r => r.profit > 0).length,
+    lossSkus: measuredRows.filter(r => r.profit < 0).length,
   };
 
   return { rows, summary };
