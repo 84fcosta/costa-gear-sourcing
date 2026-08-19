@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Boxes,
+  DollarSign,
   LayoutDashboard,
   PackageSearch,
   ShoppingCart,
@@ -11,6 +12,7 @@ import ReceivingInventoryWorkspace from "./components/ReceivingInventoryWorkspac
 import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
+import SalesWorkspace from "./components/SalesWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import "./brand.css";
 import "./legacy-overrides.css";
@@ -21,14 +23,16 @@ const primaryNav = [
   { id: "buying", label: "Buying", Icon: ShoppingCart },
   { id: "logistics", label: "Logistics", Icon: Truck },
   { id: "receiving", label: "Inventory", Icon: Boxes },
+  { id: "sales", label: "Sales", Icon: DollarSign },
 ];
 
 const pageMeta = {
-  dashboard: ["Operational Dashboard", "One view of sourcing readiness, buying commitments, logistics, receiving and inventory."],
+  dashboard: ["Operational Dashboard", "One view of sourcing readiness, buying commitments, logistics, inventory and commercial performance."],
   sourcing: ["Sourcing", "Manage products, suppliers, quotations, RFQs and sourcing decisions in one workspace."],
   buying: ["Buying Decisions & Purchase Orders", "Convert approved sourcing decisions into planned and ordered purchases."],
   logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
   receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
+  sales: ["Sales & Performance", "Capture sales, reserve inventory and measure realized margin by SKU."],
 };
 
 export default function App() {
@@ -91,7 +95,8 @@ export default function App() {
           : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
-          : <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>}
+          : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
+          : <SalesWorkspace />}
       </div>
     </main>
   </div>;
