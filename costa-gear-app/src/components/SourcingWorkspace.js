@@ -12,7 +12,7 @@ const tabStyle = active => ({
   cursor: "pointer"
 });
 
-export default function SourcingWorkspace() {
+export default function SourcingWorkspace({ onNavigate }) {
   const [view, setView] = useState("master");
   return <div>
     <div style={{background:"#F3F4EF",borderBottom:"1px solid rgba(50,56,42,.10)",padding:"14px 18px"}}>
@@ -27,6 +27,6 @@ export default function SourcingWorkspace() {
         </div>
       </div>
     </div>
-    {view==="master" ? <LegacyApp/> : <SourcingDecisionLab/>}
+    {view==="master" ? <LegacyApp/> : <SourcingDecisionLab onCreateBuyingDecision={(context)=>onNavigate?.("buying",context)}/>} 
   </div>;
 }
