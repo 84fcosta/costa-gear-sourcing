@@ -32,7 +32,7 @@ const pageMeta = {
   buying: ["Buying Decisions & Purchase Orders", "Convert approved sourcing decisions into planned and ordered purchases."],
   logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
   receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
-  sales: ["Sales & Performance", "Capture sales, measure SKU performance and convert demand signals into replenishment decisions."],
+  sales: ["Sales & Performance", "Capture sales, measure SKU performance, plan replenishment and improve pricing decisions."],
 };
 
 export default function App() {
@@ -62,6 +62,9 @@ export default function App() {
       setWorkspace("sales");
     } else if (destination === "planning") {
       setSalesView("planning");
+      setWorkspace("sales");
+    } else if (destination === "pricing") {
+      setSalesView("pricing");
       setWorkspace("sales");
     } else if (destination === "sales") {
       setSalesView("orders");
