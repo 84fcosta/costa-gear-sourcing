@@ -4,104 +4,23 @@ import { listMarketPrices, listSupplierScorecards } from "../services/sourcingRe
 import { DEFAULT_DECISION_WEIGHTS, rankProductQuotes } from "../domain/decisionRanking";
 
 const C = { ink:"#20251F", olive:"#858C38", oliveDark:"#747B31", green:"#4D7D57", red:"#B65145", blue:"#4E6A8E", muted:"#647062", border:"rgba(50,56,42,0.12)", soft:"#F3F4EF" };
-const moneyCad = v => v === null || v === undefined ? "—" : Number(v).toLocaleString("en-CA", { style:"currency", currency:"CAD", maximumFractionDigits:2 });
-const moneyUsd = v => v === null || v === undefined ? "—" : Number(v).toLocaleString("en-US", { style:"currency", currency:"USD", maximumFractionDigits:2 });
-const pct = v => v === null || v === undefined ? "—" : `${Number(v).toFixed(1)}%`;
+const moneyCad = v => v === null || v === undefined ? "N/A" : Number(v).toLocaleString("en-CA", { style:"currency", currency:"CAD", maximumFractionDigits:2 });
+const moneyUsd = v => v === null || v === undefined ? "N/A" : Number(v).toLocaleString("en-US", { style:"currency", currency:"USD", maximumFractionDigits:2 });
+const pct = v => v === null || v === undefined ? "N/A" : `${Number(v).toFixed(1)}%`;
 const inputStyle = { border:`1px solid ${C.border}`, borderRadius:10, padding:"9px 10px", fontSize:13, color:C.ink, background:"#fff", width:"100%", boxSizing:"border-box" };
+const actionBtn={border:0,background:"linear-gradient(180deg,#929A44,#747B31)",color:"#fff",borderRadius:8,padding:"6px 9px",fontWeight:800,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"};
+function Stat({ label, value, sub }) { return <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:15 }}><div style={{ fontSize:12, color:C.muted, fontWeight:700 }}>{label}</div><div style={{ fontSize:24, fontWeight:850, color:C.ink, marginTop:5 }}>{value}</div>{sub && <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>{sub}</div>}</div>; }
+function Weight({ label, value, onChange }) { return <label style={{ display:"grid", gap:5, fontSize:12, color:C.muted, fontWeight:750 }}><span style={{ display:"flex", justifyContent:"space-between" }}><span>{label}</span><strong style={{ color:C.ink }}>{value}%</strong></span><input type="range" min="0" max="100" step="5" value={value} onChange={e => onChange(Number(e.target.value))} /></label>; }
 
-function Stat({ label, value, sub }) {
-  return <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:15 }}><div style={{ fontSize:12, color:C.muted, fontWeight:700 }}>{label}</div><div style={{ fontSize:24, fontWeight:850, color:C.ink, marginTop:5 }}>{value}</div>{sub && <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>{sub}</div>}</div>;
-}
-
-function Weight({ label, value, onChange }) {
-  return <label style={{ display:"grid", gap:5, fontSize:12, color:C.muted, fontWeight:750 }}><span style={{ display:"flex", justifyContent:"space-between" }}><span>{label}</span><strong style={{ color:C.ink }}>{value}%</strong></span><input type="range" min="0" max="100" step="5" value={value} onChange={e => onChange(Number(e.target.value))} /></label>;
-}
-
-export default function SourcingDecisionLab() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [products, setProducts] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [marketPrices, setMarketPrices] = useState([]);
-  const [scorecards, setScorecards] = useState([]);
-  const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState("");
-  const [weights, setWeights] = useState(() => {
-    try { return { ...DEFAULT_DECISION_WEIGHTS, ...JSON.parse(localStorage.getItem("cg-decision-weights") || "{}") }; }
-    catch { return DEFAULT_DECISION_WEIGHTS; }
-  });
-
-  const load = async () => {
-    setLoading(true); setError("");
-    try {
-      const [{ data:p, error:pe }, { data:s, error:se }, { data:q, error:qe }, mp, sc] = await Promise.all([
-        supabase.from("products").select("*").order("sku_id"),
-        supabase.from("suppliers").select("*").order("sup_id"),
-        supabase.from("quotes").select("*").order("created_at", { ascending:false }),
-        listMarketPrices(), listSupplierScorecards(),
-      ]);
-      if (pe || se || qe) throw new Error((pe || se || qe).message);
-      setProducts(p || []); setSuppliers(s || []); setQuotes(q || []); setMarketPrices(mp || []); setScorecards(sc || []);
-    } catch (e) { setError(e?.message || "Unable to load decision data."); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
-  useEffect(() => { localStorage.setItem("cg-decision-weights", JSON.stringify(weights)); }, [weights]);
-
-  const uiQuotes = useMemo(() => quotes.map(q => ({ ...q, productId:q.product_id, supplierId:q.supplier_id, supplierName:q.supplier_name, unitPrice:q.unit_price, shippingCost:q.shipping_cost, shippingCurrency:q.shipping_currency, shippingCostPerUnitCad:q.shipping_cost_per_unit_cad, usdCadRate:q.usd_cad_rate, dutyRatePct:q.duty_rate_pct, brokerageCad:q.brokerage_cad, otherFeesCad:q.other_fees_cad, landedCostCad:q.landed_cost_cad, date:q.quote_date })), [quotes]);
-
-  const rows = useMemo(() => products.map(product => {
-    const pq = uiQuotes.filter(q => q.productId === product.id && q.unitPrice !== null && q.unitPrice !== undefined);
-    const latestMarket = marketPrices.filter(m => m.product_id === product.id).sort((a,b) => String(b.observed_at).localeCompare(String(a.observed_at)))[0];
-    const marketCad = latestMarket?.price_cad ?? product.market_reference_cad ?? null;
-    const targetSellCad = product.target_sell_price_cad ?? marketCad;
-    const ranking = rankProductQuotes({ quotes:pq, targetSellCad, scorecards, weights });
-    const best = ranking[0] || null;
-    return { product, pq, ranking, best, marketCad, targetSellCad };
-  }), [products, uiQuotes, marketPrices, scorecards, weights]);
-
-  const filtered = rows.filter(r => {
-    const q = search.trim().toLowerCase();
-    return !q || [r.product.sku_id, r.product.name, r.product.fitment, r.best?.quote?.supplierName].filter(Boolean).some(v => String(v).toLowerCase().includes(q));
-  });
-
-  const completeProducts = rows.filter(r => r.best?.basisComplete).length;
-  const avgScore = rows.filter(r => r.best).length ? (rows.filter(r => r.best).reduce((s,r) => s + r.best.decisionScore, 0) / rows.filter(r => r.best).length).toFixed(1) : "—";
-  const weightTotal = Object.values(weights).reduce((s,v) => s + Number(v || 0), 0);
-
-  return <div style={{ minHeight:"100vh", background:C.soft, color:C.ink }}>
-    <div style={{ background:"linear-gradient(180deg,#11130F,#20251F)", color:"#fff", padding:"24px 32px" }}>
-      <div style={{ maxWidth:1560, margin:"0 auto", display:"flex", justifyContent:"space-between", gap:20, alignItems:"center", flexWrap:"wrap" }}>
-        <div><div style={{ color:"#B6BE59", fontSize:12, fontWeight:850, letterSpacing:1.4, textTransform:"uppercase" }}>Costa Gear</div><h1 style={{ margin:"4px 0 0", fontSize:30, letterSpacing:"-0.03em" }}>Sourcing Decision Lab</h1><div style={{ color:"#C9CFC4", fontSize:13, marginTop:5 }}>Weighted recommendation across landed cost, margin, supplier performance and data quality.</div></div>
-        <button onClick={load} style={{ border:`1px solid rgba(255,255,255,.18)`, background:"rgba(255,255,255,.08)", color:"white", borderRadius:10, padding:"9px 12px", cursor:"pointer", fontWeight:750 }}>Refresh</button>
-      </div>
-    </div>
-
-    <div style={{ maxWidth:1560, margin:"0 auto", padding:"22px 32px 44px", display:"grid", gap:18 }}>
-      {error && <div style={{ background:"#FFF1EF", color:C.red, border:`1px solid rgba(182,81,69,.25)`, borderRadius:10, padding:12 }}>{error}</div>}
-      {loading ? <div style={{ padding:48, textAlign:"center", color:C.muted }}>Loading sourcing decisions…</div> : <>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:12 }}><Stat label="Products" value={products.length} sub={`${completeProducts} with complete landed cost`} /><Stat label="Suppliers" value={suppliers.length} sub={`${scorecards.length} scored`} /><Stat label="Quotes" value={quotes.length} sub={`${marketPrices.length} market observations`} /><Stat label="Avg Decision Score" value={avgScore} sub="0–100 weighted score" /></div>
-
-        <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:16 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:18, alignItems:"flex-start", flexWrap:"wrap" }}>
-            <div><div style={{ fontSize:17, fontWeight:850 }}>Decision Weights</div><div style={{ color:C.muted, fontSize:12, marginTop:3 }}>Weights are saved on this browser. The algorithm normalizes them automatically, so they do not need to total 100.</div></div>
-            <div style={{ fontSize:12, color:C.muted }}>Current total: <strong style={{ color:C.ink }}>{weightTotal}%</strong></div>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,minmax(160px,1fr))", gap:18, marginTop:14 }}><Weight label="Landed Cost" value={weights.landedCost} onChange={v => setWeights(w => ({...w, landedCost:v}))} /><Weight label="Margin" value={weights.margin} onChange={v => setWeights(w => ({...w, margin:v}))} /><Weight label="Supplier Score" value={weights.supplier} onChange={v => setWeights(w => ({...w, supplier:v}))} /><Weight label="Data Completeness" value={weights.completeness} onChange={v => setWeights(w => ({...w, completeness:v}))} /></div>
-          <div style={{ marginTop:12 }}><button onClick={() => setWeights(DEFAULT_DECISION_WEIGHTS)} style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:9, padding:"7px 10px", fontSize:12, fontWeight:750, cursor:"pointer" }}>Reset to 40 / 30 / 20 / 10</button></div>
-        </div>
-
-        <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:16 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:14, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}><div><div style={{ fontSize:18, fontWeight:850 }}>Product Recommendations</div><div style={{ color:C.muted, fontSize:12, marginTop:3 }}>Click a row to see how every supplier ranked for that product.</div></div><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search SKU, product or supplier…" style={{ ...inputStyle, width:330 }} /></div>
-          <div style={{ overflowX:"auto", border:`1px solid ${C.border}`, borderRadius:12 }}><table style={{ width:"100%", borderCollapse:"collapse", minWidth:1240, fontSize:12 }}><thead><tr style={{ background:"#F5F7F1" }}>{["SKU","Product","Recommended Supplier","Unit USD","Landed CAD","Target/Market CAD","Margin","Supplier Score","Data","Decision Score"].map(h => <th key={h} style={{ textAlign:"left", padding:"11px 10px", color:C.muted, fontWeight:850, borderBottom:`1px solid ${C.border}`, whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead><tbody>{filtered.map(r => {
-            const b = r.best; const isOpen = expanded === r.product.id;
-            return <tr key={r.product.id} onClick={() => setExpanded(isOpen ? "" : r.product.id)} style={{ cursor:"pointer", background:isOpen ? "#F8FAF3" : "#fff" }}><td style={{ padding:10, borderBottom:`1px solid ${C.border}`, fontFamily:"monospace", fontWeight:850, color:C.oliveDark }}>{r.product.sku_id}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}`, minWidth:260 }}><strong>{r.product.name}</strong><div style={{ color:C.muted, marginTop:2 }}>{r.product.fitment || "Fitment TBD"}</div>{isOpen && r.ranking.length > 0 && <div style={{ marginTop:10, display:"grid", gap:6 }}>{r.ranking.map((x,i) => <div key={x.quote.id} style={{ display:"grid", gridTemplateColumns:"28px 1.5fr repeat(5,1fr)", gap:8, padding:"7px 8px", border:`1px solid ${C.border}`, borderRadius:8, background:"white", alignItems:"center" }}><strong>#{i+1}</strong><span>{x.quote.supplierName || "Supplier"}</span><span>{moneyCad(x.landedCad)}</span><span>{pct(x.marginPct)}</span><span>{x.supplierScore === null ? "—" : `${x.supplierScore.toFixed(1)}/5`}</span><span>{x.completeness}%</span><strong style={{ color:i===0?C.green:C.ink }}>{x.decisionScore}</strong></div>)}</div>}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}`, fontWeight:750 }}>{b?.quote?.supplierName || "—"}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>{moneyUsd(b?.quote?.unitPrice)}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}`, fontWeight:850, color:C.green }}>{moneyCad(b?.landedCad)}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>{moneyCad(r.targetSellCad)}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>{pct(b?.marginPct)}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>{b?.supplierScore === null || b?.supplierScore === undefined ? "—" : `${b.supplierScore.toFixed(1)} / 5`}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>{b ? `${b.completeness}%` : "—"}</td><td style={{ padding:10, borderBottom:`1px solid ${C.border}` }}><span style={{ display:"inline-flex", minWidth:48, justifyContent:"center", borderRadius:999, padding:"5px 9px", fontWeight:900, background:b?.basisComplete?"#EDF7EE":"#FFF8E8", color:b?.basisComplete?C.green:"#8B6A17" }}>{b?.decisionScore ?? "—"}</span></td></tr>;
-          })}</tbody></table></div>
-          <div style={{ color:C.muted, fontSize:11, marginTop:10 }}>Incomplete landed-cost quotes are kept visible but rank behind quotes with complete landed-cost data. Missing supplier scores or margin inputs receive zero for that component rather than being guessed.</div>
-        </div>
-      </>}
-    </div>
-  </div>;
+export default function SourcingDecisionLab({ onCreateBuyingDecision }) {
+  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[products,setProducts]=useState([]),[suppliers,setSuppliers]=useState([]),[quotes,setQuotes]=useState([]),[marketPrices,setMarketPrices]=useState([]),[scorecards,setScorecards]=useState([]),[search,setSearch]=useState(""),[expanded,setExpanded]=useState("");
+  const [weights,setWeights]=useState(()=>{try{return{...DEFAULT_DECISION_WEIGHTS,...JSON.parse(localStorage.getItem("cg-decision-weights")||"{}")};}catch{return DEFAULT_DECISION_WEIGHTS;}});
+  const load=async()=>{setLoading(true);setError("");try{const[{data:p,error:pe},{data:s,error:se},{data:q,error:qe},mp,sc]=await Promise.all([supabase.from("products").select("*").order("sku_id"),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("quotes").select("*").order("created_at",{ascending:false}),listMarketPrices(),listSupplierScorecards()]);if(pe||se||qe)throw new Error((pe||se||qe).message);setProducts(p||[]);setSuppliers(s||[]);setQuotes(q||[]);setMarketPrices(mp||[]);setScorecards(sc||[]);}catch(e){setError(e?.message||"Unable to load decision data.");}finally{setLoading(false);}};
+  useEffect(()=>{load();},[]);useEffect(()=>{localStorage.setItem("cg-decision-weights",JSON.stringify(weights));},[weights]);
+  const uiQuotes=useMemo(()=>quotes.map(q=>({...q,productId:q.product_id,supplierId:q.supplier_id,supplierName:q.supplier_name,unitPrice:q.unit_price,shippingCost:q.shipping_cost,shippingCurrency:q.shipping_currency,shippingCostPerUnitCad:q.shipping_cost_per_unit_cad,usdCadRate:q.usd_cad_rate,dutyRatePct:q.duty_rate_pct,brokerageCad:q.brokerage_cad,otherFeesCad:q.other_fees_cad,landedCostCad:q.landed_cost_cad,date:q.quote_date})),[quotes]);
+  const rows=useMemo(()=>products.map(product=>{const pq=uiQuotes.filter(q=>q.productId===product.id&&q.unitPrice!==null&&q.unitPrice!==undefined);const latestMarket=marketPrices.filter(m=>m.product_id===product.id).sort((a,b)=>String(b.observed_at).localeCompare(String(a.observed_at)))[0];const marketCad=latestMarket?.price_cad??product.market_reference_cad??null;const targetSellCad=product.target_sell_price_cad??marketCad;const ranking=rankProductQuotes({quotes:pq,targetSellCad,scorecards,weights});return{product,pq,ranking,best:ranking[0]||null,marketCad,targetSellCad};}),[products,uiQuotes,marketPrices,scorecards,weights]);
+  const filtered=rows.filter(r=>{const q=search.trim().toLowerCase();return!q||[r.product.sku_id,r.product.name,r.product.fitment,r.best?.quote?.supplierName].filter(Boolean).some(v=>String(v).toLowerCase().includes(q));});
+  const completeProducts=rows.filter(r=>r.best?.basisComplete).length;const avgScore=rows.filter(r=>r.best).length?(rows.filter(r=>r.best).reduce((s,r)=>s+r.best.decisionScore,0)/rows.filter(r=>r.best).length).toFixed(1):"N/A";const weightTotal=Object.values(weights).reduce((s,v)=>s+Number(v||0),0);
+  const startBuying=(r,x)=>{if(!x?.quote)return;onCreateBuyingDecision?.({type:"sourcing-to-buying",productId:r.product.id,quoteId:x.quote.id,supplierId:x.quote.supplierId,targetSellPriceCad:r.targetSellCad,decisionScore:x.decisionScore});};
+  return <div style={{minHeight:"100vh",background:C.soft,color:C.ink}}><div style={{background:"linear-gradient(180deg,#11130F,#20251F)",color:"#fff",padding:"24px 32px"}}><div style={{maxWidth:1560,margin:"0 auto",display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}><div><div style={{color:"#B6BE59",fontSize:12,fontWeight:850,letterSpacing:1.4,textTransform:"uppercase"}}>Costa Gear</div><h1 style={{margin:"4px 0 0",fontSize:30}}>Sourcing Decision Lab</h1><div style={{color:"#C9CFC4",fontSize:13,marginTop:5}}>Weighted recommendation across landed cost, margin, supplier performance and data quality.</div></div><button onClick={load} style={{border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"white",borderRadius:10,padding:"9px 12px",cursor:"pointer",fontWeight:750}}>Refresh</button></div></div><div style={{maxWidth:1560,margin:"0 auto",padding:"22px 32px 44px",display:"grid",gap:18}}>{error&&<div style={{background:"#FFF1EF",color:C.red,borderRadius:10,padding:12}}>{error}</div>}{loading?<div style={{padding:48,textAlign:"center",color:C.muted}}>Loading sourcing decisions...</div>:<><div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:12}}><Stat label="Products" value={products.length} sub={`${completeProducts} with complete landed cost`}/><Stat label="Suppliers" value={suppliers.length} sub={`${scorecards.length} scored`}/><Stat label="Quotes" value={quotes.length} sub={`${marketPrices.length} market observations`}/><Stat label="Avg Decision Score" value={avgScore} sub="0 to 100 weighted score"/></div><div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,padding:16}}><div style={{display:"flex",justifyContent:"space-between",gap:18,flexWrap:"wrap"}}><div><div style={{fontSize:17,fontWeight:850}}>Decision Weights</div><div style={{color:C.muted,fontSize:12,marginTop:3}}>Weights are saved on this browser and normalized automatically.</div></div><div style={{fontSize:12,color:C.muted}}>Current total: <strong style={{color:C.ink}}>{weightTotal}%</strong></div></div><div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(160px,1fr))",gap:18,marginTop:14}}><Weight label="Landed Cost" value={weights.landedCost} onChange={v=>setWeights(w=>({...w,landedCost:v}))}/><Weight label="Margin" value={weights.margin} onChange={v=>setWeights(w=>({...w,margin:v}))}/><Weight label="Supplier Score" value={weights.supplier} onChange={v=>setWeights(w=>({...w,supplier:v}))}/><Weight label="Data Completeness" value={weights.completeness} onChange={v=>setWeights(w=>({...w,completeness:v}))}/></div><div style={{marginTop:12}}><button onClick={()=>setWeights(DEFAULT_DECISION_WEIGHTS)} style={{border:`1px solid ${C.border}`,background:"#fff",borderRadius:9,padding:"7px 10px",fontSize:12,fontWeight:750,cursor:"pointer"}}>Reset to 40 / 30 / 20 / 10</button></div></div><div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,padding:16}}><div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"center",flexWrap:"wrap",marginBottom:14}}><div><div style={{fontSize:18,fontWeight:850}}>Product Recommendations</div><div style={{color:C.muted,fontSize:12,marginTop:3}}>Expand a product, review the supplier ranking, then send the selected quote directly to Buying.</div></div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search SKU, product or supplier..." style={{...inputStyle,width:330}}/></div><div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:12}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:1350,fontSize:12}}><thead><tr style={{background:"#F5F7F1"}}>{["SKU","Product","Recommended Supplier","Landed CAD","Margin","Supplier Score","Data","Decision Score","Action"].map(h=><th key={h} style={{textAlign:"left",padding:"11px 10px",color:C.muted,fontWeight:850,borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{filtered.map(r=>{const b=r.best,isOpen=expanded===r.product.id;return <tr key={r.product.id} onClick={()=>setExpanded(isOpen?"":r.product.id)} style={{cursor:"pointer",background:isOpen?"#F8FAF3":"#fff"}}><td style={{padding:10,borderBottom:`1px solid ${C.border}`,fontFamily:"monospace",fontWeight:850,color:C.oliveDark}}>{r.product.sku_id}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`,minWidth:300}}><strong>{r.product.name}</strong><div style={{color:C.muted,marginTop:2}}>{r.product.fitment||"Fitment TBD"}</div>{isOpen&&r.ranking.length>0&&<div style={{marginTop:10,display:"grid",gap:6}}>{r.ranking.map((x,i)=><div key={x.quote.id} style={{display:"grid",gridTemplateColumns:"28px 1.5fr repeat(4,1fr) auto",gap:8,padding:"7px 8px",border:`1px solid ${C.border}`,borderRadius:8,background:"white",alignItems:"center"}} onClick={e=>e.stopPropagation()}><strong>#{i+1}</strong><span>{x.quote.supplierName||"Supplier"}</span><span>{moneyCad(x.landedCad)}</span><span>{pct(x.marginPct)}</span><span>{x.completeness}%</span><strong style={{color:i===0?C.green:C.ink}}>{x.decisionScore}</strong><button style={actionBtn} onClick={()=>startBuying(r,x)}>Buy from this quote</button></div>)}</div>}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`,fontWeight:750}}>{b?.quote?.supplierName||"N/A"}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`,fontWeight:850,color:C.green}}>{moneyCad(b?.landedCad)}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`}}>{pct(b?.marginPct)}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`}}>{b?.supplierScore==null?"N/A":`${b.supplierScore.toFixed(1)} / 5`}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`}}>{b?`${b.completeness}%`:"N/A"}</td><td style={{padding:10,borderBottom:`1px solid ${C.border}`}}><strong>{b?.decisionScore??"N/A"}</strong></td><td style={{padding:10,borderBottom:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>{b&&<button style={actionBtn} onClick={()=>startBuying(r,b)}>Create buying decision</button>}</td></tr>;})}</tbody></table></div></div></>}</div></div>;
 }
