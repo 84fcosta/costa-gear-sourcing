@@ -122,13 +122,15 @@ export function buildInventoryAging(data, now = new Date()) {
     };
   });
 
+  const longAgedCapital = rows.reduce((s, r) => s + r.buckets.d181_plus.capital, 0);
   const summary = {
     availableUnits: rows.reduce((s, r) => s + r.available, 0),
     inventoryCapital: rows.reduce((s, r) => s + r.capital, 0),
     unpricedUnits: rows.reduce((s, r) => s + r.unpricedUnits, 0),
     agedCapital90: rows.reduce((s, r) => s + r.buckets.d91_180.capital + r.buckets.d181_plus.capital, 0),
     agedUnits90: rows.reduce((s, r) => s + r.buckets.d91_180.qty + r.buckets.d181_plus.qty, 0),
-    longAgedCapital181: rows.reduce((s, r) => s + r.buckets.d181_plus.capital, 0),
+    longAgedCapital180: longAgedCapital,
+    longAgedCapital181: longAgedCapital,
     slowMovingSkus: rows.filter(r => r.slowMoving).length,
   };
 
@@ -200,17 +202,20 @@ export function buildSkuProfitability(data, inventoryRows, periodDays = null, no
   });
 
   const measuredRows = rows.filter(r => r.unitsSold > 0 && r.costComplete);
-  const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const measuredRevenue = measuredRows.reduce((s, r) => s + r.revenue, 0);
   const profit = measuredRows.reduce((s, r) => s + Number(r.profit || 0), 0);
+  const measuredUnits = measuredRows.reduce((s, r) => s + r.unitsSold, 0);
   const summary = {
-    revenue,
+    revenue: measuredRevenue,
+    totalRevenue,
     measuredRevenue,
     profit,
     margin: measuredRevenue > 0 ? profit / measuredRevenue * 100 : null,
-    unitsSold: rows.reduce((s, r) => s + r.unitsSold, 0),
+    unitsSold: measuredUnits,
+    totalUnitsSold: rows.reduce((s, r) => s + r.unitsSold, 0),
     missingCostUnits: rows.reduce((s, r) => s + r.missingCostUnits, 0),
-    sellingCosts: rows.reduce((s, r) => s + r.allocatedSellingCosts, 0),
+    sellingCosts: measuredRows.reduce((s, r) => s + r.allocatedSellingCosts, 0),
     profitableSkus: measuredRows.filter(r => r.profit > 0).length,
     lossSkus: measuredRows.filter(r => r.profit < 0).length,
   };
