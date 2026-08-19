@@ -42,7 +42,7 @@ export default function SourcingWorkspace({ onNavigate }) {
         targetSellPriceCad: context.targetSellPriceCad ?? null,
         notes: `Sourcing recommendation snapshot. Decision Score ${context.decisionScore ?? "N/A"}.`
       });
-      onNavigate?.("buying");
+      onNavigate?.("buying", { type:"buying-draft-created", purchaseOrderId:created.id, poRef:created.po_ref });
     } catch (e) { setHandoffError(e?.message || "Unable to create buying draft."); }
     finally { setHandoffBusy(false); }
   };
