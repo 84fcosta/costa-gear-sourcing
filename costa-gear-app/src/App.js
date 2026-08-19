@@ -32,7 +32,7 @@ const pageMeta = {
   buying: ["Buying Decisions & Purchase Orders", "Convert approved sourcing decisions into planned and ordered purchases."],
   logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
   receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
-  sales: ["Sales & Performance", "Capture sales, reserve inventory and measure aging, velocity and realized profitability by SKU."],
+  sales: ["Sales & Performance", "Capture sales, measure SKU performance and convert demand signals into replenishment decisions."],
 };
 
 export default function App() {
@@ -59,6 +59,9 @@ export default function App() {
       setWorkspace("logistics");
     } else if (destination === "performance") {
       setSalesView("performance");
+      setWorkspace("sales");
+    } else if (destination === "planning") {
+      setSalesView("planning");
       setWorkspace("sales");
     } else if (destination === "sales") {
       setSalesView("orders");
@@ -103,7 +106,7 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : <CommercialWorkspace key={salesView} initialView={salesView} />}
+          : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
   </div>;
