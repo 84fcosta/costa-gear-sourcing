@@ -4,6 +4,7 @@ import ReceivingInventoryWorkspace from "./components/ReceivingInventoryWorkspac
 import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
+import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 
 const navButton = (active) => ({
   border: active ? "1px solid rgba(116,123,49,.7)" : "1px solid rgba(50,56,42,.12)",
@@ -19,8 +20,10 @@ const navButton = (active) => ({
 export default function App() {
   const [workspace, setWorkspace] = useState("dashboard");
   const [logisticsView, setLogisticsView] = useState("shipments");
+  const [handoff, setHandoff] = useState(null);
 
-  const navigate = destination => {
+  const navigate = (destination, context = null) => {
+    if (context) setHandoff(context);
     if (destination === "shipments") {
       setLogisticsView("shipments");
       setWorkspace("logistics");
@@ -51,6 +54,7 @@ export default function App() {
         </div>
       </div>
     </div>
+    {workspace==="buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={()=>setHandoff(null)}/>} 
     {workspace==="dashboard" ? <OperationalDashboard onNavigate={navigate}/>
       : workspace==="sourcing" ? <SourcingWorkspace onNavigate={navigate}/>
       : workspace==="buying" ? <BuyingDecisionWorkspace/>
