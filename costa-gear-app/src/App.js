@@ -1,1 +1,1 @@
-export { default } from "./legacy/LegacyApp";
+export { default } from "./LegacyApp";
