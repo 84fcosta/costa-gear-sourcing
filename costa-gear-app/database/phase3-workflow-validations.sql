@@ -34,6 +34,24 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = ''
-as $$;
--- See applied migration for function body.
+as $$
+begin
+  if new.status = 'Posted' then
+    if new.received_date is null then
+      raise exception 'Received Date is required before posting a receipt.';
+    end if;
+    if not exists (
+      select 1 from public.receipt_items i
+      where i.receipt_id = new.id
+    ) then
+      raise exception 'Add at least one received item before posting a receipt.';
+    end if;
+  end if;
+  return new;
+end;
 $$;
+
+drop trigger if exists trg_validate_receipt_posting on public.receipts;
+create trigger trg_validate_receipt_posting
+before insert or update on public.receipts
+for each row execute function public.validate_receipt_posting();
