@@ -19,7 +19,7 @@ export default function CommercialWorkspace({ initialView="orders" }) {
         </div>
       </div>
     </div>
-    <div className="cg-module-embedded">
+    <div className="cg-commercial-content">
       {view==="orders"?<SalesWorkspace/>:<PerformanceWorkspace/>}
     </div>
   </div>;
