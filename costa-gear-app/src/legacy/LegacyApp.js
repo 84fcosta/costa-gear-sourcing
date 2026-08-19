@@ -1,0 +1,1425 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase";
+import * as XLSX from "xlsx";
+import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
+
+// ── Palette ─────────────────────────────────────────────────────
+const C = {
+  navy:  "#20251F",
+  blue:  "#4E6A8E",
+  amber: "#858C38",
+  teal:  "#4D7D57",
+  white: "#FFFFFF",
+  lgray: "#F3F4EF",
+  mgray: "rgba(50,56,42,0.12)",
+  dgray: "#647062",
+  red:   "#B65145",
+  green: "#4D7D57",
+  purple:"#6B4E8B",
+  sage:  "#D9DDD4",
+  sage2: "#CFD5CB",
+  soft:  "#FAFBF8",
+};
+
+const CATEGORIES = [
+  "Exterior – Protection","Exterior – Lighting","Exterior – Storage & Cargo",
+  "Exterior – Access & Entry","Exterior – Recovery",
+  "Interior – Storage","Interior – Mounting & Tech","Interior – Comfort & Utility",
+  "Drivetrain & Suspension","Other",
+];
+const FITMENTS = [
+  "Wrangler JL 2-Door","Wrangler JL 4-Door","Wrangler JL 2-Door & 4-Door",
+  "Gladiator JT","Wrangler JK 2-Door","Wrangler JK 4-Door",
+  "Wrangler JK 2-Door & 4-Door","Wrangler JL & Gladiator JT","Wrangler JL & JK","Universal",
+];
+const INCOTERMS  = ["DDP","FOB","EXW","DAP","CIF","TBD"];
+const PLATFORMS  = ["Alibaba","WeChat","WhatsApp","Email","Direct","Other"];
+const STATUSES   = ["Active","Inactive","Blocked"];
+const QSTATUSES  = ["Received","Sample Requested","Sample Received","Approved","Rejected","On Hold"];
+const SHIPPING_CURRENCIES = ["USD", "CAD"];
+const DEFAULT_FX_RATE = 1.38;
+const DEFAULT_DUTY_RATE_PCT = 6.5;
+const DEFAULT_TARGET_MARKUP = 2.2;
+
+// ── Export helpers ───────────────────────────────────────────────
+function downloadXlsx(wb, filename) {
+  XLSX.writeFile(wb, filename);
+}
+
+function exportAllQuotes(quotes) {
+  const rows = quotes.map(q => ({
+    "CG SKU":          q.cgSku || "",
+    "Product":         q.productName || "",
+    "Supplier":        q.supplierName || "",
+    "Supplier SKU":    q.supplierSku || "",
+    "Unit Price USD":  q.unitPrice != null ? Number(q.unitPrice) : "",
+    "MOQ":             q.moq || "",
+    "Incoterm":        q.incoterm || "",
+    "Shipping Method": q.shippingMethod || "",
+    "Shipping per Unit": q.shippingCost || "",
+    "Shipping Currency": q.shippingCurrency || "",
+    "Shipping CAD/unit": calcShippingCadPerUnit(q),
+    "FX Rate":         q.usdCadRate || "",
+    "Duty Rate %":     q.dutyRatePct || "",
+    "Brokerage CAD":   q.brokerageCad || "",
+    "Other Fees CAD":  q.otherFeesCad || "",
+    "Landed CAD/unit": calcQuoteLanded(q)?.totalCad || "",
+    "Status":          q.quoteStatus || "",
+    "Date":            q.date || "",
+    "Notes":           q.notes || "",
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [10,30,35,15,14,8,10,14,16,12,40].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "All Quotes");
+  downloadXlsx(wb, `CG_All_Quotes_${today()}.xlsx`);
+}
+
+function exportBestPrice(products, quotes) {
+  const rows = products.map(p => {
+    const pq     = quotes.filter(q => q.productId === p.id && q.unitPrice != null);
+    const sorted = [...pq].sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice));
+    const best   = sorted[0];
+    return {
+      "CG SKU":           p.skuId,
+      "Product":          p.name,
+      "Category":         p.category || "",
+      "Fitment":          p.fitment  || "",
+      "Material":         p.material || "",
+      "Best Price USD":   best ? Number(best.unitPrice) : "",
+      "Best Supplier":    best ? best.supplierName : "No quotes",
+      "Supplier SKU":     best ? best.supplierSku  : "",
+      "MOQ":              best ? best.moq           : "",
+      "Incoterm":         best ? best.incoterm      : "",
+      "# Quotes":         pq.length,
+      "2nd Best USD":     sorted[1] ? Number(sorted[1].unitPrice) : "",
+      "2nd Best Supplier":sorted[1] ? sorted[1].supplierName      : "",
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [10,35,26,24,18,13,35,14,8,10,8,13,35].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Best Price per Product");
+  downloadXlsx(wb, `CG_Best_Prices_${today()}.xlsx`);
+}
+
+function exportBySupplier(suppliers, products, quotes) {
+  const wb = XLSX.utils.book_new();
+  suppliers.forEach(s => {
+    const sq = quotes.filter(q => q.supplierId === s.id);
+    if (!sq.length) return;
+    const rows = sq.map(q => ({
+      "CG SKU":        q.cgSku || "",
+      "Product":       q.productName || "",
+      "Supplier SKU":  q.supplierSku || "",
+      "Unit Price USD":q.unitPrice != null ? Number(q.unitPrice) : "",
+      "MOQ":           q.moq || "",
+      "Incoterm":      q.incoterm || "",
+      "Shipping":      q.shippingMethod || "",
+      "Status":        q.quoteStatus || "",
+      "Notes":         q.notes || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [10,35,15,14,8,10,14,16,40].map(w => ({ wch: w }));
+    // Safe sheet name (max 31 chars, no special chars)
+    const sheetName = s.name.replace(/[:\\\/\?\*\[\]]/g,"").slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+  if (wb.SheetNames.length === 0) return alert("No quotes to export.");
+  downloadXlsx(wb, `CG_By_Supplier_${today()}.xlsx`);
+}
+
+function exportRFQ(selectedProductIds, supplierId, products, quotes, suppliers) {
+  const supplier = suppliers.find(s => s.id === supplierId);
+  const rows = selectedProductIds.map(pid => {
+    const p  = products.find(x => x.id === pid);
+    const pq = quotes.filter(q => q.productId === pid && q.supplierId === supplierId);
+    const q  = pq[0];
+    return {
+      "CG SKU":          p?.skuId || "",
+      "Product Description": p?.name || "",
+      "Fitment":         p?.fitment || "",
+      "Material":        p?.material || "",
+      "Supplier SKU":    q?.supplierSku || "(please quote)",
+      "Last Price USD":  q?.unitPrice != null ? Number(q.unitPrice) : "(please quote)",
+      "MOQ":             q?.moq || "",
+      "Your New Price":  "",
+      "New MOQ":         "",
+      "Lead Time (days)":"",
+      "Notes":           q?.notes || "",
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [10,40,24,18,15,14,8,14,8,16,35].map(w => ({ wch: w }));
+  // Header row with supplier info
+  XLSX.utils.sheet_add_aoa(ws, [
+    [`RFQ — Costa Gear`],
+    [`Supplier: ${supplier?.name || ""}`],
+    [`Contact:  ${supplier?.contact || ""}`],
+    [`Date:     ${today()}`],
+    [],
+  ], { origin: "A1" });
+  // Re-add column headers after prepended rows
+  const dataRows = [
+    ["CG SKU","Product Description","Fitment","Material","Supplier SKU","Last Price USD","MOQ","Your New Price","New MOQ","Lead Time (days)","Notes"],
+    ...rows.map(r => Object.values(r)),
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet([
+    [`RFQ — Costa Gear`],
+    [`Supplier: ${supplier?.name || ""}`],
+    [`Contact:  ${supplier?.contact || ""}`],
+    [`Date: ${today()}`],
+    [],
+    ...dataRows,
+  ]);
+  ws2["!cols"] = [10,40,24,18,15,14,8,14,8,16,35].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws2, "RFQ");
+  const safeName = (supplier?.name || "Supplier").replace(/[:\\\/\?\*\[\]]/g,"").slice(0,20);
+  downloadXlsx(wb, `CG_RFQ_${safeName}_${today()}.xlsx`);
+}
+
+function today() { return new Date().toISOString().slice(0,10); }
+
+
+function formatCad(value) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
+}
+
+function formatUsd(value) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+function quoteQty(quote) {
+  const q = toNumber(quote?.moq);
+  return q && q > 0 ? q : 1;
+}
+
+function shippingCadAmount(quote) {
+  const amount = toNumber(quote?.shippingCost);
+  if (!amount) return 0;
+  const fx = toNumber(quote?.usdCadRate) || DEFAULT_FX_RATE;
+  const currency = quote?.shippingCurrency || "USD";
+  return currency === "USD" ? amount * fx : amount;
+}
+
+function calcShippingCadPerUnit(quote) {
+  // Simplified model: shippingCost is the allocated shipping cost per unit.
+  // If the supplier gives total shipping for an order, calculate the product's per-unit share manually and enter that value here.
+  const totalCad = shippingCadAmount(quote);
+  return totalCad || 0;
+}
+
+function calcQuoteLanded(quote) {
+  const unitUsd = toNumber(quote?.unitPrice);
+  if (unitUsd === null) return null;
+
+  const fx = toNumber(quote?.usdCadRate) || DEFAULT_FX_RATE;
+  const productCad = unitUsd * fx;
+  const shippingCadPerUnit = calcShippingCadPerUnit(quote);
+  const incoterm = quote?.incoterm || "TBD";
+  const dutyPct = toNumber(quote?.dutyRatePct);
+  const effectiveDutyPct = dutyPct !== null ? dutyPct : (incoterm === "DDP" ? 0 : DEFAULT_DUTY_RATE_PCT);
+  const dutyCad = productCad * (effectiveDutyPct / 100);
+  const brokerageCadPerUnit = toNumber(quote?.brokerageCad) || 0;
+  const otherFeesCadPerUnit = toNumber(quote?.otherFeesCad) || 0;
+  const totalCad = productCad + shippingCadPerUnit + dutyCad + brokerageCadPerUnit + otherFeesCadPerUnit;
+
+  return { productCad, shippingCadPerUnit, dutyCad, brokerageCadPerUnit, otherFeesCadPerUnit, totalCad, fx, dutyPct: effectiveDutyPct, qty: quoteQty(quote) };
+}
+
+function targetSellCadForLanded(landedCad, product) {
+  if (!landedCad) return null;
+  if (hasValue(product?.targetSellPriceCad)) return Number(product.targetSellPriceCad);
+  if (hasValue(product?.targetMarginPct)) {
+    const margin = Number(product.targetMarginPct) / 100;
+    if (margin > 0 && margin < 0.95) return landedCad / (1 - margin);
+  }
+  return landedCad * DEFAULT_TARGET_MARKUP;
+}
+
+// ── UI Primitives ────────────────────────────────────────────────
+const Badge = ({ label, color = C.blue }) => (
+  <span style={{
+    border: `1px solid ${color}33`,
+    color,
+    background: `${color}12`,
+    borderRadius: 999,
+    padding: "4px 9px",
+    fontSize: 13,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    lineHeight: 1.2,
+  }}>
+    {label}
+  </span>
+);
+
+const Btn = ({ children, onClick, variant = "primary", small, disabled }) => {
+  const isPrimary = variant === "primary";
+  const bg = isPrimary
+    ? "linear-gradient(180deg, #929A44, #747B31)"
+    : variant === "danger"
+      ? "#FFF4F2"
+      : variant === "ghost"
+        ? "transparent"
+        : "linear-gradient(180deg, #FFFFFF, #F3F5F0)";
+  const fc = isPrimary ? "#fff" : variant === "danger" ? C.red : C.navy;
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: bg,
+      color: fc,
+      border: variant === "danger" ? "1px solid rgba(182,81,69,0.25)" : "1px solid rgba(50,56,42,0.11)",
+      borderRadius: 12,
+      padding: small ? "7px 10px" : "11px 14px",
+      minHeight: small ? 34 : 42,
+      fontSize: small ? 13 : 14,
+      fontWeight: 600,
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1,
+      transition: "all .15s",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      boxShadow: isPrimary ? "0 10px 26px rgba(132,140,56,0.22)" : "0 6px 18px rgba(28,39,24,0.05)",
+    }}>{children}</button>
+  );
+};
+
+const inputStyle = {
+  border: "1px solid rgba(50,56,42,0.13)",
+  borderRadius: 12,
+  padding: "11px 12px",
+  fontSize: 15,
+  color: C.navy,
+  background: "#fff",
+  outline: "none",
+  fontFamily: "inherit",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const Input = ({ label, value, onChange, type = "text", placeholder, options, required, small }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: small ? 100 : 140 }}>
+    {label && <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>{label}{required && " *"}</label>}
+    {options ? (
+      <select value={value} onChange={e => onChange(e.target.value)} style={inputStyle}>
+        <option value="">— select —</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    ) : (
+      <input type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
+    )}
+  </div>
+);
+
+const Card = ({ children, style }) => (
+  <div style={{
+    background: "linear-gradient(180deg, #FFFFFF, #FAFBF8)",
+    border: "1px solid rgba(50,56,42,0.09)",
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: "0 18px 45px rgba(28,39,24,0.08)",
+    ...style
+  }}>
+    {children}
+  </div>
+);
+
+const Modal = ({ title, onClose, children, wide }) => (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(18,20,18,0.42)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: wide ? 900 : 640, maxHeight: "90vh", overflow: "auto", boxShadow: "0 30px 90px rgba(18,22,15,0.22)", border: "1px solid rgba(50,56,42,0.09)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", borderBottom: "1px solid rgba(50,56,42,0.08)", background: "#fff", borderRadius: "22px 22px 0 0" }}>
+        <span style={{ fontWeight: 800, fontSize: 20, color: C.navy }}>{title}</span>
+        <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(50,56,42,0.11)", color: C.navy, fontSize: 20, cursor: "pointer", lineHeight: 1, borderRadius: 10, width: 36, height: 36 }}>×</button>
+      </div>
+      <div style={{ padding: 20 }}>{children}</div>
+    </div>
+  </div>
+);
+
+const Section = ({ title, action, children }) => (
+  <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 18 }}>
+      <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.15, fontWeight: 800, color: C.navy, letterSpacing: "-0.03em" }}>{title}</h2>
+      {action}
+    </div>
+    {children}
+  </div>
+);
+
+const Empty = ({ msg, cta }) => (
+  <div style={{ textAlign: "center", padding: "48px 24px", color: C.dgray, background: "#fff", borderRadius: 16 }}>
+    <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
+    <div style={{ fontSize: 15, marginBottom: 16 }}>{msg}</div>
+    {cta}
+  </div>
+);
+
+const Spinner = () => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 32, color: C.dgray, fontSize: 15 }}>
+    Loading…
+  </div>
+);
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+const QSTATUS_COLOR = {
+  "Received":         C.blue,
+  "Sample Requested": C.amber,
+  "Sample Received":  C.purple,
+  "Approved":         C.teal,
+  "Rejected":         C.red,
+  "On Hold":          C.dgray,
+};
+
+// ════════════════════════════════════════════════════════════════
+// MAIN APP
+// ════════════════════════════════════════════════════════════════
+export default function App() {
+  const [tab, setTab]           = useState("dashboard");
+  const [products,  setProducts]  = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [quotes,    setQuotes]    = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(null);
+
+  const [modal,    setModal]    = useState(null);
+  const [editing,  setEditing]  = useState(null);
+  const [detailId, setDetailId] = useState(null);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }] = await Promise.all([
+        supabase.from("suppliers").select("*").order("sup_id"),
+        supabase.from("products").select("*").order("sku_id"),
+        supabase.from("quotes").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (se || pe || qe) throw new Error((se || pe || qe).message);
+      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const openAdd    = (type) => { setEditing(null); setModal(type); };
+  const openEdit   = (type, item) => { setEditing(item); setModal(type); };
+  const closeModal = () => { setModal(null); setEditing(null); };
+  const openDetail = (id) => { setDetailId(id); setModal("product-detail"); };
+
+  const saveSupplier = async (f) => {
+    const row = { sup_id: f.supId, name: f.name, platform: f.platform, contact: f.contact, response_time: f.responseTime, rating: f.rating ? Number(f.rating) : null, status: f.status, notes: f.notes };
+    if (editing) await supabase.from("suppliers").update(row).eq("id", editing.id);
+    else         await supabase.from("suppliers").insert(row);
+    closeModal(); fetchAll();
+  };
+
+  const deleteSupplier = async (id) => {
+    await supabase.from("quotes").delete().eq("supplier_id", id);
+    await supabase.from("suppliers").delete().eq("id", id);
+    fetchAll();
+  };
+
+  const saveProduct = async (f) => {
+    const row = {
+      sku_id: f.skuId,
+      product_type: f.productType,
+      material: f.material,
+      fitment: f.fitment,
+      name: f.name,
+      category: f.category,
+      length_cm: f.length ? Number(f.length) : null,
+      width_cm: f.width ? Number(f.width) : null,
+      height_cm: f.height ? Number(f.height) : null,
+      weight_kg: f.weight ? Number(f.weight) : null,
+      notes: f.notes,
+      market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
+      target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
+      target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
+      competitor_reference: f.competitorReference || null,
+      competitor_url: f.competitorUrl || null,
+      pricing_notes: f.pricingNotes || null,
+    };
+    if (editing) await supabase.from("products").update(row).eq("id", editing.id);
+    else         await supabase.from("products").insert(row);
+    closeModal(); fetchAll();
+  };
+
+  const deleteProduct = async (id) => { await supabase.from("products").delete().eq("id", id); fetchAll(); };
+
+  const saveQuote = async (f) => {
+    const landed = calcQuoteLanded(f);
+    const row = {
+      product_id: f.productId,
+      supplier_id: f.supplierId,
+      cg_sku: f.cgSku,
+      product_name: f.productName,
+      supplier_sku: f.supplierSku,
+      supplier_name: f.supplierName,
+      unit_price: f.unitPrice ? Number(f.unitPrice) : null,
+      moq: f.moq || null,
+      incoterm: f.incoterm || null,
+      shipping_method: f.shippingMethod || null,
+      shipping_cost: f.shippingCost ? Number(f.shippingCost) : null,
+      shipping_currency: f.shippingCurrency || "USD",
+      shipping_cost_basis: "Per Unit",
+      shipping_allocation_method: "Already Per Unit",
+      shipping_cost_per_unit_cad: null,
+      usd_cad_rate: f.usdCadRate ? Number(f.usdCadRate) : DEFAULT_FX_RATE,
+      duty_rate_pct: hasValue(f.dutyRatePct) ? Number(f.dutyRatePct) : null,
+      brokerage_cad: f.brokerageCad ? Number(f.brokerageCad) : null,
+      other_fees_cad: f.otherFeesCad ? Number(f.otherFeesCad) : null,
+      landed_cost_cad: landed ? Number(landed.totalCad.toFixed(2)) : null,
+      notes: f.notes || null,
+      quote_date: f.date || null,
+      quote_status: f.quoteStatus || null
+    };
+    if (editing) await supabase.from("quotes").update(row).eq("id", editing.id);
+    else         await supabase.from("quotes").insert(row);
+    closeModal(); fetchAll();
+  };
+
+  const deleteQuote = async (id) => { await supabase.from("quotes").delete().eq("id", id); fetchAll(); };
+
+  // Map DB → UI
+  const uiSuppliers = suppliers.map(s => ({ id: s.id, supId: s.sup_id, name: s.name, platform: s.platform, contact: s.contact, responseTime: s.response_time, rating: s.rating, status: s.status, notes: s.notes }));
+  const uiProducts  = products.map(p  => ({
+    id: p.id,
+    skuId: p.sku_id,
+    productType: p.product_type,
+    material: p.material,
+    fitment: p.fitment,
+    name: p.name,
+    category: p.category,
+    length: p.length_cm,
+    width: p.width_cm,
+    height: p.height_cm,
+    weight: p.weight_kg,
+    notes: p.notes,
+    marketReferenceCad: p.market_reference_cad ?? p.market_price_cad ?? p.competitor_price_cad ?? null,
+    targetSellPriceCad: p.target_sell_price_cad ?? null,
+    targetMarginPct: p.target_margin_pct ?? null,
+    competitorReference: p.competitor_reference || "",
+    competitorUrl: p.competitor_url || "",
+    pricingNotes: p.pricing_notes || "",
+  }));
+  const uiQuotes    = quotes.map(q    => ({
+    id: q.id,
+    productId: q.product_id,
+    supplierId: q.supplier_id,
+    cgSku: q.cg_sku,
+    productName: q.product_name,
+    supplierSku: q.supplier_sku,
+    supplierName: q.supplier_name,
+    unitPrice: q.unit_price,
+    moq: q.moq,
+    incoterm: q.incoterm,
+    shippingMethod: q.shipping_method,
+    shippingCost: q.shipping_cost,
+    shippingCurrency: q.shipping_currency || "USD",
+    shippingCostBasis: q.shipping_cost_basis || "Per Unit",
+    shippingAllocationMethod: q.shipping_allocation_method || "Already Per Unit",
+    shippingCostPerUnitCad: q.shipping_cost_per_unit_cad,
+    usdCadRate: q.usd_cad_rate || DEFAULT_FX_RATE,
+    dutyRatePct: q.duty_rate_pct,
+    brokerageCad: q.brokerage_cad,
+    otherFeesCad: q.other_fees_cad,
+    landedCostCad: q.landed_cost_cad,
+    notes: q.notes,
+    date: q.quote_date,
+    quoteStatus: q.quote_status
+  }));
+
+  const TABS = [
+    { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
+    { id: "products",  label: `Products (${uiProducts.length})`, Icon: PackageSearch },
+    { id: "suppliers", label: `Suppliers (${uiSuppliers.length})`, Icon: Building2 },
+    { id: "quotes",    label: `Quotes (${uiQuotes.length})`, Icon: Tags },
+    { id: "export",    label: "Export / RFQ", Icon: FileSpreadsheet },
+  ];
+
+  return (
+    <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "linear-gradient(180deg, #070807 0 250px, #F3F4EF 250px 100%)", minHeight: "100vh", color: C.navy }}>
+      <div style={{ minHeight: 125, padding: "18px 0", borderBottom: "1px solid rgba(132,139,55,0.18)", background: "linear-gradient(180deg, rgba(10,11,10,0.88), rgba(9,10,9,0.95))" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, padding: "0 44px" }}>
+          <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}>
+            <img src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ height: "auto", width: 190, display: "block", objectFit: "contain" }} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ borderBottom: "1px solid rgba(132,139,55,0.22)", background: "linear-gradient(180deg, #D9DDD4, #CFD5CB)" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", padding: "14px 44px", display: "grid", gridTemplateColumns: "repeat(5, minmax(150px,1fr))", gap: 12 }}>
+          {TABS.map(t => {
+            const Icon = t.Icon;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                background: tab === t.id ? "linear-gradient(180deg, #8B9340, #727A30)" : "transparent",
+                color: tab === t.id ? "#fff" : "#2D342B",
+                border: tab === t.id ? "1px solid rgba(114,122,48,0.65)" : "1px solid transparent",
+                borderRadius: 16,
+                padding: "18px 18px",
+                minHeight: 68,
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all .15s",
+                boxShadow: tab === t.id ? "0 10px 24px rgba(114,122,48,0.24)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+              }}><Icon size={24} strokeWidth={2} />{t.label}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1560, margin: "0 auto", padding: "28px 44px 48px" }}>
+        {error && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "12px 16px", marginBottom: 20, color: C.red, fontSize: 14 }}>⚠️ Database error: {error}</div>}
+        {loading ? <Spinner /> : (
+          <>
+            {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
+            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
+            {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} />}
+            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onAdd={() => openAdd("quote")} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete quote?")) deleteQuote(id); }} />}
+            {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
+          </>
+        )}
+      </div>
+
+      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} />}
+      {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
+      {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
+      {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════════════
+function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
+  const quoteText = (count) => `${count} ${count === 1 ? "quote" : "quotes"}`;
+
+  const productRows = products.map(p => {
+    const pq = quotes.filter(q => q.productId === p.id && q.unitPrice != null && q.unitPrice !== "");
+    const sortedQuotes = [...pq].sort((a, b) => {
+      const la = calcQuoteLanded(a)?.totalCad ?? 999999;
+      const lb = calcQuoteLanded(b)?.totalCad ?? 999999;
+      return la - lb;
+    });
+    const prices = sortedQuotes.map(q => Number(q.unitPrice)).filter(v => !Number.isNaN(v));
+    const bestQuote = sortedQuotes[0];
+    const bestPrice = prices.length ? Math.min(...prices) : null;
+    const highestPrice = prices.length ? Math.max(...prices) : null;
+    const landed = bestQuote ? calcQuoteLanded(bestQuote) : null;
+    const landedCad = landed?.totalCad ?? null;
+    const shippingCadPerUnit = landed?.shippingCadPerUnit ?? null;
+    const targetSellCad = targetSellCadForLanded(landedCad, p);
+    return {
+      ...p,
+      quoteCount: pq.length,
+      bestQuote,
+      bestPrice,
+      highestPrice,
+      landedCad,
+      shippingCadPerUnit,
+      targetSellCad,
+      marketReferenceCad: p.marketReferenceCad || null,
+    };
+  }).sort((a, b) => {
+    if (b.quoteCount !== a.quoteCount) return b.quoteCount - a.quoteCount;
+    return (a.bestPrice || 999999) - (b.bestPrice || 999999);
+  });
+
+  const avgQuotes = products.length ? (quotes.length / products.length).toFixed(1) : "—";
+  const quotedProducts = productRows.filter(p => p.quoteCount > 0).length;
+  const coveragePct = products.length ? Math.round((quotedProducts / products.length) * 100) : 0;
+
+  const kpis = [
+    { label: "Products", value: products.length, sub: `${quotedProducts} with quotes` },
+    { label: "Suppliers", value: suppliers.length, sub: "Active sourcing base" },
+    { label: "Quotes", value: quotes.length, sub: `${coveragePct}% product coverage`, accent: true },
+    { label: "Avg Quotes / Product", value: avgQuotes, sub: "Across active products" },
+  ];
+
+  const tableHeaderStyle = {
+    padding: "13px 14px",
+    textAlign: "left",
+    color: "#4b5448",
+    fontSize: 12,
+    fontWeight: 700,
+    background: "#f5f7f1",
+    borderBottom: "1px solid rgba(50,56,42,0.07)",
+    whiteSpace: "nowrap",
+  };
+
+  const tableCellStyle = {
+    padding: "13px 14px",
+    color: "#253024",
+    fontSize: 14,
+    borderBottom: "1px solid rgba(50,56,42,0.07)",
+    background: "#ffffff",
+    verticalAlign: "top",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, marginBottom: 0 }}>
+        <div>
+          <h1 style={{ margin: 0, letterSpacing: "-0.03em", color: "#20251f", fontSize: 32, lineHeight: 1.15, fontWeight: 800 }}>Product Sourcing</h1>
+          <p style={{ margin: "7px 0 0", color: C.dgray, fontSize: 16 }}>Track products, suppliers, quotes, estimated landed cost and pricing position.</p>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, marginBottom: 0 }}>
+        {kpis.map(k => (
+          <Card key={k.label} style={{ padding: 20 }}>
+            <div style={{ color: C.dgray, fontSize: 13 }}>{k.label}</div>
+            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 8, letterSpacing: "-0.04em", color: k.accent ? C.accent2 : "#20251f" }}>{k.value}</div>
+            <div style={{ color: C.dgray, marginTop: 4, fontSize: 13 }}>{k.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em", color: C.navy }}>Product Cost Snapshot</h2>
+            <p style={{ margin: "4px 0 0", color: C.dgray }}>Quick view of quote range, estimated landed cost and indicative sell price.</p>
+          </div>
+          <Badge label={`${coveragePct}% quoted`} color={C.teal} />
+        </div>
+
+        {products.length === 0 ? <Empty msg="No products yet." /> : (
+          <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(50,56,42,0.09)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1280 }}>
+              <thead>
+                <tr>
+                  {["SKU", "Product", "Quotes Received", "Cost Range USD", "Shipping/unit CAD", "Best Supplier", "Est. Landed CAD", "Target Sell CAD", "Market Ref. CAD"].map(h => (
+                    <th key={h} style={tableHeaderStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {productRows.map(p => {
+                  const costRange = p.bestPrice && p.highestPrice && p.bestPrice !== p.highestPrice
+                    ? `${formatUsd(p.bestPrice)} – ${formatUsd(p.highestPrice)}`
+                    : formatUsd(p.bestPrice);
+                  return (
+                    <tr key={p.id} onClick={() => onOpenDetail(p.id)} style={{ cursor: "pointer" }}>
+                      <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
+                      <td style={{ ...tableCellStyle, minWidth: 260 }}>
+                        <div style={{ fontWeight: 650, color: C.navy }}>{p.name}</div>
+                        <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.fitment || "Fitment TBD"}</div>
+                      </td>
+                      <td style={tableCellStyle}>{quoteText(p.quoteCount)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 700 }}>{costRange}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.blue }}>{formatCad(p.shippingCadPerUnit)}</td>
+                      <td style={tableCellStyle}>{p.bestQuote?.supplierName || "—"}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{formatCad(p.landedCad)}</td>
+                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{formatCad(p.targetSellCad)}</td>
+                      <td style={tableCellStyle}>
+                        {p.marketReferenceCad ? (
+                          <div>
+                            <div style={{ fontWeight: 750 }}>{formatCad(p.marketReferenceCad)}</div>
+                            {p.competitorReference && <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.competitorReference}</div>}
+                          </div>
+                        ) : <span style={{ color: C.dgray }}>Not tracked</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, color: C.dgray, fontSize: 12 }}>
+          Landed cost uses quote-level assumptions: unit price, FX, allocated shipping per unit, Incoterm, duty, brokerage and other fees. DDP defaults duty to 0 unless manually entered.
+        </div>
+      </Card>
+
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em", color: C.navy }}>Recent Quotes</h2>
+            <p style={{ margin: "4px 0 0", color: C.dgray }}>Latest supplier pricing received.</p>
+          </div>
+        </div>
+
+        {quotes.length === 0 ? <Empty msg="No quotes yet." /> : (
+          <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(50,56,42,0.09)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+              <thead>
+                <tr>
+                  {["SKU", "Product", "Supplier", "Price USD", "Incoterm", "Status", "Date"].map(h => (
+                    <th key={h} style={tableHeaderStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {quotes.slice(0, 10).map(q => (
+                  <tr key={q.id}>
+                    <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace" }}>{q.cgSku || "—"}</td>
+                    <td style={{ ...tableCellStyle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
+                    <td style={tableCellStyle}>{q.supplierName || "—"}</td>
+                    <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{q.unitPrice ? formatUsd(q.unitPrice) : "—"}</td>
+                    <td style={tableCellStyle}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
+                    <td style={tableCellStyle}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
+                    <td style={{ ...tableCellStyle, color: C.dgray }}>{q.date || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRODUCTS TAB
+// ════════════════════════════════════════════════════════════════
+function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
+  const [filter, setFilter]       = useState("");
+  const [catFilter, setCatFilter] = useState("");
+
+  const filtered = products.filter(p => {
+    const q   = filter.toLowerCase();
+    const match = !q || p.skuId?.toLowerCase().includes(q) || p.name?.toLowerCase().includes(q) || p.fitment?.toLowerCase().includes(q) || p.productType?.toLowerCase().includes(q) || p.material?.toLowerCase().includes(q);
+    return match && (!catFilter || p.category === catFilter);
+  });
+
+  return (
+    <Section title="Products" action={<Btn onClick={onAdd}>+ Add Product</Btn>}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <Input placeholder="Search SKU or name…" value={filter} onChange={setFilter} />
+        <Input options={CATEGORIES} value={catFilter} onChange={setCatFilter} />
+        {catFilter && <Btn variant="ghost" small onClick={() => setCatFilter("")}>Clear</Btn>}
+      </div>
+      {filtered.length === 0 ? (
+        <Empty msg={products.length === 0 ? "No products yet." : "No products match."} cta={products.length === 0 && <Btn onClick={onAdd}>+ Add First Product</Btn>} />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(p => {
+            const pq     = quotes.filter(q => q.productId === p.id);
+            const prices = pq.map(q => parseFloat(q.unitPrice)).filter(Boolean);
+            const minP   = prices.length ? Math.min(...prices) : null;
+            const maxP   = prices.length ? Math.max(...prices) : null;
+            return (
+              <Card key={p.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
+                <div onClick={() => onDetail(p.id)} style={{ display: "flex", alignItems: "center", gap: 16, flex: 1, minWidth: 0, cursor: "pointer" }}>
+                  <div style={{ background: "#F5F7F1", color: C.amber, borderRadius: 6, padding: "4px 10px", fontSize: 13, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                    <div style={{ fontSize: 12, color: C.dgray, marginTop: 2 }}>{p.productType} · {p.material || "—"} · {p.fitment || "—"} · {p.category}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
+                  {pq.length > 0 ? (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.teal }}>${minP}{maxP !== minP ? `–$${maxP}` : ""}</div>
+                      <div style={{ fontSize: 12, color: C.dgray }}>{pq.length} {pq.length === 1 ? "quote" : "quotes"}</div>
+                    </div>
+                  ) : <Badge label="No quotes" color={C.mgray} />}
+                  <Btn small variant="ghost"  onClick={() => onEdit(p)}>Edit</Btn>
+                  <Btn small variant="danger" onClick={() => onDelete(p.id)}>Del</Btn>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// SUPPLIERS TAB
+// ════════════════════════════════════════════════════════════════
+function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
+  return (
+    <Section title="Suppliers" action={<Btn onClick={onAdd}>+ Add Supplier</Btn>}>
+      {suppliers.length === 0 ? (
+        <Empty msg="No suppliers yet." cta={<Btn onClick={onAdd}>+ Add First Supplier</Btn>} />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {suppliers.map(s => {
+            const sq = quotes.filter(q => q.supplierId === s.id);
+            return (
+              <Card key={s.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
+                <div style={{ background: C.teal, color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{s.supId}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                  <div style={{ fontSize: 12, color: C.dgray, marginTop: 2 }}>{s.platform} · {s.contact} · Response: {s.responseTime || "—"}</div>
+                  {s.notes && <div style={{ fontSize: 12, color: C.dgray, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.notes}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>{sq.length} {sq.length === 1 ? "quote" : "quotes"}</div>
+                    <div style={{ fontSize: 12, color: C.dgray }}>Rating: {s.rating || "—"}/5</div>
+                  </div>
+                  <Badge label={s.status || "Active"} color={s.status === "Blocked" ? C.red : s.status === "Inactive" ? C.dgray : C.teal} />
+                  <Btn small variant="ghost"  onClick={() => onEdit(s)}>Edit</Btn>
+                  <Btn small variant="danger" onClick={() => onDelete(s.id)}>Del</Btn>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// QUOTES TAB
+// ════════════════════════════════════════════════════════════════
+function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
+  const [filter, setFilter]         = useState("");
+  const [statusFilter, setStatus]   = useState("");
+  const [supplierFilter, setSupFil] = useState("");
+
+  const filtered = quotes.filter(q => {
+    const s = filter.toLowerCase();
+    const textOk = !s || q.productName?.toLowerCase().includes(s) || q.supplierName?.toLowerCase().includes(s) || q.cgSku?.toLowerCase().includes(s) || q.supplierSku?.toLowerCase().includes(s);
+    const stOk   = !statusFilter   || q.quoteStatus   === statusFilter;
+    const supOk  = !supplierFilter || q.supplierId     === supplierFilter;
+    return textOk && stOk && supOk;
+  });
+
+  return (
+    <Section title="Quotes" action={<Btn onClick={onAdd}>+ Add Quote</Btn>}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <Input placeholder="Search product, supplier or SKU…" value={filter} onChange={setFilter} />
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <select value={statusFilter} onChange={e => setStatus(e.target.value)} style={inputStyle}>
+            <option value="">All statuses</option>
+            {QSTATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <select value={supplierFilter} onChange={e => setSupFil(e.target.value)} style={inputStyle}>
+            <option value="">All suppliers</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        {(statusFilter || supplierFilter || filter) && <Btn variant="ghost" small onClick={() => { setFilter(""); setStatus(""); setSupFil(""); }}>Clear</Btn>}
+      </div>
+      {filtered.length === 0 ? (
+        <Empty msg={quotes.length === 0 ? "No quotes yet." : "No quotes match."} cta={quotes.length === 0 && <Btn onClick={onAdd}>+ Add First Quote</Btn>} />
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <thead>
+              <tr style={{ background: "#F5F7F1" }}>
+                {["SKU","Product","Supp. SKU","Supplier","Price USD","MOQ","Incoterm","Status","Date",""].map(h => (
+                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 700, color: C.mgray, textTransform: "uppercase", letterSpacing: .5, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((q, i) => (
+                <tr key={q.id} style={{ background: i % 2 === 0 ? "#fff" : C.lgray, borderBottom: `1px solid ${C.mgray}` }}>
+                  <td style={{ padding: "10px 12px", fontWeight: 800, color: C.amber, fontFamily: "monospace", fontSize: 13 }}>{q.cgSku || "—"}</td>
+                  <td style={{ padding: "10px 12px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.productName || "—"}</td>
+                  <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 12, color: C.dgray }}>{q.supplierSku || "—"}</td>
+                  <td style={{ padding: "10px 12px" }}>{q.supplierName || "—"}</td>
+                  <td style={{ padding: "10px 12px", fontWeight: 700, color: C.teal }}>{q.unitPrice ? `$${q.unitPrice}` : "—"}</td>
+                  <td style={{ padding: "10px 12px", color: C.dgray }}>{q.moq || "—"}</td>
+                  <td style={{ padding: "10px 12px" }}><Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.teal} /></td>
+                  <td style={{ padding: "10px 12px" }}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
+                  <td style={{ padding: "10px 12px", fontSize: 12, color: C.dgray, whiteSpace: "nowrap" }}>{q.date || "—"}</td>
+                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <Btn small variant="ghost"  onClick={() => onEdit(q)}>Edit</Btn>
+                      <Btn small variant="danger" onClick={() => onDelete(q.id)}>Del</Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// EXPORT / RFQ TAB
+// ════════════════════════════════════════════════════════════════
+function ExportRFQ({ products, suppliers, quotes }) {
+  const [rfqSupplier,  setRfqSupplier]  = useState("");
+  const [rfqSelected,  setRfqSelected]  = useState([]);
+  const [rfqFilter,    setRfqFilter]    = useState("");
+
+  const toggleProduct = (id) => setRfqSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const selectAll     = () => setRfqSelected(filteredProds.map(p => p.id));
+  const clearAll      = () => setRfqSelected([]);
+
+  const filteredProds = products.filter(p => {
+    const s = rfqFilter.toLowerCase();
+    return !s || p.skuId?.toLowerCase().includes(s) || p.name?.toLowerCase().includes(s);
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* ── Quick Exports ── */}
+      <Card>
+        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: C.navy }}>Quick Exports</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 16 }}>
+
+          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>📋 All Quotes</div>
+            <div style={{ fontSize: 13, color: C.dgray, marginBottom: 12 }}>Every quote in the database, one row each.</div>
+            <Btn variant="teal" small onClick={() => exportAllQuotes(quotes)}>Download Excel</Btn>
+          </div>
+
+          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>🏆 Best Price per Product</div>
+            <div style={{ fontSize: 13, color: C.dgray, marginBottom: 12 }}>One row per product showing cheapest quote + supplier. Includes 2nd best.</div>
+            <Btn variant="teal" small onClick={() => exportBestPrice(products, quotes)}>Download Excel</Btn>
+          </div>
+
+          <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: C.navy }}>🏭 By Supplier</div>
+            <div style={{ fontSize: 13, color: C.dgray, marginBottom: 12 }}>One tab per supplier with all their quotes. Good for comparison.</div>
+            <Btn variant="teal" small onClick={() => exportBySupplier(suppliers, products, quotes)}>Download Excel</Btn>
+          </div>
+
+        </div>
+      </Card>
+
+      {/* ── RFQ Builder ── */}
+      <Card>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: C.navy }}>📨 RFQ Builder</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: C.dgray }}>Select a supplier and the products you want to request pricing for. The exported file includes your last known price for reference and blank columns for the supplier to fill in.</p>
+
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Supplier *</label>
+            <select value={rfqSupplier} onChange={e => setRfqSupplier(e.target.value)} style={inputStyle}>
+              <option value="">— select supplier —</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <Input placeholder="Filter products…" value={rfqFilter} onChange={setRfqFilter} label="Filter" />
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <Btn variant="ghost" small onClick={selectAll}>Select all</Btn>
+          <Btn variant="ghost" small onClick={clearAll}>Clear</Btn>
+          <span style={{ fontSize: 13, color: C.dgray, alignSelf: "center" }}>{rfqSelected.length} selected</span>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 8 }}>
+          {filteredProds.length === 0 && <div style={{ padding: 16, textAlign: "center", color: C.dgray, fontSize: 14 }}>No products match.</div>}
+          {filteredProds.map(p => {
+            const checked = rfqSelected.includes(p.id);
+            const existingQ = quotes.filter(q => q.productId === p.id && q.supplierId === rfqSupplier);
+            const lastPrice = existingQ.length ? `$${Math.min(...existingQ.map(q => Number(q.unitPrice)).filter(Boolean))}` : null;
+            return (
+              <div key={p.id} onClick={() => toggleProduct(p.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 6, background: checked ? "#f0faf9" : "#fff", border: `1px solid ${checked ? C.teal : C.mgray}`, cursor: "pointer" }}>
+                <input type="checkbox" checked={checked} onChange={() => {}} style={{ accentColor: C.teal, width: 16, height: 16, flexShrink: 0 }} />
+                <div style={{ width: 70, fontSize: 12, fontWeight: 800, color: C.amber, fontFamily: "monospace" }}>{p.skuId}</div>
+                <div style={{ flex: 1, fontSize: 14, color: C.navy }}>{p.name}</div>
+                {lastPrice && <div style={{ fontSize: 12, color: C.teal, fontWeight: 700, whiteSpace: "nowrap" }}>Last: {lastPrice}</div>}
+                {!lastPrice && rfqSupplier && <div style={{ fontSize: 12, color: C.mgray, whiteSpace: "nowrap" }}>No prior quote</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+          <Btn
+            variant="purple"
+            disabled={!rfqSupplier || rfqSelected.length === 0}
+            onClick={() => exportRFQ(rfqSelected, rfqSupplier, products, quotes, suppliers)}
+          >
+            📥 Export RFQ ({rfqSelected.length} products)
+          </Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRODUCT DETAIL MODAL
+// ════════════════════════════════════════════════════════════════
+function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, onDeleteQuote }) {
+  const product = products.find(p => p.id === id);
+  if (!product) return null;
+  const pquotes = quotes.filter(q => q.productId === id);
+  const prices  = pquotes.map(q => parseFloat(q.unitPrice)).filter(Boolean);
+  const best    = prices.length ? Math.min(...prices) : null;
+
+  const bestQuote = [...pquotes].sort((a, b) => {
+    const la = calcQuoteLanded(a)?.totalCad ?? 999999;
+    const lb = calcQuoteLanded(b)?.totalCad ?? 999999;
+    return la - lb;
+  })[0];
+  const bestLanded = bestQuote ? calcQuoteLanded(bestQuote) : null;
+
+  return (
+    <Modal title={`${product.skuId} — ${product.name}`} onClose={onClose} wide>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Product info */}
+        <div style={{ background: C.lgray, borderRadius: 8, padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {[
+            ["Category",       product.category],
+            ["Product Type",   product.productType || "—"],
+            ["Material",       product.material    || "—"],
+            ["Fitment",        product.fitment     || "—"],
+            ["Dimensions (cm)",(product.length || product.width || product.height) ? `${product.length||"—"} × ${product.width||"—"} × ${product.height||"—"}` : "—"],
+            ["Gross Weight",   product.weight ? `${product.weight} kg` : "—"],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{k}</div>
+              <div style={{ fontSize: 14, color: C.navy, fontWeight: 600, marginTop: 2 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        {product.notes && <div style={{ fontSize: 14, color: C.dgray, fontStyle: "italic" }}>{product.notes}</div>}
+
+        {(product.marketReferenceCad || product.targetSellPriceCad || product.targetMarginPct || product.competitorReference || product.competitorUrl || product.pricingNotes) && (
+          <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 16 }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Market Ref. CAD</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.navy, marginTop: 2 }}>{hasValue(product.marketReferenceCad) ? formatCad(product.marketReferenceCad) : "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Sell CAD</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.accent2, marginTop: 2 }}>{hasValue(product.targetSellPriceCad) ? formatCad(product.targetSellPriceCad) : "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Margin</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.teal, marginTop: 2 }}>{product.targetMarginPct ? `${product.targetMarginPct}%` : "—"}</div>
+              </div>
+            </div>
+            {(product.competitorReference || product.competitorUrl || product.competitorUrl || product.pricingNotes) && (
+              <div style={{ marginTop: 10, color: C.dgray, fontSize: 13 }}>
+                {product.competitorReference && <div><strong>Competitor:</strong> {product.competitorReference}</div>}
+                {product.competitorUrl && (
+                  <div><strong>URL:</strong> {String(product.competitorUrl).startsWith("http") ? <a href={product.competitorUrl} target="_blank" rel="noreferrer" style={{ color: C.teal, fontWeight: 700 }}>Open link</a> : product.competitorUrl}</div>
+                )}
+                {product.pricingNotes && <div><strong>Notes:</strong> {product.pricingNotes}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Landed Cost Summary */}
+        <div style={{ background: "#fffbf0", border: `1px solid #f0d080`, borderRadius: 8, padding: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.navy, marginBottom: 12 }}>🧮 Landed Cost Summary, best quote</div>
+          {bestLanded ? (
+            <>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  ["Product (CAD)", formatCad(bestLanded.productCad)],
+                  ["Shipping/unit", formatCad(bestLanded.shippingCadPerUnit)],
+                  ["Duty", formatCad(bestLanded.dutyCad)],
+                  ["Brokerage/unit", formatCad(bestLanded.brokerageCadPerUnit)],
+                  ["Other/unit", formatCad(bestLanded.otherFeesCadPerUnit)],
+                  ["Total Landed", formatCad(bestLanded.totalCad)],
+                ].map(([label, val], i) => (
+                  <div key={label} style={{ background: i === 5 ? C.navy : "#fff", borderRadius: 6, padding: "8px 14px", border: `1px solid ${C.mgray}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: i === 5 ? "#F4F5EF" : C.dgray, textTransform: "uppercase" }}>{label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: i === 5 ? "#C8CF5A" : C.navy, marginTop: 2 }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>Based on {bestQuote.supplierName}, {bestQuote.incoterm || "Incoterm TBD"}, FX {bestLanded.fx}, duty {bestLanded.dutyPct}%, quantity basis {bestLanded.qty}.</div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: C.dgray }}>Add at least one quote to see the calculation.</div>
+          )}
+        </div>
+
+        {/* Quotes */}
+        <div>
+          <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 800, color: C.navy }}>
+            Quotes ({pquotes.length}) {best !== null && <span style={{ color: C.teal }}>· best ${best} USD</span>}
+          </h3>
+          {pquotes.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 24, color: C.dgray, fontSize: 14 }}>No quotes for this product yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pquotes.sort((a, b) => (parseFloat(a.unitPrice) || 999) - (parseFloat(b.unitPrice) || 999)).map(q => {
+                const isBest = parseFloat(q.unitPrice) === best;
+                const lc = q.unitPrice ? calcQuoteLanded(q) : null;
+                return (
+                  <div key={q.id} style={{ border: `2px solid ${isBest ? C.teal : C.mgray}`, borderRadius: 8, padding: "12px 16px", background: isBest ? "#f0faf9" : "#fff" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: 15, color: C.navy }}>{q.supplierName}</span>
+                          {isBest && <Badge label="Best price" color={C.teal} />}
+                          <Badge label={q.incoterm || "TBD"} color={q.incoterm === "DDP" ? C.red : C.blue} />
+                          {q.quoteStatus && <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} />}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.dgray }}>
+                          SKU: <span style={{ fontFamily: "monospace", color: C.navy }}>{q.supplierSku || "—"}</span>
+                          {q.moq && ` · MOQ: ${q.moq}`}
+                          {q.shippingMethod && ` · ${q.shippingMethod}`}
+                          {q.date && ` · ${q.date}`}
+                        </div>
+                        {q.notes && <div style={{ fontSize: 13, color: C.dgray, marginTop: 4, fontStyle: "italic" }}>{q.notes}</div>}
+                        {lc && <div style={{ fontSize: 12, color: C.purple, marginTop: 4, fontWeight: 600 }}>Est. landed: {formatCad(lc.totalCad)}</div>}
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: isBest ? C.teal : C.navy }}>${q.unitPrice || "—"}</div>
+                        <div style={{ fontSize: 12, color: C.dgray }}>per unit USD</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
+                          <Btn small variant="ghost"  onClick={() => onEditQuote(q)}>Edit</Btn>
+                          <Btn small variant="danger" onClick={() => onDeleteQuote(q.id)}>Del</Btn>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRODUCT MODAL
+// ════════════════════════════════════════════════════════════════
+function ProductModal({ onSave, onClose, editing }) {
+  const [form, setForm] = useState(editing || {
+    skuId: "",
+    productType: "",
+    material: "",
+    fitment: "",
+    name: "",
+    category: "",
+    length: "",
+    width: "",
+    height: "",
+    weight: "",
+    notes: "",
+    marketReferenceCad: "",
+    targetSellPriceCad: "",
+    targetMarginPct: "",
+    competitorReference: "",
+    competitorUrl: "",
+    pricingNotes: "",
+  });
+  const set = (k) => (v) => {
+    setForm(f => {
+      const u = { ...f, [k]: v };
+      const parts = [k === "productType" ? v : f.productType, k === "material" ? v : f.material, k === "fitment" ? v : f.fitment].filter(Boolean);
+      u.name = parts.join(" – ");
+      return u;
+    });
+  };
+  const valid = form.skuId && form.productType;
+  return (
+    <Modal title={editing ? "Edit Product" : "Add Product"} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="SKU ID" value={form.skuId} onChange={set("skuId")} placeholder="e.g. CG-004" required />
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Auto Name</label>
+            <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 6, padding: "7px 10px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 34 }}>{form.name || "Filled automatically…"}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Product Type *" value={form.productType} onChange={set("productType")} placeholder="e.g. Side Steps" required />
+          <Input label="Material"       value={form.material}    onChange={set("material")}    placeholder="e.g. Aluminum" />
+          <Input label="Fitment"        value={form.fitment}     onChange={set("fitment")}     options={FITMENTS} />
+        </div>
+        <Input label="Category" value={form.category} onChange={set("category")} options={CATEGORIES} />
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 6 }}>Dimensions (cm) & Weight</label>
+          <div style={{ display: "flex", gap: 12 }}>
+            <Input label="Length" value={form.length} onChange={set("length")} type="number" placeholder="cm" small />
+            <Input label="Width"  value={form.width}  onChange={set("width")}  type="number" placeholder="cm" small />
+            <Input label="Height" value={form.height} onChange={set("height")} type="number" placeholder="cm" small />
+            <Input label="Weight (kg)" value={form.weight} onChange={set("weight")} type="number" placeholder="kg" small />
+          </div>
+        </div>
+        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Optional notes" />
+
+        <div style={{ border: "1px solid rgba(132,140,56,0.25)", background: "#F7F9ED", borderRadius: 14, padding: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
+            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={set("targetSellPriceCad")} type="number" placeholder="e.g. 249.99" />
+            <Input label="Target Margin %" value={form.targetMarginPct} onChange={set("targetMarginPct")} type="number" placeholder="e.g. 35" />
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <Input label="Competitor Reference" value={form.competitorReference} onChange={set("competitorReference")} placeholder="e.g. Amazon, DV8, Extreme Terrain" />
+            <Input label="Competitor URL" value={form.competitorUrl} onChange={set("competitorUrl")} placeholder="Product link" />
+          </div>
+          <Input label="Pricing Notes" value={form.pricingNotes} onChange={set("pricingNotes")} placeholder="Notes about market price, competitor, margin strategy..." />
+        </div>
+
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Product</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// SUPPLIER MODAL
+// ════════════════════════════════════════════════════════════════
+function SupplierModal({ onSave, onClose, editing }) {
+  const [form, setForm] = useState(editing || { supId: "", name: "", platform: "Alibaba", contact: "", responseTime: "", rating: "", status: "Active", notes: "" });
+  const set  = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+  const valid = form.supId && form.name;
+  return (
+    <Modal title={editing ? "Edit Supplier" : "Add Supplier"} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Supplier ID"   value={form.supId} onChange={set("supId")} placeholder="e.g. SUP-005" required />
+          <Input label="Supplier Name" value={form.name}  onChange={set("name")}  placeholder="Company name" required />
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Platform"     value={form.platform}  onChange={set("platform")}  options={PLATFORMS} />
+          <Input label="Contact Name" value={form.contact}   onChange={set("contact")}   placeholder="e.g. Kevin Gong" />
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Response Time" value={form.responseTime} onChange={set("responseTime")} placeholder="e.g. Same day" />
+          <Input label="Rating (1–5)"  value={form.rating}       onChange={set("rating")}       type="number" placeholder="1–5" />
+          <Input label="Status"        value={form.status}       onChange={set("status")}       options={STATUSES} />
+        </div>
+        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Email, WhatsApp, communication quality…" />
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Supplier</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// QUOTE MODAL
+// ════════════════════════════════════════════════════════════════
+function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState(editing || {
+    productId: "",
+    supplierId: "",
+    supplierSku: "",
+    cgSku: "",
+    productName: "",
+    supplierName: "",
+    unitPrice: "",
+    moq: "",
+    incoterm: "DDP",
+    shippingMethod: "",
+    shippingCost: "",
+    shippingCurrency: "USD",
+    usdCadRate: DEFAULT_FX_RATE,
+    dutyRatePct: "",
+    brokerageCad: "",
+    otherFeesCad: "",
+    notes: "",
+    date: todayStr,
+    quoteStatus: "Received"
+  });
+
+  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+  const selectProduct  = (id) => { const p = products.find(x => x.id === id);  setForm(f => ({ ...f, productId: id,  cgSku: p?.skuId || "", productName: p?.name || "" })); };
+  const selectSupplier = (id) => { const s = suppliers.find(x => x.id === id); setForm(f => ({ ...f, supplierId: id, supplierName: s?.name || "" })); };
+  const valid = form.productId && form.supplierId;
+  const landed = calcQuoteLanded(form);
+
+  return (
+    <Modal title={editing ? "Edit Quote" : "Add Quote"} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Costa Gear Product *</label>
+          <select value={form.productId} onChange={e => selectProduct(e.target.value)} style={{ ...inputStyle, width: "100%" }}>
+            <option value="">— select product —</option>
+            {products.map(p => <option key={p.id} value={p.id}>{p.skuId} — {p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Supplier *</label>
+          <select value={form.supplierId} onChange={e => selectSupplier(e.target.value)} style={{ ...inputStyle, width: "100%" }}>
+            <option value="">— select supplier —</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.supId} — {s.name}</option>)}
+          </select>
+        </div>
+
+        <Input label="Supplier's SKU" value={form.supplierSku} onChange={set("supplierSku")} placeholder="e.g. SKJLM001" />
+
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Unit Price (USD)" value={form.unitPrice} onChange={set("unitPrice")} type="number" placeholder="e.g. 48" />
+          <Input label="MOQ / Quantity Basis" value={form.moq} onChange={set("moq")} placeholder="e.g. 10" />
+        </div>
+
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input label="Incoterm" value={form.incoterm} onChange={set("incoterm")} options={INCOTERMS} />
+          <Input label="Shipping Method" value={form.shippingMethod} onChange={set("shippingMethod")} placeholder="e.g. DDP sea, DHL, UPS" />
+          <Input label="Date" value={form.date} onChange={set("date")} type="date" />
+        </div>
+
+        <div style={{ background: "#F7F9ED", border: "1px solid rgba(132,140,56,0.28)", borderRadius: 12, padding: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 6 }}>Shipping and Landed Cost</div>
+          <div style={{ fontSize: 12, color: C.dgray, marginBottom: 12 }}>
+            Enter the allocated shipping cost per unit. If the supplier gave one total shipping amount, calculate this product's per-unit share manually first.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <Input label="Shipping per Unit" value={form.shippingCost} onChange={set("shippingCost")} type="number" placeholder="allocated per-unit shipping" />
+            <Input label="Shipping Currency" value={form.shippingCurrency} onChange={set("shippingCurrency")} options={SHIPPING_CURRENCIES} />
+            <Input label="USD → CAD Rate" value={form.usdCadRate} onChange={set("usdCadRate")} type="number" placeholder="1.38" />
+            <Input label="Duty Rate %" value={form.dutyRatePct} onChange={set("dutyRatePct")} type="number" placeholder={form.incoterm === "DDP" ? "0 if included" : "6.5"} />
+            <Input label="Brokerage CAD/unit" value={form.brokerageCad} onChange={set("brokerageCad")} type="number" placeholder="optional" />
+            <Input label="Other Fees CAD/unit" value={form.otherFeesCad} onChange={set("otherFeesCad")} type="number" placeholder="optional" />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginTop: 12 }}>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Product CAD</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.productCad)}</div></div>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Shipping/unit</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.shippingCadPerUnit)}</div></div>
+            <div style={{ background: "#fff", border: `1px solid ${C.mgray}`, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.dgray, textTransform: "uppercase" }}>Duty</div><div style={{ fontWeight: 900 }}>{formatCad(landed?.dutyCad)}</div></div>
+            <div style={{ background: C.navy, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: "#F4F5EF", textTransform: "uppercase" }}>Total Landed</div><div style={{ fontWeight: 900, color: "#C8CF5A" }}>{formatCad(landed?.totalCad)}</div></div>
+          </div>
+          <div style={{ fontSize: 12, color: C.dgray, marginTop: 8 }}>For DDP, duty normally defaults to 0 unless you enter a value. Shipping is tracked separately as allocated per-unit shipping for historical comparison.</div>
+        </div>
+
+        <Input label="Quote Status" value={form.quoteStatus} onChange={set("quoteStatus")} options={QSTATUSES} />
+        <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="e.g. Steel, blade style. 197×25×22.5 cm, 15.9 kg." />
+
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Quote</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
