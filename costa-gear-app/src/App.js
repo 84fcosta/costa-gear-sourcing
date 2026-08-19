@@ -23,20 +23,9 @@ export default function App() {
 
   const navigate = (destination, context = null) => {
     if (context) setHandoff(context);
-    if (destination === "shipments") {
-      setLogisticsView("shipments");
-      setWorkspace("logistics");
-      return;
-    }
-    if (destination === "importcosts") {
-      setLogisticsView("costs");
-      setWorkspace("logistics");
-      return;
-    }
-    if (destination === "operations" || destination === "intelligence") {
-      setWorkspace("sourcing");
-      return;
-    }
+    if (destination === "shipments") { setLogisticsView("shipments"); setWorkspace("logistics"); return; }
+    if (destination === "importcosts") { setLogisticsView("costs"); setWorkspace("logistics"); return; }
+    if (destination === "operations" || destination === "intelligence") { setWorkspace("sourcing"); return; }
     setWorkspace(destination);
   };
 
@@ -46,27 +35,20 @@ export default function App() {
         <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
       </div>
     </header>
-
     <nav className="cg-primary-nav" aria-label="Costa Gear operations navigation">
       <div className="cg-primary-nav-inner">
-        {navItems.map(({ id, label, Icon }) => <button
-          key={id}
-          className={`cg-nav-button ${workspace === id ? "active" : ""}`}
-          onClick={() => navigate(id)}
-        >
-          <Icon size={19} strokeWidth={2} />
-          <span>{label}</span>
+        {navItems.map(({ id, label, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)}>
+          <Icon size={19} strokeWidth={2} /><span>{label}</span>
         </button>)}
       </div>
     </nav>
-
     <main className="cg-workspace">
       {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
-      {workspace === "dashboard" ? <OperationalDashboard onNavigate={navigate} />
+      {workspace === "dashboard" ? <div className="cg-module-embedded"><OperationalDashboard onNavigate={navigate} /></div>
         : workspace === "sourcing" ? <SourcingWorkspace onNavigate={navigate} />
-        : workspace === "buying" ? <BuyingDecisionWorkspace />
+        : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
         : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
-        : <ReceivingInventoryWorkspace />}
+        : <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>}
     </main>
   </div>;
 }
