@@ -19,8 +19,10 @@ const navButton = (active) => ({
 export default function App() {
   const [workspace, setWorkspace] = useState("dashboard");
   const [logisticsView, setLogisticsView] = useState("shipments");
+  const [handoff, setHandoff] = useState(null);
 
-  const navigate = destination => {
+  const navigate = (destination, context = null) => {
+    if (context) setHandoff(context);
     if (destination === "shipments") {
       setLogisticsView("shipments");
       setWorkspace("logistics");
@@ -52,9 +54,9 @@ export default function App() {
       </div>
     </div>
     {workspace==="dashboard" ? <OperationalDashboard onNavigate={navigate}/>
-      : workspace==="sourcing" ? <SourcingWorkspace/>
-      : workspace==="buying" ? <BuyingDecisionWorkspace/>
-      : workspace==="logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView}/>
+      : workspace==="sourcing" ? <SourcingWorkspace onNavigate={navigate}/>
+      : workspace==="buying" ? <BuyingDecisionWorkspace handoff={handoff} onNavigate={navigate} onHandoffConsumed={()=>setHandoff(null)}/>
+      : workspace==="logistics" ? <LogisticsWorkspace key={`${logisticsView}-${handoff?.purchaseOrderId||""}`} initialView={logisticsView} handoff={handoff} onHandoffConsumed={()=>setHandoff(null)}/>
       : <ReceivingInventoryWorkspace/>}
   </div>;
 }
