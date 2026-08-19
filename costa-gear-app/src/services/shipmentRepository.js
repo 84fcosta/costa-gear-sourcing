@@ -85,6 +85,7 @@ export async function applyAllocationToQuotes(rows) {
       shipping_cost_per_unit_cad: Number(row.perUnitCad.toFixed(2)),
       shipping_allocation_method: row.allocationMethod || null,
       shipping_cost_basis: "shipment_allocation",
+      landed_cost_cad: null,
     }).eq("id", row.quote_id);
     if (error) throw error;
   }
