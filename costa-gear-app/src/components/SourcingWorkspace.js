@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import LegacyApp from "../LegacyApp";
 import SourcingDecisionLab from "./SourcingDecisionLab";
+import SupplierQuotationWorkspace from "./SupplierQuotationWorkspace";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
@@ -53,14 +54,17 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
       <div className="cg-subworkspace-inner">
         <div>
           <div className="cg-subworkspace-title">Sourcing</div>
-          <div className="cg-subworkspace-copy">Products, suppliers, quotes, RFQs and sourcing analysis in one workflow.</div>
+          <div className="cg-subworkspace-copy">Maintain products and suppliers, import complete supplier quotations, then compare and buy.</div>
         </div>
         <div className="cg-segmented">
           <button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button>
+          <button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button>
           <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button>
         </div>
       </div>
     </div>
-    {view === "master" ? <div className="cg-legacy-embedded"><LegacyApp /></div> : <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
+    {view === "master" && <div className="cg-legacy-embedded"><LegacyApp /></div>}
+    {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
+    {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
 }
