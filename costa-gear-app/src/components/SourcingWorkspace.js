@@ -3,10 +3,9 @@ import LegacyApp from "../LegacyApp";
 import SourcingDecisionLab from "./SourcingDecisionLab";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
-import { createPurchaseOrder, addPurchaseOrderItem } from "../services/purchaseOrderRepository";
+import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
 
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
-const makePoRef = () => { const d = new Date(); return `PO-${d.toISOString().slice(0,10).replaceAll("-","")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}${String(d.getSeconds()).padStart(2,"0")}`; };
 
 export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
   const [view, setView] = useState(initialView);
@@ -21,19 +20,27 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     try {
       const { data: quote, error } = await supabase.from("quotes").select("*").eq("id", context.quoteId).single();
       if (error) throw error;
+
+      const fx = Number(quote.usd_cad_rate);
+      if (!Number.isFinite(fx) || fx <= 0) {
+        throw new Error("Confirm the USD/CAD rate on the quote before creating a buying draft.");
+      }
+      if (Math.abs(fx - 1.38) < 0.000001) {
+        const confirmed = window.confirm("This quote uses USD/CAD 1.38, the legacy default rate. Confirm that 1.38 is correct for this buying decision. Select Cancel to review the quote first.");
+        if (!confirmed) throw new Error("Buying draft cancelled. Review the quote's USD/CAD rate and try again.");
+      }
+
       const landed = calculateQuoteLandedCost(quote);
-      const created = await createPurchaseOrder({
-        poRef: makePoRef(), supplierId: context.supplierId || quote.supplier_id, status: "Draft",
-        currency: "USD", usdCadRate: quote.usd_cad_rate || 1.38,
-        notes: `Created from Sourcing Decision Lab. Decision Score ${context.decisionScore ?? "N/A"}.`
-      });
-      await addPurchaseOrderItem({
-        purchaseOrderId: created.id, productId: context.productId, quoteId: quote.id,
-        quantity: qtyFromMoq(quote.moq), moqText: quote.moq || null,
-        supplierSku: quote.supplier_sku || null, unitPriceUsd: quote.unit_price,
-        landedCostPerUnitCad: landed?.totalCad ?? null,
+      if (!landed?.complete || landed.totalCad === null || landed.totalCad === undefined) {
+        throw new Error("Complete the quote's landed-cost inputs before creating a buying draft. Shipping and duty must be known, or the quote must be DDP.");
+      }
+
+      const created = await createBuyingDraftFromQuote({
+        quoteId: quote.id,
+        quantity: qtyFromMoq(quote.moq),
+        landedCostPerUnitCad: landed.totalCad,
         targetSellPriceCad: context.targetSellPriceCad ?? null,
-        notes: `Sourcing recommendation snapshot. Decision Score ${context.decisionScore ?? "N/A"}.`
+        decisionScore: context.decisionScore ?? null,
       });
       onNavigate?.("buying", { type:"buying-draft-created", purchaseOrderId:created.id, poRef:created.po_ref });
     } catch (e) { setHandoffError(e?.message || "Unable to create buying draft."); }
