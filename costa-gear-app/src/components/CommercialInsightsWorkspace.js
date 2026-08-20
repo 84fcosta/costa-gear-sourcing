@@ -10,6 +10,8 @@ const tools = [
 ];
 
 const cardStyle = { background: "#fff", border: "1px solid rgba(50,56,42,.12)", borderRadius: 14, padding: 18, textAlign: "left", display: "grid", gap: 8 };
+const primaryButton = { border: 0, background: "linear-gradient(180deg,#929A44,#747B31)", color: "#fff", borderRadius: 9, padding: "9px 13px", fontWeight: 800, fontSize: 12, cursor: "pointer" };
+const secondaryButton = { border: "1px solid rgba(50,56,42,.15)", background: "#fff", color: "#20251F", borderRadius: 9, padding: "8px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" };
 
 export default function CommercialInsightsWorkspace({ initialInsight="overview", onNavigate }) {
   const [view,setView]=useState(initialInsight || "overview");
@@ -23,7 +25,7 @@ export default function CommercialInsightsWorkspace({ initialInsight="overview",
           <div style={{fontSize:11,fontWeight:850,letterSpacing:.6,textTransform:"uppercase",color:"#747B31"}}>Business Insights</div>
           <div style={{fontSize:20,fontWeight:850,color:"#20251F",marginTop:2}}>{title}</div>
         </div>
-        <button className="cg-secondary-button" onClick={()=>setView("overview")}>Back to Insights</button>
+        <button style={secondaryButton} onClick={()=>setView("overview")}>Back to Insights</button>
       </div>
       {view==="performance"?<PerformanceWorkspace/>:view==="planning"?<DemandPlanningWorkspace onNavigate={onNavigate}/>:<PricingIntelligenceWorkspace/>}
     </div>;
@@ -38,7 +40,7 @@ export default function CommercialInsightsWorkspace({ initialInsight="overview",
       {tools.map(tool=><div key={tool.id} style={cardStyle}>
         <div style={{fontSize:16,fontWeight:850,color:"#20251F"}}>{tool.title}</div>
         <div style={{fontSize:12.5,color:"#647062",lineHeight:1.55,minHeight:58}}>{tool.copy}</div>
-        <div><button className="cg-primary-button" onClick={()=>setView(tool.id)}>Open</button></div>
+        <div><button style={primaryButton} onClick={()=>setView(tool.id)}>Open</button></div>
       </div>)}
     </div>
   </div>;
