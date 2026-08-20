@@ -71,3 +71,17 @@ export async function deletePurchaseOrderItem(id) {
   const { error } = await supabase.from("purchase_order_items").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function createBuyingDraftFromQuote(record) {
+  const { data, error } = await supabase.rpc("create_buying_draft_from_quote", {
+    p_quote_id: record.quoteId,
+    p_quantity: Number(record.quantity || 1),
+    p_landed_cost_per_unit_cad: record.landedCostPerUnitCad === null || record.landedCostPerUnitCad === undefined ? null : Number(record.landedCostPerUnitCad),
+    p_target_sell_price_cad: record.targetSellPriceCad === null || record.targetSellPriceCad === undefined || record.targetSellPriceCad === "" ? null : Number(record.targetSellPriceCad),
+    p_decision_score: record.decisionScore === null || record.decisionScore === undefined || record.decisionScore === "" ? null : Number(record.decisionScore),
+  });
+  if (error) throw error;
+  const created = Array.isArray(data) ? data[0] : data;
+  if (!created?.purchase_order_id) throw new Error("Buying draft was not created.");
+  return { id: created.purchase_order_id, po_ref: created.po_ref };
+}
