@@ -1,5 +1,11 @@
 import { supabase } from "../supabase";
 
+const requiredFxRate = value => {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error("Enter a valid USD/CAD rate before saving the buying decision.");
+  return rate;
+};
+
 export async function listPurchaseOrders() {
   const { data, error } = await supabase.from("purchase_orders").select("*").order("created_at", { ascending: false });
   if (error) throw error;
@@ -21,7 +27,7 @@ export async function createPurchaseOrder(record) {
     order_date: record.orderDate || null,
     expected_delivery_date: record.expectedDeliveryDate || null,
     currency: record.currency || "USD",
-    usd_cad_rate: Number(record.usdCadRate || 1.38),
+    usd_cad_rate: requiredFxRate(record.usdCadRate),
     incoterm: record.incoterm || null,
     payment_terms: record.paymentTerms || null,
     notes: record.notes || null,
@@ -39,7 +45,7 @@ export async function updatePurchaseOrder(id, record) {
     order_date: record.orderDate || null,
     expected_delivery_date: record.expectedDeliveryDate || null,
     currency: record.currency || "USD",
-    usd_cad_rate: Number(record.usdCadRate || 1.38),
+    usd_cad_rate: requiredFxRate(record.usdCadRate),
     incoterm: record.incoterm || null,
     payment_terms: record.paymentTerms || null,
     notes: record.notes || null,
