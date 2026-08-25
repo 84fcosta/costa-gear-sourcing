@@ -19,20 +19,20 @@ import "./legacy-overrides.css";
 
 const primaryNav = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { id: "sourcing", label: "Sourcing", Icon: PackageSearch },
-  { id: "buying", label: "Buying", Icon: ShoppingCart },
-  { id: "logistics", label: "Logistics", Icon: Truck },
-  { id: "receiving", label: "Inventory", Icon: Boxes },
-  { id: "sales", label: "Sales", Icon: DollarSign },
+  { id: "sourcing", label: "Sourcing", step: 1, Icon: PackageSearch },
+  { id: "buying", label: "Buying", step: 2, Icon: ShoppingCart },
+  { id: "logistics", label: "Logistics", step: 3, Icon: Truck },
+  { id: "receiving", label: "Inventory", step: 4, Icon: Boxes },
+  { id: "sales", label: "Sales", step: 5, Icon: DollarSign },
 ];
 
 const pageMeta = {
-  dashboard: ["Operational Dashboard", "One view of sourcing readiness, buying commitments, logistics, inventory and commercial performance."],
-  sourcing: ["Sourcing", "Manage products, suppliers, quotations, RFQs and sourcing decisions in one workspace."],
-  buying: ["Buying Decisions & Purchase Orders", "Convert approved sourcing decisions into planned and ordered purchases."],
-  logistics: ["Logistics & Landed Cost", "Manage shipments, freight allocation, duty and import costs from one workflow."],
-  receiving: ["Receiving & Inventory", "Receive against shipments, confirm exceptions and maintain on-hand inventory."],
-  sales: ["Sales", "Record sales and use optional business insights only when a decision needs deeper analysis."],
+  dashboard: ["Business Dashboard", "See sales, profit, inventory health and the few actions that need attention."],
+  sourcing: ["Sourcing", "Step 1 · Products, suppliers, quotations and sourcing decisions."],
+  buying: ["Buying Decisions & Purchase Orders", "Step 2 · Convert sourcing decisions into planned and ordered purchases."],
+  logistics: ["Logistics & Landed Cost", "Step 3 · Shipments, freight allocation, duty and import costs."],
+  receiving: ["Receiving & Inventory", "Step 4 · Receive goods, confirm exceptions and make sellable stock available."],
+  sales: ["Sales", "Step 5 · Record sales and measure realized revenue, profit and margin."],
 };
 
 export default function App() {
@@ -84,10 +84,10 @@ export default function App() {
           <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
         </button>
 
-        <nav className="cg-primary-nav" aria-label="Costa Gear primary navigation">
-          {primaryNav.map(({ id, label, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)}>
+        <nav className="cg-primary-nav" aria-label="Costa Gear operating workflow">
+          {primaryNav.map(({ id, label, step, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)} aria-label={step ? `Step ${step}: ${label}` : label}>
             <Icon size={18} strokeWidth={1.9} />
-            <span>{label}</span>
+            <span className="cg-nav-label">{step && <b className="cg-nav-step">{step}</b>}<span>{label}</span></span>
           </button>)}
         </nav>
       </div>
@@ -104,7 +104,7 @@ export default function App() {
 
       <div className="cg-page-content">
         {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
-        {workspace === "dashboard" ? <div className="cg-module-embedded"><OperationalDashboard onNavigate={navigate} /></div>
+        {workspace === "dashboard" ? <div className="cg-module-embedded cg-dashboard-embedded"><OperationalDashboard onNavigate={navigate} /></div>
           : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
