@@ -40,6 +40,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
   const allMatched=lines.length>0&&matched===lines.length;
   const canFinalize=selected&&selected.status!=="Cancelled"&&allMatched&&validationProblems===0&&Number(finalizeForm.usdCadRate)>0;
   const canBuy=selected?.status==="Finalized"&&selectedLines.length>0&&!selected.purchase_order_id;
+  const categoryOptions=useMemo(()=>[...new Set(products.map(p=>String(p.category||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[products]);
 
   const onFile=async e=>{const file=e.target.files?.[0];if(!file)return;setError("");setMessage("");try{setPreview(await parseCostaGearSupplierQuotation(file));}catch(err){setPreview(null);setError(err.message||"Unable to read the workbook.");}finally{e.target.value="";}};
   const doImport=async()=>{if(!preview||!importSupplierId)return setError("Select the supplier in Costa Gear before importing.");setBusy(true);setError("");try{const created=await importSupplierQuotation({supplierId:importSupplierId,header:preview.header,lines:preview.lines});setPreview(null);setImportSupplierId("");await load();setSelectedId(created.id);setMessage(`Quotation ${created.quote_ref} imported. Review product matches, then finalize.`);}catch(e){setError(e.message||"Unable to import quotation.");}finally{setBusy(false);}};
@@ -124,7 +125,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
           <div style={{fontSize:11,color:C.muted,background:"#F8FAF0",border:`1px solid rgba(133,140,56,.22)`,borderRadius:9,padding:9}}>Only Product Name is needed now. Category, type, material and fitment are optional and can be completed later in Product Master.</div>
           <Field label="Product Name *"><input autoFocus style={input} value={newProductForm.name} onChange={e=>setNewProductForm(f=>({...f,name:e.target.value}))} placeholder="Costa Gear product name"/></Field>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>
-            <Field label="Category (optional)"><input style={input} value={newProductForm.category} onChange={e=>setNewProductForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Interior Accessories"/></Field>
+            <Field label="Category (optional)"><select style={input} value={newProductForm.category} onChange={e=>setNewProductForm(f=>({...f,category:e.target.value}))}><option value="">Select existing category</option>{categoryOptions.map(category=><option key={category} value={category}>{category}</option>)}</select></Field>
             <Field label="Product Type (optional)"><input style={input} value={newProductForm.productType} onChange={e=>setNewProductForm(f=>({...f,productType:e.target.value}))} placeholder="e.g. Phone Holder"/></Field>
             <Field label="Material (optional)"><input style={input} value={newProductForm.material} onChange={e=>setNewProductForm(f=>({...f,material:e.target.value}))} placeholder="e.g. ABS / Aluminum"/></Field>
             <Field label="Fitment (optional)"><input style={input} value={newProductForm.fitment} onChange={e=>setNewProductForm(f=>({...f,fitment:e.target.value}))} placeholder="e.g. Wrangler JL 2018+"/></Field>
