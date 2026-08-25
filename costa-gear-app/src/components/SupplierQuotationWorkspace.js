@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
 import {
   createBuyingDraftFromQuotation,
+  createProductFromQuotationLine,
   finalizeSupplierQuotation,
   importSupplierQuotation,
   listSupplierQuotationLines,
@@ -23,6 +24,8 @@ export default function SupplierQuotationWorkspace({onNavigate}){
   const[selectedId,setSelectedId]=useState(""),[preview,setPreview]=useState(null),[importSupplierId,setImportSupplierId]=useState(""),[busy,setBusy]=useState(false);
   const[finalizeForm,setFinalizeForm]=useState({usdCadRate:"",allocationMethod:"value",dutyRatePct:""});
   const[selectedLines,setSelectedLines]=useState([]);
+  const[newProductLine,setNewProductLine]=useState(null);
+  const[newProductForm,setNewProductForm]=useState({name:"",productType:"",category:"",material:"",fitment:"",notes:""});
 
   const load=async()=>{setLoading(true);setError("");try{const[q,{data:s,error:se},{data:p,error:pe},{data:o,error:oe}]=await Promise.all([listSupplierQuotations(),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("products").select("*").order("sku_id"),supabase.from("purchase_orders").select("id,po_ref,status")]);if(se||pe||oe)throw(se||pe||oe);setQuotations(q);setSuppliers(s||[]);setProducts(p||[]);setOrders(o||[]);}catch(e){setError(e.message||"Unable to load supplier quotations.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
@@ -41,6 +44,9 @@ export default function SupplierQuotationWorkspace({onNavigate}){
   const onFile=async e=>{const file=e.target.files?.[0];if(!file)return;setError("");setMessage("");try{setPreview(await parseCostaGearSupplierQuotation(file));}catch(err){setPreview(null);setError(err.message||"Unable to read the workbook.");}finally{e.target.value="";}};
   const doImport=async()=>{if(!preview||!importSupplierId)return setError("Select the supplier in Costa Gear before importing.");setBusy(true);setError("");try{const created=await importSupplierQuotation({supplierId:importSupplierId,header:preview.header,lines:preview.lines});setPreview(null);setImportSupplierId("");await load();setSelectedId(created.id);setMessage(`Quotation ${created.quote_ref} imported. Review product matches, then finalize.`);}catch(e){setError(e.message||"Unable to import quotation.");}finally{setBusy(false);}};
   const mapLine=async(lineId,productId)=>{if(!productId)return;setError("");try{await mapSupplierQuotationLine(lineId,productId);setLines(await listSupplierQuotationLines(selectedId));setMessage("Supplier SKU mapping saved. Future quotations from this supplier can reuse it automatically.");}catch(e){setError(e.message||"Unable to save product match.");}};
+  const openCreateProduct=line=>{setError("");setNewProductLine(line);setNewProductForm({name:line.supplier_description||line.supplier_sku||"",productType:"",category:"",material:"",fitment:"",notes:""});};
+  const closeCreateProduct=()=>{if(busy)return;setNewProductLine(null);setNewProductForm({name:"",productType:"",category:"",material:"",fitment:"",notes:""});};
+  const createProduct=async()=>{if(!newProductLine)return;if(!newProductForm.name.trim())return setError("Enter a product name before creating the Product Master record.");setBusy(true);setError("");try{const result=await createProductFromQuotationLine({lineId:newProductLine.id,...newProductForm});const[{data:p,error:pe},rows]=await Promise.all([supabase.from("products").select("*").order("sku_id"),listSupplierQuotationLines(selectedId)]);if(pe)throw pe;setProducts(p||[]);setLines(rows);setNewProductLine(null);setNewProductForm({name:"",productType:"",category:"",material:"",fitment:"",notes:""});setMessage(`${result?.product?.sku_id||"New CG product"} created and matched to ${newProductLine.supplier_sku||"this supplier line"}. Future quotations can reuse this mapping automatically.`);}catch(e){setError(e.message||"Unable to create and match the new product.");}finally{setBusy(false);}};
   const finalize=async()=>{if(!canFinalize)return;setBusy(true);setError("");try{await finalizeSupplierQuotation({quotationId:selectedId,...finalizeForm});await load();setLines(await listSupplierQuotationLines(selectedId));setMessage("Quotation finalized. Its matched lines are now available as comparable quotes in Decision Lab.");}catch(e){setError(e.message||"Unable to finalize quotation.");}finally{setBusy(false);}};
   const createPO=async()=>{if(!canBuy)return;setBusy(true);setError("");try{const po=await createBuyingDraftFromQuotation(selectedId,selectedLines);await load();setMessage(`${po.po_ref} created with ${selectedLines.length} selected quotation line(s).`);onNavigate?.("buying",{type:"buying-draft-created",purchaseOrderId:po.id,poRef:po.po_ref});}catch(e){setError(e.message||"Unable to create Buying Draft.");}finally{setBusy(false);}};
   const toggleLine=id=>setSelectedLines(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
@@ -49,7 +55,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
   const previewTotals=useMemo(()=>{if(!preview)return null;const itemTotal=preview.lines.reduce((s,l)=>s+Number(l.supplierLineTotal===""?Number(l.quantity||0)*Number(l.unitPrice||0):l.supplierLineTotal||0),0);return{itemTotal,items:preview.lines.length};},[preview]);
 
   return <div style={{minHeight:"100vh",background:C.soft,color:C.ink}}>
-    <div style={{background:"#20251F",color:"#fff",padding:"20px 28px"}}><div><h1 style={{margin:0,fontSize:25}}>Supplier Quotations</h1><div style={{color:"#C9CFC4",fontSize:12,marginTop:4}}>Import the standardized workbook from Supplier Quote Formatter, match products once, and convert selected lines into one Buying Draft.</div></div></div>
+    <div style={{background:"#20251F",color:"#fff",padding:"20px 28px"}}><div><h1 style={{margin:0,fontSize:25}}>Supplier Quotations</h1><div style={{color:"#C9CFC4",fontSize:12,marginTop:4}}>Import the standardized workbook from Supplier Quote Formatter, match or create products once, and convert selected lines into one Buying Draft.</div></div></div>
     <div style={{padding:"16px 0 28px",display:"grid",gap:14}}>
       {error&&<div style={{background:"#FFF1EF",color:C.red,padding:10,borderRadius:9}}>{error}</div>}
       {message&&<div style={{background:"#EDF7EE",color:C.green,padding:10,borderRadius:9}}>{message}</div>}
@@ -81,8 +87,8 @@ export default function SupplierQuotationWorkspace({onNavigate}){
           </div>
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14,overflowX:"auto"}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:9}}><div><strong>Product Matching</strong><div style={{fontSize:10.5,color:C.muted}}>Known Supplier SKUs match automatically. For a new SKU, select the Costa Gear product once and the mapping is remembered.</div></div>{allMatched&&badge("MATCHED")}</div>
-            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1100,fontSize:11.5}}><thead><tr style={{background:"#F5F7F1"}}>{["Line","Supplier SKU","Supplier Description","Qty","Unit Price","Line Total","Validation","Costa Gear Product","Match"].map(h=><th key={h} style={{textAlign:"left",padding:8,color:C.muted,borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead><tbody>{lines.map(l=>{const p=productById(l.product_id);return <tr key={l.id}><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{l.line_no}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,fontFamily:"monospace",fontWeight:800}}>{l.supplier_sku||"—"}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,minWidth:260}}>{l.supplier_description||"—"}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{l.quantity} {l.unit||""}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{money(l.unit_price,selected.currency)}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{money(l.supplier_line_total??l.calculated_line_total,selected.currency)}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{badge(l.line_validation)}</td><td style={{padding:6,borderBottom:`1px solid ${C.border}`,minWidth:300}}><select style={input} value={l.product_id||""} disabled={selected.status==="Converted"} onChange={e=>mapLine(l.id,e.target.value)}><option value="">Select CG product</option>{products.map(x=><option key={x.id} value={x.id}>{x.sku_id} · {x.name}</option>)}</select>{p&&<div style={{fontSize:9.5,color:C.muted,marginTop:2}}>{p.fitment||"Fitment TBD"}</div>}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{badge(l.product_id?"MATCHED":"UNMATCHED")}</td></tr>})}</tbody></table>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:9}}><div><strong>Product Matching</strong><div style={{fontSize:10.5,color:C.muted}}>Known Supplier SKUs match automatically. For a new SKU, either match an existing CG product or create a new Product Master record directly from the quotation line.</div></div>{allMatched&&badge("MATCHED")}</div>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1180,fontSize:11.5}}><thead><tr style={{background:"#F5F7F1"}}>{["Line","Supplier SKU","Supplier Description","Qty","Unit Price","Line Total","Validation","Costa Gear Product","Match"].map(h=><th key={h} style={{textAlign:"left",padding:8,color:C.muted,borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead><tbody>{lines.map(l=>{const p=productById(l.product_id);return <tr key={l.id}><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{l.line_no}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,fontFamily:"monospace",fontWeight:800}}>{l.supplier_sku||"—"}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,minWidth:260}}>{l.supplier_description||"—"}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{l.quantity} {l.unit||""}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{money(l.unit_price,selected.currency)}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{money(l.supplier_line_total??l.calculated_line_total,selected.currency)}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{badge(l.line_validation)}</td><td style={{padding:6,borderBottom:`1px solid ${C.border}`,minWidth:330}}><select style={input} value={l.product_id||""} disabled={selected.status==="Converted"} onChange={e=>mapLine(l.id,e.target.value)}><option value="">Select existing CG product</option>{products.map(x=><option key={x.id} value={x.id}>{x.sku_id} · {x.name}</option>)}</select>{p?<div style={{fontSize:9.5,color:C.muted,marginTop:2}}>{p.fitment||"Fitment TBD"}</div>:selected.status==="Imported"&&<button type="button" style={{...btn(),marginTop:5,padding:"6px 9px",color:C.oliveDark,borderColor:"rgba(133,140,56,.35)"}} onClick={()=>openCreateProduct(l)}>+ Create New Product</button>}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{badge(l.product_id?"MATCHED":"UNMATCHED")}</td></tr>})}</tbody></table>
           </div>
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
@@ -93,7 +99,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
               <Field label={String(selected.incoterm||"").toUpperCase()==="DDP"?"Duty % (DDP = 0)":"Duty % (if known)"}><input style={input} type="number" min="0" max="100" step="0.1" disabled={String(selected.incoterm||"").toUpperCase()==="DDP"} value={String(selected.incoterm||"").toUpperCase()==="DDP"?"0":finalizeForm.dutyRatePct} onChange={e=>setFinalizeForm(f=>({...f,dutyRatePct:e.target.value}))}/></Field>
               <button disabled={!canFinalize||busy||selected.status==="Converted"} onClick={finalize} style={{...btn(true),opacity:(!canFinalize||busy||selected.status==="Converted")?0.45:1,height:35}}>{busy?"Working...":selected.status==="Finalized"?"Recalculate Quotes":"Finalize Quotes"}</button>
             </div>
-            {!allMatched&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Match all {lines.length-matched} remaining line(s) before finalizing.</div>}
+            {!allMatched&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Match or create all {lines.length-matched} remaining product(s) before finalizing.</div>}
             {validationProblems>0&&<div style={{fontSize:10.5,color:C.red,marginTop:7}}>This quotation contains validation exceptions. Correct the standardized workbook and re-import it rather than overriding the discrepancy.</div>}
           </div>
 
@@ -105,5 +111,28 @@ export default function SupplierQuotationWorkspace({onNavigate}){
         </>:<div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:28,color:C.muted}}>Import or select a supplier quotation to continue.</div>}</div>
       </div>}
     </div>
+
+    {newProductLine&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(9,10,8,.56)",display:"grid",placeItems:"center",padding:20}} onMouseDown={e=>{if(e.target===e.currentTarget)closeCreateProduct();}}>
+      <div style={{width:"min(720px,96vw)",background:"#fff",borderRadius:16,border:`1px solid ${C.border}`,boxShadow:"0 26px 80px rgba(9,10,8,.28)",overflow:"hidden"}}>
+        <div style={{background:"#20251F",color:"#fff",padding:"16px 18px"}}><div style={{fontSize:17,fontWeight:900}}>Create Costa Gear Product</div><div style={{fontSize:11,color:"#C9CFC4",marginTop:3}}>Create the Product Master record and match this supplier line in one step.</div></div>
+        <div style={{padding:18,display:"grid",gap:13}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div style={{background:"#F8F9F5",padding:9,borderRadius:9}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>SUPPLIER SKU</div><div style={{fontSize:12,fontWeight:850,marginTop:2,fontFamily:"monospace"}}>{newProductLine.supplier_sku||"—"}</div></div>
+            <div style={{background:"#F8F9F5",padding:9,borderRadius:9}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>QUOTATION LINE</div><div style={{fontSize:12,fontWeight:850,marginTop:2}}>#{newProductLine.line_no}</div></div>
+            <div style={{background:"#F8F9F5",padding:9,borderRadius:9}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>CG SKU</div><div style={{fontSize:12,fontWeight:850,marginTop:2,color:C.oliveDark}}>Generated automatically</div></div>
+          </div>
+          <div style={{fontSize:11,color:C.muted,background:"#F8FAF0",border:`1px solid rgba(133,140,56,.22)`,borderRadius:9,padding:9}}>Only Product Name is needed now. Category, type, material and fitment are optional and can be completed later in Product Master.</div>
+          <Field label="Product Name *"><input autoFocus style={input} value={newProductForm.name} onChange={e=>setNewProductForm(f=>({...f,name:e.target.value}))} placeholder="Costa Gear product name"/></Field>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>
+            <Field label="Category (optional)"><input style={input} value={newProductForm.category} onChange={e=>setNewProductForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Interior Accessories"/></Field>
+            <Field label="Product Type (optional)"><input style={input} value={newProductForm.productType} onChange={e=>setNewProductForm(f=>({...f,productType:e.target.value}))} placeholder="e.g. Phone Holder"/></Field>
+            <Field label="Material (optional)"><input style={input} value={newProductForm.material} onChange={e=>setNewProductForm(f=>({...f,material:e.target.value}))} placeholder="e.g. ABS / Aluminum"/></Field>
+            <Field label="Fitment (optional)"><input style={input} value={newProductForm.fitment} onChange={e=>setNewProductForm(f=>({...f,fitment:e.target.value}))} placeholder="e.g. Wrangler JL 2018+"/></Field>
+          </div>
+          <Field label="Notes (optional)"><input style={input} value={newProductForm.notes} onChange={e=>setNewProductForm(f=>({...f,notes:e.target.value}))} placeholder="Anything useful for Product Master"/></Field>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.name.trim()} style={{...btn(true),opacity:(busy||!newProductForm.name.trim())?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
