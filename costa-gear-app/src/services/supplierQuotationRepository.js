@@ -38,6 +38,28 @@ export async function mapSupplierQuotationLine(lineId, productId) {
   return data;
 }
 
+export async function createProductFromQuotationLine({
+  lineId,
+  name,
+  productType,
+  category,
+  material,
+  fitment,
+  notes,
+}) {
+  const { data, error } = await supabase.rpc("create_product_from_quotation_line", {
+    p_line_id: lineId,
+    p_name: name || null,
+    p_product_type: productType || null,
+    p_category: category || null,
+    p_material: material || null,
+    p_fitment: fitment || null,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function finalizeSupplierQuotation({ quotationId, usdCadRate, allocationMethod, dutyRatePct }) {
   const { data, error } = await supabase.rpc("finalize_supplier_quotation", {
     p_quotation_id: quotationId,
