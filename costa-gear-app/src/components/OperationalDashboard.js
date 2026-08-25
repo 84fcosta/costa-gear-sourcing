@@ -3,118 +3,293 @@ import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
 import { loadOperationalDashboardData, updateProductReorderPoint } from "../services/dashboardRepository";
 
-const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",blue:"#4E6A8E",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
+const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",oliveLight:"#A4AA55",green:"#4D7D57",red:"#B65145",amber:"#A87818",blue:"#4E6A8E",muted:"#647062",line:"#E0E3DB",soft:"#F4F5F1"};
+const salesConsumedStatuses=new Set(["Confirmed","Paid","Shipped","Completed"]);
+const salesOpenStatuses=new Set(["Confirmed","Paid","Shipped"]);
 const money=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0});
+const money2=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2});
 const number=v=>Number(v||0).toLocaleString("en-CA");
 const pct=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":`${Number(v).toFixed(1)}%`;
-const btn=(active=false)=>({border:active?0:`1px solid ${C.border}`,background:active?"linear-gradient(180deg,#929A44,#747B31)":"#fff",color:active?"#fff":C.ink,borderRadius:9,padding:"8px 11px",fontWeight:800,fontSize:11.5,cursor:"pointer"});
-const salesCommitStatuses=new Set(["Confirmed","Paid","Shipped","Completed"]);
+const dateLabel=v=>{if(!v)return "";const d=new Date(v);return Number.isNaN(d.getTime())?"":d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});};
+const daysOld=value=>{if(!value)return Infinity;const t=new Date(value).getTime();return Number.isFinite(t)?Math.floor((Date.now()-t)/86400000):Infinity;};
+const latestByProduct=quotes=>{const map=new Map();for(const q of quotes){const current=map.get(q.product_id);if(!current||new Date(q.quote_date||q.created_at)>new Date(current.quote_date||current.created_at))map.set(q.product_id,q);}return map;};
+const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+const monthLabel=d=>d.toLocaleDateString("en-CA",{month:"short"});
+const orderDate=o=>o.sold_date||o.created_at;
 
-function daysOld(value){if(!value)return Infinity;const t=new Date(value).getTime();return Number.isFinite(t)?Math.floor((Date.now()-t)/86400000):Infinity;}
-function latestByProduct(quotes){const map=new Map();for(const q of quotes){const current=map.get(q.product_id);if(!current||new Date(q.quote_date||q.created_at)>new Date(current.quote_date||current.created_at))map.set(q.product_id,q);}return map;}
-function Card({label,value,sub,tone="neutral",onClick}){const tones={neutral:C.ink,good:C.green,warn:C.amber,bad:C.red,info:C.blue};return <button onClick={onClick} disabled={!onClick} style={{textAlign:"left",border:`1px solid ${C.border}`,background:"#fff",borderRadius:13,padding:13,cursor:onClick?"pointer":"default"}}><div style={{fontSize:9.5,color:C.muted,fontWeight:820,textTransform:"uppercase",letterSpacing:.45}}>{label}</div><div style={{fontSize:22,fontWeight:900,color:tones[tone]||C.ink,marginTop:4}}>{value}</div>{sub&&<div style={{fontSize:10.5,color:C.muted,marginTop:3,lineHeight:1.4}}>{sub}</div>}</button>}
-function Badge({children,tone="neutral"}){const x={neutral:["#F1F3EF",C.muted],good:["#EDF7EE",C.green],warn:["#FFF8E8",C.amber],bad:["#FFF1EF",C.red],info:["#EEF4FA",C.blue]}[tone];return <span style={{background:x[0],color:x[1],borderRadius:999,padding:"4px 7px",fontSize:9.5,fontWeight:850,whiteSpace:"nowrap"}}>{children}</span>}
+function KpiCard({label,value,sub,tone="neutral",onClick}){
+  return <button className={`cg-kpi-card tone-${tone}`} onClick={onClick} disabled={!onClick}>
+    <span className="cg-kpi-label">{label}</span>
+    <strong>{value}</strong>
+    <span className="cg-kpi-sub">{sub}</span>
+  </button>;
+}
+
+function Panel({title,eyebrow,action,children,className=""}){
+  return <section className={`cg-dashboard-panel ${className}`}>
+    <div className="cg-panel-head">
+      <div>{eyebrow&&<div className="cg-panel-eyebrow">{eyebrow}</div>}<h3>{title}</h3></div>
+      {action}
+    </div>
+    {children}
+  </section>;
+}
+
+function SalesProfitChart({series}){
+  const width=720,height=230,left=28,right=16,top=20,bottom=42;
+  const values=series.flatMap(x=>[x.revenue,x.profit]);
+  const min=Math.min(0,...values),max=Math.max(1,...values);
+  const range=max-min||1,plotH=height-top-bottom,plotW=width-left-right;
+  const y=v=>top+(max-v)/range*plotH;
+  const zeroY=y(0);
+  const step=plotW/Math.max(1,series.length);
+  const barW=Math.min(56,step*.48);
+  const points=series.map((x,i)=>`${left+step*(i+.5)},${y(x.profit)}`).join(" ");
+  return <div className="cg-chart-wrap">
+    <div className="cg-chart-legend"><span><i className="revenue"/>Revenue</span><span><i className="profit"/>Gross Profit</span></div>
+    <svg className="cg-sales-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue and gross profit for the last six months">
+      <line x1={left} x2={width-right} y1={zeroY} y2={zeroY} stroke="#D8DDD2" strokeWidth="1"/>
+      <line x1={left} x2={width-right} y1={top} y2={top} stroke="#EEF0EA" strokeWidth="1"/>
+      <text x={left} y={12} fontSize="10" fill={C.muted}>{money(max)}</text>
+      {series.map((x,i)=>{
+        const cx=left+step*(i+.5),barTop=y(x.revenue),barHeight=Math.max(1,zeroY-barTop);
+        return <g key={x.key}>
+          <rect x={cx-barW/2} y={barTop} width={barW} height={barHeight} rx="5" fill={C.olive} opacity=".82"/>
+          <text x={cx} y={height-17} textAnchor="middle" fontSize="10" fontWeight="700" fill={C.muted}>{x.label}</text>
+        </g>;
+      })}
+      {series.length>1&&<polyline points={points} fill="none" stroke={C.ink} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
+      {series.map((x,i)=><circle key={`p-${x.key}`} cx={left+step*(i+.5)} cy={y(x.profit)} r="4" fill="#fff" stroke={C.ink} strokeWidth="2"/>)}
+    </svg>
+  </div>;
+}
+
+function TopProductsChart({rows,mode,setMode}){
+  const valueFor=row=>mode==="profit"?Number(row.realizedProfitCad||0):mode==="units"?Number(row.completedUnits||0):Number(row.realizedRevenueCad||0);
+  const ranked=[...rows].filter(row=>valueFor(row)>0).sort((a,b)=>valueFor(b)-valueFor(a)).slice(0,5);
+  const max=Math.max(1,...ranked.map(valueFor));
+  return <>
+    <div className="cg-mini-tabs" role="group" aria-label="Top product metric">
+      {[['revenue','Revenue'],['profit','Profit'],['units','Units']].map(([id,label])=><button key={id} className={mode===id?"active":""} onClick={()=>setMode(id)}>{label}</button>)}
+    </div>
+    <div className="cg-hbars">
+      {!ranked.length&&<div className="cg-empty-chart">Sales history will populate this chart.</div>}
+      {ranked.map(row=>{const value=valueFor(row);return <div className="cg-hbar-row" key={row.product.id}>
+        <div className="cg-hbar-label"><strong>{row.product.sku_id}</strong><span title={row.product.name}>{row.product.name}</span></div>
+        <div className="cg-hbar-track"><i style={{width:`${Math.max(4,value/max*100)}%`}}/></div>
+        <div className="cg-hbar-value">{mode==="units"?number(value):money(value)}</div>
+      </div>;})}
+    </div>
+  </>;
+}
+
+function InventoryHealth({available,committed,damaged,inTransit}){
+  const parts=[
+    {label:"Available",value:available,color:C.olive},
+    {label:"Reserved",value:committed,color:C.blue},
+    {label:"Damaged",value:damaged,color:C.red},
+    {label:"In Transit",value:inTransit,color:C.amber},
+  ];
+  const total=parts.reduce((s,p)=>s+p.value,0);
+  let cursor=0;
+  const segments=parts.filter(p=>p.value>0).map(p=>{const start=total?cursor/total*100:0;cursor+=p.value;const end=total?cursor/total*100:0;return `${p.color} ${start}% ${end}%`;});
+  const bg=segments.length?`conic-gradient(${segments.join(",")})`:"#E8EBE4";
+  return <div className="cg-inventory-health">
+    <div className="cg-donut" style={{background:bg}}><div><strong>{number(available)}</strong><span>available</span></div></div>
+    <div className="cg-donut-legend">{parts.map(p=><div key={p.label}><span><i style={{background:p.color}}/>{p.label}</span><strong>{number(p.value)}</strong></div>)}</div>
+  </div>;
+}
+
+function MarginChart({rows}){
+  const ranked=[...rows].filter(row=>row.realizedMarginPct!==null&&row.realizedMarginPct!==undefined&&row.realizedRevenueCad>0).sort((a,b)=>b.realizedRevenueCad-a.realizedRevenueCad).slice(0,5);
+  return <div className="cg-margin-chart">
+    <div className="cg-margin-target">Target reference 40%</div>
+    {!ranked.length&&<div className="cg-empty-chart">Completed sales will populate product margins.</div>}
+    {ranked.map(row=>{const margin=Number(row.realizedMarginPct||0);const tone=margin>=40?C.green:margin>=25?C.amber:C.red;return <div className="cg-margin-row" key={row.product.id}>
+      <div className="cg-margin-name"><strong>{row.product.sku_id}</strong><span>{row.product.name}</span></div>
+      <div className="cg-margin-track"><span className="target"/><i style={{width:`${Math.min(100,Math.max(0,margin))}%`,background:tone}}/></div>
+      <strong className="cg-margin-value" style={{color:tone}}>{pct(margin)}</strong>
+    </div>;})}
+  </div>;
+}
+
+function deltaText(current,previous){
+  if(previous>0){const d=(current-previous)/previous*100;return `${d>=0?"↑":"↓"} ${Math.abs(d).toFixed(0)}% vs last month`;}
+  return current>0?"First recorded sales month":"No completed sales this month";
+}
 
 export default function OperationalDashboard({onNavigate}){
-  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[savingId,setSavingId]=useState("");
+  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
+  const [savingId,setSavingId]=useState("");
   const [reorderDrafts,setReorderDrafts]=useState({});
+  const [topMode,setTopMode]=useState("revenue");
+
   const load=async()=>{setLoading(true);setError("");try{const d=await loadOperationalDashboardData();setData(d);setReorderDrafts(Object.fromEntries(d.products.map(p=>[p.id,String(p.reorder_point||0)])));}catch(e){setError(e?.message||"Unable to load dashboard.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
 
-  const metrics=useMemo(()=>{
-    if(!data)return null;
+  const performance=useMemo(()=>data?buildPerformanceAnalytics(data):null,[data]);
+
+  const dashboard=useMemo(()=>{
+    if(!data||!performance)return null;
+    const productsById=new Map(data.products.map(p=>[p.id,p]));
+    const poById=new Map(data.purchaseOrders.map(po=>[po.id,po]));
+    const poItemById=new Map(data.purchaseOrderItems.map(i=>[i.id,i]));
+    const receiptById=new Map(data.receipts.map(r=>[r.id,r]));
+    const salesItemsByOrder=new Map();
+    for(const item of data.salesOrderItems){if(!salesItemsByOrder.has(item.sales_order_id))salesItemsByOrder.set(item.sales_order_id,[]);salesItemsByOrder.get(item.sales_order_id).push(item);}
+
     const postedReceiptIds=new Set(data.receipts.filter(r=>r.status==="Posted").map(r=>r.id));
-    const receivedInventory=new Map(data.products.map(p=>[p.id,0]));
     const receivedByPoItem=new Map();
-    let actualCostVarianceValue=0,actualCostBasis=0;
+    let damagedUnits=0;
     for(const ri of data.receiptItems){
       if(!postedReceiptIds.has(ri.receipt_id))continue;
-      const sellable=Math.max(0,Number(ri.quantity_received||0)-Number(ri.quantity_damaged||0)-Number(ri.quantity_rejected||0));
-      receivedInventory.set(ri.product_id,(receivedInventory.get(ri.product_id)||0)+sellable);
+      damagedUnits+=Number(ri.quantity_damaged||0);
       receivedByPoItem.set(ri.purchase_order_item_id,(receivedByPoItem.get(ri.purchase_order_item_id)||0)+Number(ri.quantity_received||0));
-      const poi=data.purchaseOrderItems.find(i=>i.id===ri.purchase_order_item_id);
-      if(poi&&ri.actual_landed_cost_per_unit_cad!==null&&ri.actual_landed_cost_per_unit_cad!==undefined&&poi.landed_cost_per_unit_cad!==null&&poi.landed_cost_per_unit_cad!==undefined){const qty=Number(ri.quantity_received||0);actualCostVarianceValue+=(Number(ri.actual_landed_cost_per_unit_cad)-Number(poi.landed_cost_per_unit_cad))*qty;actualCostBasis+=Number(poi.landed_cost_per_unit_cad)*qty;}
     }
 
-    const activeSalesIds=new Set(data.salesOrders.filter(o=>salesCommitStatuses.has(o.status)).map(o=>o.id));
-    const salesCommitted=new Map(data.products.map(p=>[p.id,0]));
-    let salesCommittedUnits=0;
-    for(const item of data.salesOrderItems){if(!activeSalesIds.has(item.sales_order_id))continue;const qty=Number(item.quantity||0);salesCommitted.set(item.product_id,(salesCommitted.get(item.product_id)||0)+qty);salesCommittedUnits+=qty;}
-    const inventory=new Map(data.products.map(p=>[p.id,Math.max(0,(receivedInventory.get(p.id)||0)-(salesCommitted.get(p.id)||0))]));
-    const oversold=data.products.filter(p=>(salesCommitted.get(p.id)||0)>(receivedInventory.get(p.id)||0)).map(p=>({product:p,received:receivedInventory.get(p.id)||0,committed:salesCommitted.get(p.id)||0}));
+    const openCommittedUnits=data.salesOrderItems.reduce((sum,item)=>{
+      const order=data.salesOrders.find(o=>o.id===item.sales_order_id);
+      return sum+(order&&salesOpenStatuses.has(order.status)?Number(item.quantity||0):0);
+    },0);
 
+    let inTransitUnits=0;
     const activeOrders=data.purchaseOrders.filter(po=>!["Received","Cancelled"].includes(po.status));
-    const activeIds=new Set(activeOrders.map(po=>po.id));
-    let committed=0,projectedRevenue=0,inTransitUnits=0;
-    for(const item of data.purchaseOrderItems){if(!activeIds.has(item.purchase_order_id))continue;const qty=Number(item.quantity||0);committed+=Number(item.landed_cost_per_unit_cad||0)*qty;projectedRevenue+=Number(item.target_sell_price_cad||0)*qty;const po=data.purchaseOrders.find(x=>x.id===item.purchase_order_id);if(po&&["Ordered","Partially Received"].includes(po.status))inTransitUnits+=Math.max(0,qty-(receivedByPoItem.get(item.id)||0));}
-    const projectedMargin=projectedRevenue>0?(projectedRevenue-committed)/projectedRevenue*100:null;
+    for(const item of data.purchaseOrderItems){
+      const po=poById.get(item.purchase_order_id);
+      if(po&&["Ordered","Partially Received"].includes(po.status))inTransitUnits+=Math.max(0,Number(item.quantity||0)-(receivedByPoItem.get(item.id)||0));
+    }
 
-    const completedIds=new Set(data.salesOrders.filter(o=>o.status==="Completed").map(o=>o.id));
-    let realizedRevenue=0,realizedCogs=0,realizedOrderCosts=0,completedSales=0;
-    for(const o of data.salesOrders){if(!completedIds.has(o.id))continue;completedSales+=1;realizedOrderCosts+=Number(o.payment_fee_cad||0)+Number(o.outbound_shipping_cad||0)+Number(o.other_costs_cad||0);}
-    for(const i of data.salesOrderItems){if(!completedIds.has(i.sales_order_id))continue;const qty=Number(i.quantity||0);realizedRevenue+=Math.max(0,Number(i.unit_sell_price_cad||0)*qty-Number(i.discount_cad||0));realizedCogs+=Number(i.unit_cost_cad||0)*qty;}
-    const realizedProfit=realizedRevenue-realizedCogs-realizedOrderCosts;
-    const realizedMargin=realizedRevenue>0?realizedProfit/realizedRevenue*100:null;
+    const aggregateSales=(start,end)=>{
+      let revenue=0,cogs=0,orderCosts=0,units=0,sales=0;
+      for(const order of data.salesOrders){
+        if(order.status!=="Completed")continue;
+        const d=new Date(orderDate(order));
+        if(Number.isNaN(d.getTime())||d<start||d>=end)continue;
+        const lines=salesItemsByOrder.get(order.id)||[];
+        if(!lines.length)continue;
+        sales+=1;
+        orderCosts+=Number(order.payment_fee_cad||0)+Number(order.outbound_shipping_cad||0)+Number(order.other_costs_cad||0);
+        for(const line of lines){const q=Number(line.quantity||0);units+=q;revenue+=Math.max(0,Number(line.unit_sell_price_cad||0)*q-Number(line.discount_cad||0));cogs+=Number(line.unit_cost_cad||0)*q;}
+      }
+      const profit=revenue-cogs-orderCosts;
+      return {revenue,cogs,orderCosts,profit,margin:revenue>0?profit/revenue*100:null,units,sales};
+    };
+
+    const now=new Date();
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+    const nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
+    const previousMonth=new Date(now.getFullYear(),now.getMonth()-1,1);
+    const mtd=aggregateSales(monthStart,nextMonth);
+    const previous=aggregateSales(previousMonth,monthStart);
+
+    const trend=[];
+    for(let offset=5;offset>=0;offset--){
+      const start=new Date(now.getFullYear(),now.getMonth()-offset,1);
+      const end=new Date(now.getFullYear(),now.getMonth()-offset+1,1);
+      const a=aggregateSales(start,end);
+      trend.push({key:monthKey(start),label:monthLabel(start),...a});
+    }
 
     const latest=latestByProduct(data.quotes);
     const stale=[];const incomplete=[];
-    for(const p of data.products){const q=latest.get(p.id);if(!q||daysOld(q.quote_date||q.created_at)>60)stale.push({product:p,quote:q,age:q?daysOld(q.quote_date||q.created_at):null});if(q){const lc=calculateQuoteLandedCost(q);if(!lc?.complete||lc.totalCad===null)incomplete.push({product:p,quote:q});}}
-    const lowStock=data.products.filter(p=>Number(p.reorder_point||0)>0&&(inventory.get(p.id)||0)<=Number(p.reorder_point||0)).map(p=>({product:p,onHand:inventory.get(p.id)||0}));
+    for(const p of data.products){
+      const q=latest.get(p.id);
+      if(!q||daysOld(q.quote_date||q.created_at)>60)stale.push({product:p,quote:q,age:q?daysOld(q.quote_date||q.created_at):null});
+      if(q){const lc=calculateQuoteLandedCost(q);if(!lc?.complete||lc.totalCad===null)incomplete.push({product:p,quote:q});}
+    }
+    const lowStock=performance.productMetrics.filter(row=>Number(row.product.reorder_point||0)>0&&row.availableUnits<=Number(row.product.reorder_point||0));
     const reorderUnset=data.products.filter(p=>Number(p.reorder_point||0)===0).length;
     const shipmentAlerts=data.shipments.filter(s=>Number(s.freight_amount||0)<=0||((s.status!=="Completed"&&s.status!=="Received")&&(Number(s.brokerage_amount||0)===0&&Number(s.other_import_costs_amount||0)===0)));
-    const availableUnits=[...inventory.values()].reduce((a,b)=>a+b,0);
-    const actualVariancePct=actualCostBasis>0?actualCostVarianceValue/actualCostBasis*100:null;
-    return{inventory,receivedInventory,salesCommitted,availableUnits,salesCommittedUnits,oversold,activeOrders,committed,projectedRevenue,projectedMargin,inTransitUnits,stale,incomplete,lowStock,reorderUnset,shipmentAlerts,actualVariancePct,actualCostVarianceValue,realizedRevenue,realizedProfit,realizedMargin,completedSales};
-  },[data]);
 
-  const performance=useMemo(()=>data?buildPerformanceAnalytics(data):null,[data]);
+    const actions=[];
+    if(damagedUnits>0)actions.push({tone:"bad",title:`${number(damagedUnits)} damaged unit${damagedUnits===1?"":"s"} awaiting disposition`,detail:"Review supplier resolution before treating damaged stock as sellable.",action:"receiving"});
+    if(lowStock.length)actions.push({tone:"bad",title:`${lowStock.length} SKU${lowStock.length===1?"":"s"} at or below reorder point`,detail:"Review inventory and decide whether replenishment is needed.",action:"receiving"});
+    if(shipmentAlerts.length)actions.push({tone:"warn",title:`${shipmentAlerts.length} shipment${shipmentAlerts.length===1?"":"s"} with costs to review`,detail:"Freight or import-cost completion needs attention.",action:"importcosts"});
+    if(incomplete.length)actions.push({tone:"warn",title:`${incomplete.length} SKU${incomplete.length===1?"":"s"} with incomplete landed cost`,detail:"Latest supplier quote is missing cost inputs.",action:"shipments"});
+    if(stale.length)actions.push({tone:"info",title:`${stale.length} quote${stale.length===1?"":"s"} need refresh`,detail:"No quote or the latest quote is older than 60 days.",action:"intelligence"});
+    if(reorderUnset>0)actions.push({tone:"neutral",title:`${reorderUnset} SKU${reorderUnset===1?"":"s"} without reorder points`,detail:"Optional setup as sales history becomes more meaningful.",action:"receiving"});
+
+    const activities=[];
+    for(const order of data.salesOrders){
+      const d=orderDate(order);if(!d)continue;
+      const lines=salesItemsByOrder.get(order.id)||[];
+      const net=lines.reduce((sum,line)=>sum+Math.max(0,Number(line.unit_sell_price_cad||0)*Number(line.quantity||0)-Number(line.discount_cad||0)),0);
+      activities.push({date:d,title:`Sale ${order.status.toLowerCase()}`,detail:`${order.sale_ref} · ${money2(net)} · ${order.channel}`,action:"sales"});
+    }
+    for(const receipt of data.receipts){if(!receipt.created_at)continue;activities.push({date:receipt.created_at,title:`Receipt ${receipt.status.toLowerCase()}`,detail:`${receipt.receipt_ref}${receipt.location?` · ${receipt.location}`:""}`,action:"receiving"});}
+    for(const shipment of data.shipments){if(!shipment.created_at)continue;activities.push({date:shipment.created_at,title:`Shipment ${String(shipment.status||"").toLowerCase()}`,detail:`${shipment.shipment_ref}${shipment.shipping_method?` · ${shipment.shipping_method}`:""}`,action:"shipments"});}
+    for(const po of data.purchaseOrders){if(!po.created_at)continue;activities.push({date:po.created_at,title:`PO ${String(po.status||"").toLowerCase()}`,detail:po.po_ref,action:"buying"});}
+    activities.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+    return {
+      mtd,previous,trend,inTransitUnits,openCommittedUnits,damagedUnits,actions:actions.slice(0,5),activities:activities.slice(0,5),
+      stale,incomplete,lowStock,reorderUnset,activeOrders,productsById,poItemById,receiptById,
+    };
+  },[data,performance]);
 
   const saveReorder=async productId=>{setSavingId(productId);setError("");try{await updateProductReorderPoint(productId,reorderDrafts[productId]);await load();}catch(e){setError(e?.message||"Unable to save reorder point.");}finally{setSavingId("");}};
 
-  if(loading)return <div style={{minHeight:"55vh",display:"grid",placeItems:"center",background:C.soft,color:C.muted}}>Loading Costa Gear operations…</div>;
+  if(loading)return <div className="cg-dashboard-loading">Loading Costa Gear dashboard…</div>;
   if(error&&!data)return <div style={{padding:30,color:C.red}}>{error}</div>;
+  if(!dashboard||!performance)return null;
 
-  const inventoryRows=(data?.products||[]).map(p=>({product:p,received:metrics.receivedInventory.get(p.id)||0,committed:metrics.salesCommitted.get(p.id)||0,available:metrics.inventory.get(p.id)||0})).sort((a,b)=>a.available-b.available||a.product.sku_id.localeCompare(b.product.sku_id));
-  const agedBuckets=(performance?.agingBuckets||[]).filter(bucket=>bucket.key==="slow"||bucket.key==="critical");
-  const agedCapital=agedBuckets.reduce((sum,bucket)=>sum+Number(bucket.valueCad||0),0);
-  const agedUnits=agedBuckets.reduce((sum,bucket)=>sum+Number(bucket.units||0),0);
-  const agedCapitalPct=(performance?.summary.totalInventoryValueCad||0)>0?agedCapital/performance.summary.totalInventoryValueCad*100:0;
-  const performanceAlerts=(performance?.productMetrics||[]).filter(row=>row.performanceStatus==="Critical"||row.performanceStatus==="Slow").sort((a,b)=>b.inventoryValueCad-a.inventoryValueCad).slice(0,5);
-  const alerts=[
-    ...metrics.oversold.map(x=>({tone:"bad",title:`${x.product.sku_id} inventory overcommitted`,detail:`${x.committed} committed against ${x.received} sellable units`,action:"sales"})),
-    ...performanceAlerts.map(row=>({tone:row.performanceStatus==="Critical"?"bad":"warn",title:`${row.product.sku_id} ${row.performanceStatus.toLowerCase()} inventory`,detail:`${number(row.availableUnits)} available · ${money(row.inventoryValueCad)} capital · oldest ${row.oldestAgeDays===null?"—":`${number(row.oldestAgeDays)} days`}`,action:"performance"})),
-    ...metrics.lowStock.map(x=>({tone:"bad",title:`${x.product.sku_id} low stock`,detail:`${x.onHand} available after sales commitments, reorder point ${x.product.reorder_point}`,action:"receiving"})),
-    ...metrics.stale.slice(0,6).map(x=>({tone:"warn",title:`${x.product.sku_id} quote needs refresh`,detail:x.age===null?"No quotation recorded":`Latest quotation is ${x.age} days old`,action:"intelligence"})),
-    ...metrics.incomplete.slice(0,5).map(x=>({tone:"warn",title:`${x.product.sku_id} landed cost incomplete`,detail:"Latest quote is missing one or more landed-cost inputs",action:"shipments"})),
-    ...metrics.shipmentAlerts.slice(0,5).map(s=>({tone:"info",title:`${s.shipment_ref} costs pending`,detail:"Review freight and import-cost completion",action:"importcosts"})),
-  ];
+  const inventoryRows=[...performance.productMetrics].sort((a,b)=>a.product.sku_id.localeCompare(b.product.sku_id));
+  const inventoryValue=performance.summary.totalInventoryValueCad;
+  const availableUnits=performance.summary.totalAvailableUnits;
 
-  return <div style={{minHeight:"100vh",background:C.soft,color:C.ink}}>
-    <div style={{background:"#20251F",color:"#fff",padding:"20px 26px"}}><div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"end",flexWrap:"wrap"}}><div><div style={{color:"#B6BE59",fontSize:10,fontWeight:900,letterSpacing:1.3,textTransform:"uppercase"}}>Costa Gear</div><h1 style={{margin:"3px 0 0",fontSize:27}}>Operational Dashboard</h1><div style={{color:"#C9CFC4",fontSize:11.5,marginTop:4}}>Sourcing, buying, logistics, inventory and commercial performance in one view.</div></div><button style={btn(true)} onClick={load}>Refresh Dashboard</button></div></div>
-    <div style={{padding:"16px 0 28px",display:"grid",gap:14}}>
-      {error&&<div style={{background:"#FFF1EF",color:C.red,padding:10,borderRadius:9}}>{error}</div>}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:9}}>
-        <Card label="Available Inventory" value={number(metrics.availableUnits)} sub={`${metrics.salesCommittedUnits} units committed to sales`} tone="info" onClick={()=>onNavigate?.("receiving")}/>
-        <Card label="Aged Capital >90d" value={money(agedCapital)} sub={`${number(agedUnits)} units · ${pct(agedCapitalPct)} of known inventory value`} tone={agedCapital>0?"warn":"good"} onClick={()=>onNavigate?.("performance")}/>
-        <Card label="Sales Committed" value={number(metrics.salesCommittedUnits)} sub="Confirmed through completed" tone="info" onClick={()=>onNavigate?.("sales")}/>
-        <Card label="Realized Revenue" value={money(metrics.realizedRevenue)} sub={`${metrics.completedSales} completed sales · margin ${pct(metrics.realizedMargin)}`} tone="good" onClick={()=>onNavigate?.("sales")}/>
-        <Card label="Capital Committed" value={money(metrics.committed)} sub={`${metrics.activeOrders.length} open buying decisions / POs`} onClick={()=>onNavigate?.("buying")}/>
-        <Card label="Units in Transit" value={number(metrics.inTransitUnits)} sub="Ordered quantity not yet received" tone="info" onClick={()=>onNavigate?.("shipments")}/>
-        <Card label="Projected Revenue" value={money(metrics.projectedRevenue)} sub={`Projected margin ${pct(metrics.projectedMargin)}`} tone="good" onClick={()=>onNavigate?.("buying")}/>
-        <Card label="Quote Refresh Needed" value={metrics.stale.length} sub="No quote or latest quote older than 60 days" tone={metrics.stale.length?"warn":"good"} onClick={()=>onNavigate?.("intelligence")}/>
-        <Card label="Low Stock SKUs" value={metrics.lowStock.length} sub={`${metrics.reorderUnset} SKUs still need reorder points`} tone={metrics.lowStock.length?"bad":"good"} onClick={()=>onNavigate?.("receiving")}/>
-        <Card label="Actual Cost Variance" value={metrics.actualVariancePct===null?"—":pct(metrics.actualVariancePct)} sub={metrics.actualVariancePct===null?"No posted receipts with actual cost yet":`${money(metrics.actualCostVarianceValue)} vs planned`} tone={metrics.actualVariancePct===null?"neutral":metrics.actualVariancePct>5?"bad":metrics.actualVariancePct>0?"warn":"good"}/>
+  return <div className="cg-dashboard-root">
+    <div className="cg-dashboard-sentinel" aria-hidden="true"/>
+    <div className="cg-dashboard-shell">
+      {error&&<div className="cg-dashboard-error">{error}</div>}
+
+      <div className="cg-dashboard-toolbar">
+        <div><strong>Today at a glance</strong><span>Only the metrics and exceptions that matter for daily operation.</span></div>
+        <button onClick={load}>Refresh</button>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.2fr) minmax(320px,.8fr)",gap:14,alignItems:"start"}}>
-        <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}><div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:10}}><div><div style={{fontWeight:900,fontSize:15}}>Action Queue</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Items that need operational attention.</div></div><Badge tone={alerts.length?"warn":"good"}>{alerts.length} alerts</Badge></div>{alerts.length===0?<div style={{padding:20,textAlign:"center",color:C.green,fontWeight:750}}>No sourcing, logistics, inventory or sales exceptions detected.</div>:<div style={{display:"grid",gap:6}}>{alerts.slice(0,14).map((a,i)=><button key={`${a.title}-${i}`} onClick={()=>onNavigate?.(a.action)} style={{display:"grid",gridTemplateColumns:"auto 1fr auto",gap:8,alignItems:"center",textAlign:"left",background:"#fff",border:`1px solid ${C.border}`,borderRadius:9,padding:9,cursor:"pointer"}}><Badge tone={a.tone}>ACTION</Badge><div><div style={{fontSize:11.5,fontWeight:850}}>{a.title}</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{a.detail}</div></div><span style={{fontSize:10.5,color:C.oliveDark,fontWeight:850}}>Open</span></button>)}</div>}</div>
-
-        <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}><div style={{fontWeight:900,fontSize:15}}>Workflow Snapshot</div><div style={{fontSize:10.5,color:C.muted,marginTop:2,marginBottom:10}}>Current volume at each stage.</div><div style={{display:"grid",gap:7}}>{[
-          ["Products",data.products.length,"operations"],["Quotes",data.quotes.length,"intelligence"],["Open Buying Decisions",metrics.activeOrders.length,"buying"],["Shipments",data.shipments.length,"shipments"],["Receipts",data.receipts.length,"receiving"],["Sales",data.salesOrders.length,"sales"],["Slow / Critical SKUs",performance?.summary.slowMovingSkus||0,"performance"],["Available Units",metrics.availableUnits,"receiving"]
-        ].map(([label,value,target])=><button key={label} onClick={()=>onNavigate?.(target)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 10px",border:`1px solid ${C.border}`,borderRadius:9,background:"#FAFBF8",cursor:"pointer"}}><span style={{fontSize:11,color:C.muted,fontWeight:750}}>{label}</span><strong>{number(value)}</strong></button>)}</div></div>
+      <div className="cg-kpi-grid">
+        <KpiCard label="Sales MTD" value={money(dashboard.mtd.revenue)} sub={`${number(dashboard.mtd.units)} units · ${deltaText(dashboard.mtd.revenue,dashboard.previous.revenue)}`} tone="good" onClick={()=>onNavigate?.("sales")}/>
+        <KpiCard label="Gross Profit MTD" value={money(dashboard.mtd.profit)} sub={`${number(dashboard.mtd.sales)} completed transaction${dashboard.mtd.sales===1?"":"s"}`} tone={dashboard.mtd.profit>=0?"good":"bad"} onClick={()=>onNavigate?.("sales")}/>
+        <KpiCard label="Gross Margin" value={pct(dashboard.mtd.margin)} sub="Realized margin after COGS and direct selling costs" tone={dashboard.mtd.margin===null?"neutral":dashboard.mtd.margin>=40?"good":"warn"} onClick={()=>onNavigate?.("performance")}/>
+        <KpiCard label="Inventory Value" value={money(inventoryValue)} sub={`${number(availableUnits)} sellable units available`} tone="neutral" onClick={()=>onNavigate?.("receiving")}/>
+        <KpiCard label="Available Units" value={number(availableUnits)} sub={`${number(dashboard.openCommittedUnits)} units currently reserved`} tone="info" onClick={()=>onNavigate?.("receiving")}/>
+        <KpiCard label="Units in Transit" value={number(dashboard.inTransitUnits)} sub={`${dashboard.activeOrders.length} open buying decision / PO${dashboard.activeOrders.length===1?"":"s"}`} tone="info" onClick={()=>onNavigate?.("shipments")}/>
       </div>
 
-      <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14,overflowX:"auto"}}><div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:9}}><div><div style={{fontWeight:900,fontSize:15}}>Inventory Control</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Available inventory = posted sellable receipts minus active sales commitments.</div></div><div style={{display:"flex",gap:7}}><button style={btn()} onClick={()=>onNavigate?.("performance")}>Open Performance</button><button style={btn()} onClick={()=>onNavigate?.("sales")}>Open Sales</button><button style={btn()} onClick={()=>onNavigate?.("receiving")}>Open Receiving</button></div></div><table style={{minWidth:940}}><thead><tr>{["SKU","Product","Received","Committed to Sales","Available","Reorder Point","Status","Action"].map(h=><th key={h} style={{textAlign:"left",padding:8,borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead><tbody>{inventoryRows.map(({product,received,committed,available})=>{const rp=Number(product.reorder_point||0),low=rp>0&&available<=rp;return <tr key={product.id}><td style={{padding:8,borderBottom:`1px solid ${C.border}`,fontWeight:900,color:C.oliveDark}}>{product.sku_id}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,fontWeight:750}}>{product.name}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{received}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{committed}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`,fontWeight:900}}>{available}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}><input type="number" min="0" value={reorderDrafts[product.id]??"0"} onChange={e=>setReorderDrafts(x=>({...x,[product.id]:e.target.value}))} style={{width:78,border:`1px solid ${C.border}`,borderRadius:7,padding:"6px 7px"}}/></td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}>{rp===0?<Badge>NOT SET</Badge>:low?<Badge tone="bad">REORDER</Badge>:<Badge tone="good">OK</Badge>}</td><td style={{padding:8,borderBottom:`1px solid ${C.border}`}}><button style={btn()} disabled={savingId===product.id} onClick={()=>saveReorder(product.id)}>{savingId===product.id?"Saving...":"Save"}</button></td></tr>})}</tbody></table></div>
+      <div className="cg-dashboard-grid cg-dashboard-grid-primary">
+        <Panel title="Sales & Gross Profit" eyebrow="Last 6 months" className="cg-sales-panel"><SalesProfitChart series={dashboard.trend}/></Panel>
+        <Panel title="Top Products" eyebrow="Completed sales"><TopProductsChart rows={performance.productMetrics} mode={topMode} setMode={setTopMode}/></Panel>
+      </div>
+
+      <div className="cg-dashboard-grid cg-dashboard-grid-secondary">
+        <Panel title="Inventory Health" eyebrow="Current supply position"><InventoryHealth available={availableUnits} committed={dashboard.openCommittedUnits} damaged={dashboard.damagedUnits} inTransit={dashboard.inTransitUnits}/></Panel>
+        <Panel title="Margin by Product" eyebrow="Realized performance"><MarginChart rows={performance.productMetrics}/></Panel>
+      </div>
+
+      <div className="cg-dashboard-grid cg-dashboard-grid-bottom">
+        <Panel title="Action Required" eyebrow="Prioritized" action={<button className="cg-text-button" onClick={()=>onNavigate?.("receiving")}>Inventory →</button>}>
+          <div className="cg-action-list">
+            {!dashboard.actions.length&&<div className="cg-empty-state">No material operational exceptions right now.</div>}
+            {dashboard.actions.map((a,i)=><button key={`${a.title}-${i}`} className={`cg-action-row tone-${a.tone}`} onClick={()=>onNavigate?.(a.action)}><span className="cg-action-dot"/><span><strong>{a.title}</strong><small>{a.detail}</small></span><b>›</b></button>)}
+          </div>
+        </Panel>
+        <Panel title="Recent Activity" eyebrow="Latest 5 events">
+          <div className="cg-activity-list">
+            {!dashboard.activities.length&&<div className="cg-empty-state">Activity will appear as transactions are recorded.</div>}
+            {dashboard.activities.map((a,i)=><button key={`${a.title}-${i}`} onClick={()=>onNavigate?.(a.action)}><span><strong>{a.title}</strong><small>{a.detail}</small></span><time>{dateLabel(a.date)}</time></button>)}
+          </div>
+        </Panel>
+      </div>
+
+      <details className="cg-dashboard-details">
+        <summary>Inventory controls · Reorder points <span>Optional setup</span></summary>
+        <div className="cg-dashboard-details-body">
+          <p>Keep this section collapsed during normal daily use. Set reorder points only when you want the dashboard to flag low-stock SKUs.</p>
+          <div className="cg-dashboard-table-wrap"><table><thead><tr><th>SKU</th><th>Product</th><th>Available</th><th>Reorder Point</th><th>Action</th></tr></thead><tbody>
+            {inventoryRows.map(row=><tr key={row.product.id}><td><strong>{row.product.sku_id}</strong></td><td>{row.product.name}</td><td>{number(row.availableUnits)}</td><td><input type="number" min="0" step="1" value={reorderDrafts[row.product.id]??"0"} onChange={e=>setReorderDrafts(x=>({...x,[row.product.id]:e.target.value}))}/></td><td><button disabled={savingId===row.product.id} onClick={()=>saveReorder(row.product.id)}>{savingId===row.product.id?"Saving…":"Save"}</button></td></tr>)}
+          </tbody></table></div>
+        </div>
+      </details>
     </div>
   </div>;
 }
