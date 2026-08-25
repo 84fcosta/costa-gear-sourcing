@@ -3,9 +3,20 @@ import { supabase } from "../supabase";
 const fail=(error)=>{if(error)throw error;};
 export async function listReceipts(){const {data,error}=await supabase.from("receipts").select("*").order("created_at",{ascending:false});fail(error);return data||[];}
 export async function listReceiptItems(receiptId){const {data,error}=await supabase.from("receipt_items").select("*").eq("receipt_id",receiptId).order("created_at");fail(error);return data||[];}
-export async function createReceipt(v){const {data,error}=await supabase.from("receipts").insert({receipt_ref:v.receiptRef,purchase_order_id:v.purchaseOrderId,shipment_id:v.shipmentId||null,received_date:v.receivedDate||null,status:v.status||"Draft",location:v.location||null,notes:v.notes||null}).select().single();fail(error);return data;}
+export async function createReceipt(v){
+  if(v.shipmentId){
+    const {data,error}=await supabase.rpc("create_receipt_from_shipment",{p_shipment_id:v.shipmentId,p_receipt_ref:v.receiptRef,p_received_date:v.receivedDate||null,p_status:v.status||"Draft",p_location:v.location||null,p_notes:v.notes||null});
+    fail(error);
+    const receiptId=data?.receipt_id;
+    if(!receiptId)throw new Error("Receipt was created but no receipt ID was returned.");
+    const {data:receipt,error:receiptError}=await supabase.from("receipts").select("*").eq("id",receiptId).single();
+    fail(receiptError);
+    return receipt;
+  }
+  const {data,error}=await supabase.from("receipts").insert({receipt_ref:v.receiptRef,purchase_order_id:v.purchaseOrderId,shipment_id:null,received_date:v.receivedDate||null,status:v.status||"Draft",location:v.location||null,notes:v.notes||null}).select().single();fail(error);return data;
+}
 export async function updateReceipt(id,v){const {data,error}=await supabase.from("receipts").update({shipment_id:v.shipmentId||null,received_date:v.receivedDate||null,status:v.status,location:v.location||null,notes:v.notes||null,updated_at:new Date().toISOString()}).eq("id",id).select().single();fail(error);return data;}
-export async function addReceiptItem(v){const {data,error}=await supabase.from("receipt_items").insert({receipt_id:v.receiptId,purchase_order_item_id:v.purchaseOrderItemId,shipment_item_id:v.shipmentItemId||null,product_id:v.productId,quantity_received:Number(v.quantityReceived||0),quantity_damaged:Number(v.quantityDamaged||0),quantity_rejected:Number(v.quantityRejected||0),actual_landed_cost_per_unit_cad:v.actualLandedCostPerUnitCad===""||v.actualLandedCostPerUnitCad==null?null:Number(v.actualLandedCostPerUnitCad),notes:v.notes||null}).select().single();fail(error);return data;}
+export async function addReceiptItem(v){const row={receipt_id:v.receiptId,purchase_order_item_id:v.purchaseOrderItemId,shipment_item_id:v.shipmentItemId||null,product_id:v.productId,quantity_received:Number(v.quantityReceived||0),quantity_damaged:Number(v.quantityDamaged||0),quantity_rejected:Number(v.quantityRejected||0),actual_landed_cost_per_unit_cad:v.actualLandedCostPerUnitCad===""||v.actualLandedCostPerUnitCad==null?null:Number(v.actualLandedCostPerUnitCad),notes:v.notes||null};const {data,error}=await supabase.from("receipt_items").upsert(row,{onConflict:"receipt_id,purchase_order_item_id",ignoreDuplicates:true}).select().maybeSingle();fail(error);return data;}
 export async function updateReceiptItem(id,v){const {data,error}=await supabase.from("receipt_items").update({quantity_received:Number(v.quantityReceived||0),quantity_damaged:Number(v.quantityDamaged||0),quantity_rejected:Number(v.quantityRejected||0),actual_landed_cost_per_unit_cad:v.actualLandedCostPerUnitCad===""||v.actualLandedCostPerUnitCad==null?null:Number(v.actualLandedCostPerUnitCad),notes:v.notes||null,updated_at:new Date().toISOString()}).eq("id",id).select().single();fail(error);return data;}
 export async function deleteReceiptItem(id){const {error}=await supabase.from("receipt_items").delete().eq("id",id);fail(error);}
 export async function loadPostedInventory(){const {data:r,error:re}=await supabase.from("receipts").select("id,status").eq("status","Posted");fail(re);const ids=(r||[]).map(x=>x.id);if(!ids.length)return[];const {data,error}=await supabase.from("receipt_items").select("*").in("receipt_id",ids);fail(error);return data||[];}
