@@ -28,6 +28,11 @@ function redirectUri() {
   return CANONICAL_APP_ORIGIN;
 }
 
+function returnPage() {
+  if (typeof window === "undefined") return CANONICAL_APP_ORIGIN;
+  return window.location.href;
+}
+
 export function getMicrosoftOneDriveConfiguration() {
   return {
     configured: Boolean(clientId),
@@ -50,19 +55,13 @@ async function getClient() {
         postLogoutRedirectUri: redirectUri(),
         navigateToLoginRequestUrl: true,
       },
-      cache: {
-        cacheLocation: "localStorage",
-      },
+      cache: { cacheLocation: "localStorage" },
     });
 
     clientPromise = (async () => {
       await client.initialize();
       const redirectResult = await client.handleRedirectPromise();
-      const account =
-        redirectResult?.account ||
-        client.getActiveAccount() ||
-        client.getAllAccounts()[0] ||
-        null;
+      const account = redirectResult?.account || client.getActiveAccount() || client.getAllAccounts()[0] || null;
       if (account) client.setActiveAccount(account);
       return client;
     })();
@@ -77,22 +76,23 @@ function currentAccount(client) {
   return account;
 }
 
+function interactionRequired(error) {
+  return (
+    error instanceof InteractionRequiredAuthError ||
+    ["interaction_required", "consent_required", "login_required"].includes(error?.errorCode)
+  );
+}
+
 async function acquireOneDriveToken() {
   const client = await getClient();
   const account = currentAccount(client);
-
-  if (!account) {
-    throw new Error("OneDrive is not connected. Use Connect OneDrive in the Expenses module first.");
-  }
+  if (!account) throw new Error("OneDrive is not connected. Use Connect OneDrive in the Expenses module first.");
 
   try {
     const response = await client.acquireTokenSilent({ account, scopes: graphScopes });
     return response.accessToken;
   } catch (error) {
-    if (
-      error instanceof InteractionRequiredAuthError ||
-      ["interaction_required", "consent_required", "login_required"].includes(error?.errorCode)
-    ) {
+    if (interactionRequired(error)) {
       throw new Error("OneDrive authorization needs to be renewed. Use Connect OneDrive again.");
     }
     throw error;
@@ -129,24 +129,37 @@ export async function connectMicrosoftOneDrive() {
 
   const client = await getClient();
   const account = currentAccount(client);
-  if (account) {
-    client.setActiveAccount(account);
-    return {
-      configured: true,
-      connected: true,
-      accountName: account.name || null,
-      username: account.username || null,
-    };
-  }
 
   if (typeof window !== "undefined") {
     window.sessionStorage.setItem("cg:return-workspace", "expenses");
   }
 
+  if (account) {
+    try {
+      await client.acquireTokenSilent({ account, scopes: graphScopes });
+      client.setActiveAccount(account);
+      return {
+        configured: true,
+        connected: true,
+        accountName: account.name || null,
+        username: account.username || null,
+      };
+    } catch (error) {
+      if (!interactionRequired(error)) throw error;
+      await client.acquireTokenRedirect({
+        account,
+        scopes: graphScopes,
+        redirectUri: redirectUri(),
+        redirectStartPage: returnPage(),
+      });
+      return { redirecting: true };
+    }
+  }
+
   await client.loginRedirect({
     scopes: graphScopes,
     redirectUri: redirectUri(),
-    redirectStartPage: typeof window !== "undefined" ? window.location.href : CANONICAL_APP_ORIGIN,
+    redirectStartPage: returnPage(),
   });
 
   return { redirecting: true };
