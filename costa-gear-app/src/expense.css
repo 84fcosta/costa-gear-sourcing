@@ -1,3 +1,9 @@
+.cg-nav-divider{width:1px;height:42px;background:rgba(255,255,255,.16);margin:19px 5px;flex:0 0 1px}
+.cg-nav-admin{min-width:98px}
+.cg-nav-admin:not(.active){color:#c8cdbf}
+.cg-nav-admin:not(.active):after{content:"Admin";position:absolute;top:8px;right:7px;font-size:7px;line-height:1;padding:2px 4px;border-radius:99px;background:rgba(164,170,85,.14);color:#bfc575;letter-spacing:.04em;text-transform:uppercase}
+.cg-nav-admin.active:after{content:"Admin";position:absolute;top:8px;right:7px;font-size:7px;line-height:1;padding:2px 4px;border-radius:99px;background:rgba(255,255,255,.18);color:#fff;letter-spacing:.04em;text-transform:uppercase}
+
 .cg-expense-shell{display:grid;gap:14px;min-width:0}
 .cg-expense-commandbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .cg-expense-tabs{overflow-x:auto;max-width:100%}
@@ -79,6 +85,7 @@
   .cg-expense-filters{grid-template-columns:1fr 1fr}
 }
 @media(max-width:760px){
+  .cg-nav-divider{height:36px;margin:22px 3px}
   .cg-expense-commandbar{align-items:stretch}
   .cg-expense-command-controls{width:100%;justify-content:space-between}
   .cg-expense-tabs{width:100%}
