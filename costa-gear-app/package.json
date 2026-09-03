@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "@azure/msal-browser": "^5.20.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "lucide-react": "^0.468.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "@supabase/supabase-js": "^2.39.0",
-    "xlsx": "^0.18.5",
-    "lucide-react": "^0.468.0"
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",

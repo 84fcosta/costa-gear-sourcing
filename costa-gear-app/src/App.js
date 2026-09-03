@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Boxes,
+  Cloud,
   DollarSign,
   LayoutDashboard,
   PackageSearch,
@@ -16,6 +17,12 @@ import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
 import ExpenseWorkspace from "./components/ExpenseWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
+import {
+  connectMicrosoftOneDrive,
+  getMicrosoftOneDriveAuthState,
+  getMicrosoftOneDriveConfiguration,
+} from "./services/microsoftOneDriveAuth";
+import { testOneDriveConnection } from "./services/oneDriveAppFolderService";
 import "./brand.css";
 import "./legacy-overrides.css";
 
@@ -44,6 +51,22 @@ export default function App() {
   const [logisticsView, setLogisticsView] = useState("shipments");
   const [salesView, setSalesView] = useState("orders");
   const [handoff, setHandoff] = useState(null);
+  const [oneDriveVersion, setOneDriveVersion] = useState(0);
+  const [oneDriveBusy, setOneDriveBusy] = useState(false);
+  const [oneDriveMessage, setOneDriveMessage] = useState("");
+  const [oneDriveAuth, setOneDriveAuth] = useState(() => ({
+    configured: getMicrosoftOneDriveConfiguration().configured,
+    connected: false,
+    username: null,
+  }));
+
+  useEffect(() => {
+    let active = true;
+    getMicrosoftOneDriveAuthState()
+      .then((state) => { if (active) setOneDriveAuth(state); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const navigate = (destination, context = null) => {
     if (context) setHandoff(context);
@@ -78,7 +101,24 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const connectOneDrive = async () => {
+    setOneDriveBusy(true);
+    setOneDriveMessage("");
+    try {
+      const authState = await connectMicrosoftOneDrive();
+      const connection = await testOneDriveConnection();
+      setOneDriveAuth(authState);
+      setOneDriveMessage(connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected");
+      setOneDriveVersion((version) => version + 1);
+    } catch (error) {
+      setOneDriveMessage(error?.message || "Unable to connect OneDrive.");
+    } finally {
+      setOneDriveBusy(false);
+    }
+  };
+
   const [title, subtitle] = pageMeta[workspace];
+  const showOneDriveControl = workspace === "expenses";
 
   return <div className="cg-app-shell">
     <header className="cg-topbar" style={{ height: 96 }}>
@@ -103,10 +143,35 @@ export default function App() {
 
     <main className="cg-main-area" style={{ minHeight: "calc(100vh - 96px)" }}>
       <div className="cg-page-header">
-        <div>
-          <div className="cg-page-eyebrow">Costa Gear Operations</div>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
+        <div style={showOneDriveControl ? { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 } : undefined}>
+          <div>
+            <div className="cg-page-eyebrow">Costa Gear Operations</div>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          {showOneDriveControl ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+              <button
+                type="button"
+                className="cg-text-button"
+                onClick={connectOneDrive}
+                disabled={!oneDriveAuth.configured || oneDriveBusy || oneDriveAuth.connected}
+                title="Microsoft Graph permission: Files.ReadWrite.AppFolder"
+                style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+              >
+                <Cloud size={15} />
+                {oneDriveBusy
+                  ? "Connecting..."
+                  : !oneDriveAuth.configured
+                    ? "OneDrive setup required"
+                    : oneDriveAuth.connected
+                      ? "OneDrive connected"
+                      : "Connect OneDrive"}
+              </button>
+              {oneDriveMessage ? <span style={{ fontSize: 10.5, color: "#687166", maxWidth: 300, textAlign: "right" }}>{oneDriveMessage}</span> : null}
+              {oneDriveAuth.connected && oneDriveAuth.username ? <span style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -117,7 +182,7 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : workspace === "expenses" ? <ExpenseWorkspace />
+          : workspace === "expenses" ? <ExpenseWorkspace key={oneDriveVersion} />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
