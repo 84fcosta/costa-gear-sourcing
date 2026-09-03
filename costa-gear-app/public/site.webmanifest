@@ -1,6 +1,7 @@
 {
-  "name": "Costa Gear",
-  "short_name": "Costa Gear",
+  "name": "Costa Gear Operations",
+  "short_name": "Costa Gear Ops",
+  "description": "Costa Gear Operations portal for sourcing, buying, logistics, inventory, sales and expenses.",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
