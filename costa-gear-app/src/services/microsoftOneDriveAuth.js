@@ -9,6 +9,7 @@ import {
 } from "./oneDriveAppFolderService";
 
 const DEFAULT_MICROSOFT_CLIENT_ID = "27622880-a323-4be9-a1e7-8f23ed948f7c";
+const CANONICAL_APP_ORIGIN = "https://ops.costagear.ca";
 const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || DEFAULT_MICROSOFT_CLIENT_ID).trim();
 const authority = (process.env.REACT_APP_MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/consumers").trim();
 const configuredRedirectUri = (process.env.REACT_APP_MICROSOFT_REDIRECT_URI || "").trim();
@@ -16,10 +17,15 @@ const graphScopes = [ONE_DRIVE_APP_FOLDER_SCOPE];
 
 let clientPromise = null;
 
+function isLocalDevelopment() {
+  if (typeof window === "undefined") return false;
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
 function redirectUri() {
   if (configuredRedirectUri) return configuredRedirectUri;
-  if (typeof window !== "undefined") return window.location.origin;
-  return "https://ops.costagear.ca";
+  if (isLocalDevelopment()) return window.location.origin;
+  return CANONICAL_APP_ORIGIN;
 }
 
 export function getMicrosoftOneDriveConfiguration() {
@@ -33,9 +39,7 @@ export function getMicrosoftOneDriveConfiguration() {
 }
 
 async function getClient() {
-  if (!clientId) {
-    throw new Error("Microsoft OneDrive is not configured.");
-  }
+  if (!clientId) throw new Error("Microsoft OneDrive is not configured.");
 
   if (!clientPromise) {
     const client = new PublicClientApplication({
@@ -44,6 +48,7 @@ async function getClient() {
         authority,
         redirectUri: redirectUri(),
         postLogoutRedirectUri: redirectUri(),
+        navigateToLoginRequestUrl: true,
       },
       cache: {
         cacheLocation: "localStorage",
@@ -81,10 +86,7 @@ async function acquireOneDriveToken() {
   }
 
   try {
-    const response = await client.acquireTokenSilent({
-      account,
-      scopes: graphScopes,
-    });
+    const response = await client.acquireTokenSilent({ account, scopes: graphScopes });
     return response.accessToken;
   } catch (error) {
     if (
@@ -97,20 +99,12 @@ async function acquireOneDriveToken() {
   }
 }
 
-if (clientId) {
-  configureOneDriveAccessTokenProvider(acquireOneDriveToken);
-} else {
-  clearOneDriveAccessTokenProvider();
-}
+if (clientId) configureOneDriveAccessTokenProvider(acquireOneDriveToken);
+else clearOneDriveAccessTokenProvider();
 
 export async function getMicrosoftOneDriveAuthState() {
   if (!clientId) {
-    return {
-      configured: false,
-      connected: false,
-      accountName: null,
-      username: null,
-    };
+    return { configured: false, connected: false, accountName: null, username: null };
   }
 
   const client = await getClient();
@@ -124,22 +118,36 @@ export async function getMicrosoftOneDriveAuthState() {
 }
 
 export async function connectMicrosoftOneDrive() {
+  if (
+    typeof window !== "undefined" &&
+    !isLocalDevelopment() &&
+    window.location.origin !== CANONICAL_APP_ORIGIN
+  ) {
+    window.location.replace(`${CANONICAL_APP_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return { redirecting: true };
+  }
+
   const client = await getClient();
-  const response = await client.loginPopup({ scopes: graphScopes });
-  const account = response?.account || currentAccount(client);
-  if (!account) throw new Error("Microsoft sign-in completed without returning an account.");
-  client.setActiveAccount(account);
+  const account = currentAccount(client);
+  if (account) {
+    client.setActiveAccount(account);
+    return {
+      configured: true,
+      connected: true,
+      accountName: account.name || null,
+      username: account.username || null,
+    };
+  }
 
-  const tokenResponse = await client.acquireTokenSilent({
-    account,
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem("cg:return-workspace", "expenses");
+  }
+
+  await client.loginRedirect({
     scopes: graphScopes,
+    redirectUri: redirectUri(),
+    redirectStartPage: typeof window !== "undefined" ? window.location.href : CANONICAL_APP_ORIGIN,
   });
-  if (!tokenResponse?.accessToken) throw new Error("Microsoft did not return a Graph access token.");
 
-  return {
-    configured: true,
-    connected: true,
-    accountName: account.name || null,
-    username: account.username || null,
-  };
+  return { redirecting: true };
 }
