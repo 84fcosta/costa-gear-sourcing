@@ -8,7 +8,8 @@ import {
   configureOneDriveAccessTokenProvider,
 } from "./oneDriveAppFolderService";
 
-const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || "").trim();
+const DEFAULT_MICROSOFT_CLIENT_ID = "27622880-a323-4be9-a1e7-8f23ed948f7c";
+const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || DEFAULT_MICROSOFT_CLIENT_ID).trim();
 const authority = (process.env.REACT_APP_MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/consumers").trim();
 const configuredRedirectUri = (process.env.REACT_APP_MICROSOFT_REDIRECT_URI || "").trim();
 const graphScopes = [ONE_DRIVE_APP_FOLDER_SCOPE];
@@ -33,9 +34,7 @@ export function getMicrosoftOneDriveConfiguration() {
 
 async function getClient() {
   if (!clientId) {
-    throw new Error(
-      "Microsoft OneDrive is not configured. Add REACT_APP_MICROSOFT_CLIENT_ID in the Vercel environment first."
-    );
+    throw new Error("Microsoft OneDrive is not configured.");
   }
 
   if (!clientPromise) {
