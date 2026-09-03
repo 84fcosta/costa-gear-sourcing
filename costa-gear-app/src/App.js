@@ -45,8 +45,18 @@ const pageMeta = {
   expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
 };
 
+function initialWorkspace() {
+  if (typeof window === "undefined") return "dashboard";
+  const pending = window.sessionStorage.getItem("cg:return-workspace");
+  if (pending === "expenses") {
+    window.sessionStorage.removeItem("cg:return-workspace");
+    return "expenses";
+  }
+  return "dashboard";
+}
+
 export default function App() {
-  const [workspace, setWorkspace] = useState("dashboard");
+  const [workspace, setWorkspace] = useState(initialWorkspace);
   const [sourcingView, setSourcingView] = useState("master");
   const [logisticsView, setLogisticsView] = useState("shipments");
   const [salesView, setSalesView] = useState("orders");
@@ -62,9 +72,23 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    getMicrosoftOneDriveAuthState()
-      .then((state) => { if (active) setOneDriveAuth(state); })
-      .catch(() => {});
+    (async () => {
+      try {
+        const state = await getMicrosoftOneDriveAuthState();
+        if (!active) return;
+        setOneDriveAuth(state);
+        if (state.connected) {
+          try {
+            const connection = await testOneDriveConnection();
+            if (!active) return;
+            setOneDriveMessage(connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected");
+            setOneDriveVersion((version) => version + 1);
+          } catch (error) {
+            if (active) setOneDriveMessage(error?.message || "OneDrive authorization needs attention.");
+          }
+        }
+      } catch (_) {}
+    })();
     return () => { active = false; };
   }, []);
 
@@ -106,6 +130,7 @@ export default function App() {
     setOneDriveMessage("");
     try {
       const authState = await connectMicrosoftOneDrive();
+      if (authState?.redirecting) return;
       const connection = await testOneDriveConnection();
       setOneDriveAuth(authState);
       setOneDriveMessage(connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected");
