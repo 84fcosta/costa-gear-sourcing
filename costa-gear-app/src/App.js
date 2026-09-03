@@ -25,6 +25,7 @@ import {
 import { testOneDriveConnection } from "./services/oneDriveAppFolderService";
 import "./brand.css";
 import "./legacy-overrides.css";
+import "./mobile.css";
 
 const primaryNav = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -45,21 +46,35 @@ const pageMeta = {
   expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
 };
 
+function readSessionValue(key, fallback, allowedValues = null) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = window.sessionStorage.getItem(key);
+    if (!stored) return fallback;
+    if (allowedValues && !allowedValues.includes(stored)) return fallback;
+    return stored;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function initialWorkspace() {
   if (typeof window === "undefined") return "dashboard";
-  const pending = window.sessionStorage.getItem("cg:return-workspace");
-  if (pending === "expenses") {
-    window.sessionStorage.removeItem("cg:return-workspace");
-    return "expenses";
-  }
-  return "dashboard";
+  try {
+    const pending = window.sessionStorage.getItem("cg:return-workspace");
+    if (pending === "expenses") {
+      window.sessionStorage.removeItem("cg:return-workspace");
+      return "expenses";
+    }
+  } catch (_) {}
+  return readSessionValue("cg:workspace", "dashboard", Object.keys(pageMeta));
 }
 
 export default function App() {
   const [workspace, setWorkspace] = useState(initialWorkspace);
-  const [sourcingView, setSourcingView] = useState("master");
-  const [logisticsView, setLogisticsView] = useState("shipments");
-  const [salesView, setSalesView] = useState("orders");
+  const [sourcingView, setSourcingView] = useState(() => readSessionValue("cg:sourcing-view", "master", ["master", "analysis"]));
+  const [logisticsView, setLogisticsView] = useState(() => readSessionValue("cg:logistics-view", "shipments", ["shipments", "costs"]));
+  const [salesView, setSalesView] = useState(() => readSessionValue("cg:sales-view", "orders", ["orders", "performance", "planning", "pricing"]));
   const [handoff, setHandoff] = useState(null);
   const [oneDriveVersion, setOneDriveVersion] = useState(0);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
@@ -69,6 +84,22 @@ export default function App() {
     connected: false,
     username: null,
   }));
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem("cg:workspace", workspace); } catch (_) {}
+  }, [workspace]);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem("cg:sourcing-view", sourcingView); } catch (_) {}
+  }, [sourcingView]);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem("cg:logistics-view", logisticsView); } catch (_) {}
+  }, [logisticsView]);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem("cg:sales-view", salesView); } catch (_) {}
+  }, [salesView]);
 
   useEffect(() => {
     let active = true;
