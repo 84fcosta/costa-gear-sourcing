@@ -9,6 +9,7 @@ import {
 } from "./oneDriveAppFolderService";
 
 const DEFAULT_MICROSOFT_CLIENT_ID = "27622880-a323-4be9-a1e7-8f23ed948f7c";
+const CANONICAL_APP_ORIGIN = "https://ops.costagear.ca";
 const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || DEFAULT_MICROSOFT_CLIENT_ID).trim();
 const authority = (process.env.REACT_APP_MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/consumers").trim();
 const configuredRedirectUri = (process.env.REACT_APP_MICROSOFT_REDIRECT_URI || "").trim();
@@ -16,10 +17,20 @@ const graphScopes = [ONE_DRIVE_APP_FOLDER_SCOPE];
 
 let clientPromise = null;
 
+function isLocalDevelopment() {
+  if (typeof window === "undefined") return false;
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
 function redirectUri() {
   if (configuredRedirectUri) return configuredRedirectUri;
-  if (typeof window !== "undefined") return window.location.origin;
-  return "https://ops.costagear.ca";
+  if (isLocalDevelopment()) return window.location.origin;
+  return CANONICAL_APP_ORIGIN;
+}
+
+function returnPage() {
+  if (typeof window === "undefined") return CANONICAL_APP_ORIGIN;
+  return window.location.href;
 }
 
 export function getMicrosoftOneDriveConfiguration() {
@@ -33,9 +44,7 @@ export function getMicrosoftOneDriveConfiguration() {
 }
 
 async function getClient() {
-  if (!clientId) {
-    throw new Error("Microsoft OneDrive is not configured.");
-  }
+  if (!clientId) throw new Error("Microsoft OneDrive is not configured.");
 
   if (!clientPromise) {
     const client = new PublicClientApplication({
@@ -44,20 +53,15 @@ async function getClient() {
         authority,
         redirectUri: redirectUri(),
         postLogoutRedirectUri: redirectUri(),
+        navigateToLoginRequestUrl: true,
       },
-      cache: {
-        cacheLocation: "localStorage",
-      },
+      cache: { cacheLocation: "localStorage" },
     });
 
     clientPromise = (async () => {
       await client.initialize();
       const redirectResult = await client.handleRedirectPromise();
-      const account =
-        redirectResult?.account ||
-        client.getActiveAccount() ||
-        client.getAllAccounts()[0] ||
-        null;
+      const account = redirectResult?.account || client.getActiveAccount() || client.getAllAccounts()[0] || null;
       if (account) client.setActiveAccount(account);
       return client;
     })();
@@ -72,45 +76,35 @@ function currentAccount(client) {
   return account;
 }
 
+function interactionRequired(error) {
+  return (
+    error instanceof InteractionRequiredAuthError ||
+    ["interaction_required", "consent_required", "login_required"].includes(error?.errorCode)
+  );
+}
+
 async function acquireOneDriveToken() {
   const client = await getClient();
   const account = currentAccount(client);
-
-  if (!account) {
-    throw new Error("OneDrive is not connected. Use Connect OneDrive in the Expenses module first.");
-  }
+  if (!account) throw new Error("OneDrive is not connected. Use Connect OneDrive in the Expenses module first.");
 
   try {
-    const response = await client.acquireTokenSilent({
-      account,
-      scopes: graphScopes,
-    });
+    const response = await client.acquireTokenSilent({ account, scopes: graphScopes });
     return response.accessToken;
   } catch (error) {
-    if (
-      error instanceof InteractionRequiredAuthError ||
-      ["interaction_required", "consent_required", "login_required"].includes(error?.errorCode)
-    ) {
+    if (interactionRequired(error)) {
       throw new Error("OneDrive authorization needs to be renewed. Use Connect OneDrive again.");
     }
     throw error;
   }
 }
 
-if (clientId) {
-  configureOneDriveAccessTokenProvider(acquireOneDriveToken);
-} else {
-  clearOneDriveAccessTokenProvider();
-}
+if (clientId) configureOneDriveAccessTokenProvider(acquireOneDriveToken);
+else clearOneDriveAccessTokenProvider();
 
 export async function getMicrosoftOneDriveAuthState() {
   if (!clientId) {
-    return {
-      configured: false,
-      connected: false,
-      accountName: null,
-      username: null,
-    };
+    return { configured: false, connected: false, accountName: null, username: null };
   }
 
   const client = await getClient();
@@ -124,22 +118,49 @@ export async function getMicrosoftOneDriveAuthState() {
 }
 
 export async function connectMicrosoftOneDrive() {
+  if (
+    typeof window !== "undefined" &&
+    !isLocalDevelopment() &&
+    window.location.origin !== CANONICAL_APP_ORIGIN
+  ) {
+    window.location.replace(`${CANONICAL_APP_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return { redirecting: true };
+  }
+
   const client = await getClient();
-  const response = await client.loginPopup({ scopes: graphScopes });
-  const account = response?.account || currentAccount(client);
-  if (!account) throw new Error("Microsoft sign-in completed without returning an account.");
-  client.setActiveAccount(account);
+  const account = currentAccount(client);
 
-  const tokenResponse = await client.acquireTokenSilent({
-    account,
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem("cg:return-workspace", "expenses");
+  }
+
+  if (account) {
+    try {
+      await client.acquireTokenSilent({ account, scopes: graphScopes });
+      client.setActiveAccount(account);
+      return {
+        configured: true,
+        connected: true,
+        accountName: account.name || null,
+        username: account.username || null,
+      };
+    } catch (error) {
+      if (!interactionRequired(error)) throw error;
+      await client.acquireTokenRedirect({
+        account,
+        scopes: graphScopes,
+        redirectUri: redirectUri(),
+        redirectStartPage: returnPage(),
+      });
+      return { redirecting: true };
+    }
+  }
+
+  await client.loginRedirect({
     scopes: graphScopes,
+    redirectUri: redirectUri(),
+    redirectStartPage: returnPage(),
   });
-  if (!tokenResponse?.accessToken) throw new Error("Microsoft did not return a Graph access token.");
 
-  return {
-    configured: true,
-    connected: true,
-    accountName: account.name || null,
-    username: account.username || null,
-  };
+  return { redirecting: true };
 }
