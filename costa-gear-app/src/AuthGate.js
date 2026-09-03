@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import "./auth.css";
 
@@ -58,22 +58,63 @@ function AccessPending({ user }) {
 
 export default function AuthGate({ children }) {
   const [session,setSession]=useState(null),[membership,setMembership]=useState(null),[loading,setLoading]=useState(true);
+  const sessionRef=useRef(null);
+  const membershipRef=useRef(null);
+
+  const applyMembership = data => {
+    membershipRef.current=data||null;
+    setMembership(data||null);
+    setLoading(false);
+  };
 
   const checkMembership = async currentSession => {
-    if (!currentSession?.user) { setMembership(null); setLoading(false); return; }
+    if (!currentSession?.user) { applyMembership(null); return; }
     const { data } = await supabase.from("app_members").select("role").eq("user_id",currentSession.user.id).maybeSingle();
-    setMembership(data||null); setLoading(false);
+    applyMembership(data);
   };
 
   useEffect(()=>{
     let active=true;
-    supabase.auth.getSession().then(({data})=>{if(!active)return;const current=data?.session||null;setSession(current);checkMembership(current);});
-    const {data:listener}=supabase.auth.onAuthStateChange((_event,nextSession)=>{setSession(nextSession);setLoading(true);setTimeout(()=>checkMembership(nextSession),0);});
+    supabase.auth.getSession().then(({data})=>{
+      if(!active)return;
+      const current=data?.session||null;
+      sessionRef.current=current;
+      setSession(current);
+      checkMembership(current);
+    });
+
+    const {data:listener}=supabase.auth.onAuthStateChange((event,nextSession)=>{
+      if(!active)return;
+      const previousUserId=sessionRef.current?.user?.id||null;
+      const nextUserId=nextSession?.user?.id||null;
+      const sameAuthorizedUser=Boolean(nextUserId && previousUserId===nextUserId && membershipRef.current);
+
+      sessionRef.current=nextSession;
+      setSession(nextSession);
+
+      if(!nextSession){
+        applyMembership(null);
+        return;
+      }
+
+      if(event==="TOKEN_REFRESHED" && sameAuthorizedUser){
+        return;
+      }
+
+      if(sameAuthorizedUser){
+        setTimeout(()=>{ if(active) checkMembership(nextSession); },0);
+        return;
+      }
+
+      setLoading(true);
+      setTimeout(()=>{ if(active) checkMembership(nextSession); },0);
+    });
+
     return()=>{active=false;listener?.subscription?.unsubscribe();};
   },[]);
 
   if(loading)return <div style={{minHeight:"100vh",display:"grid",placeItems:"center",fontFamily:font,color:palette.muted,background:palette.bg}}>Loading Costa Gear...</div>;
-  if(!session)return <LoginScreen onAuthenticated={nextSession=>{setSession(nextSession);setLoading(true);checkMembership(nextSession);}}/>;
+  if(!session)return <LoginScreen onAuthenticated={nextSession=>{sessionRef.current=nextSession;setSession(nextSession);setLoading(true);checkMembership(nextSession);}}/>;
   if(!membership)return <AccessPending user={session.user}/>;
 
   return <>
