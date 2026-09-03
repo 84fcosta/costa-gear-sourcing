@@ -81,10 +81,10 @@ export default function App() {
   const [title, subtitle] = pageMeta[workspace];
 
   return <div className="cg-app-shell">
-    <header className="cg-topbar">
+    <header className="cg-topbar" style={{ height: 96 }}>
       <div className="cg-topbar-inner">
         <button className="cg-logo-button" onClick={() => navigate("dashboard")} aria-label="Costa Gear dashboard">
-          <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
+          <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ width: 155, maxHeight: 84 }} />
         </button>
 
         <nav className="cg-primary-nav" aria-label="Costa Gear navigation">
@@ -101,7 +101,7 @@ export default function App() {
       </div>
     </header>
 
-    <main className="cg-main-area">
+    <main className="cg-main-area" style={{ minHeight: "calc(100vh - 96px)" }}>
       <div className="cg-page-header">
         <div>
           <div className="cg-page-eyebrow">Costa Gear Operations</div>
