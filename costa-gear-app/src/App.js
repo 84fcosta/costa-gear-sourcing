@@ -4,6 +4,7 @@ import {
   DollarSign,
   LayoutDashboard,
   PackageSearch,
+  ReceiptText,
   ShoppingCart,
   Truck,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
+import ExpenseWorkspace from "./components/ExpenseWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import "./brand.css";
 import "./legacy-overrides.css";
@@ -33,6 +35,7 @@ const pageMeta = {
   logistics: ["Logistics & Landed Cost", "Step 3 · Shipments, freight allocation, duty and import costs."],
   receiving: ["Receiving & Inventory", "Step 4 · Receive goods, confirm exceptions and make sellable stock available."],
   sales: ["Sales", "Step 5 · Record sales and measure realized revenue, profit and margin."],
+  expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
 };
 
 export default function App() {
@@ -84,11 +87,16 @@ export default function App() {
           <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" />
         </button>
 
-        <nav className="cg-primary-nav" aria-label="Costa Gear operating workflow">
+        <nav className="cg-primary-nav" aria-label="Costa Gear navigation">
           {primaryNav.map(({ id, label, step, Icon }) => <button key={id} className={`cg-nav-button ${workspace === id ? "active" : ""}`} onClick={() => navigate(id)} aria-label={step ? `Step ${step}: ${label}` : label}>
             <Icon size={18} strokeWidth={1.9} />
             <span className="cg-nav-label">{step && <b className="cg-nav-step">{step}</b>}<span>{label}</span></span>
           </button>)}
+          <span className="cg-nav-divider" aria-hidden="true" />
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
+            <ReceiptText size={18} strokeWidth={1.9} />
+            <span className="cg-nav-label"><span>Expenses</span></span>
+          </button>
         </nav>
       </div>
     </header>
@@ -109,6 +117,7 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
+          : workspace === "expenses" ? <ExpenseWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
