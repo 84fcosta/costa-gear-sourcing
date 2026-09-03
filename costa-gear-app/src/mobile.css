@@ -1,0 +1,110 @@
+/* Mobile-specific shell adjustments. Keep the logo readable while making every module reachable. */
+@media (max-width: 680px) {
+  .cg-topbar {
+    height: 118px !important;
+  }
+
+  .cg-topbar-inner {
+    position: relative !important;
+    display: block !important;
+    height: 100% !important;
+    padding: 0 8px !important;
+  }
+
+  .cg-logo-button {
+    position: absolute !important;
+    top: 3px !important;
+    left: 10px !important;
+    height: 61px !important;
+    z-index: 2 !important;
+  }
+
+  .cg-brand-logo {
+    width: 126px !important;
+    max-height: 60px !important;
+    object-fit: contain !important;
+  }
+
+  .cg-account-control {
+    top: 12px !important;
+    right: 9px !important;
+  }
+
+  .cg-account-control button {
+    min-height: 38px !important;
+    padding: 8px 11px !important;
+    font-size: 11px !important;
+  }
+
+  .cg-primary-nav {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: 54px !important;
+    margin: 0 !important;
+    padding: 0 6px !important;
+    gap: 2px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .cg-primary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cg-nav-button {
+    min-width: 64px !important;
+    width: 64px !important;
+    flex: 0 0 64px !important;
+    padding: 4px 5px !important;
+    gap: 2px !important;
+    font-size: 8.5px !important;
+    scroll-snap-align: start;
+  }
+
+  .cg-nav-button svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .cg-nav-label {
+    display: flex !important;
+    height: auto !important;
+    gap: 3px !important;
+    line-height: 1 !important;
+  }
+
+  .cg-nav-label > span {
+    display: block !important;
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8px !important;
+  }
+
+  .cg-nav-step {
+    width: 14px !important;
+    height: 14px !important;
+    font-size: 7px !important;
+  }
+
+  .cg-nav-divider {
+    flex: 0 0 1px;
+    height: 30px;
+    align-self: center;
+    background: rgba(255,255,255,.15);
+  }
+
+  .cg-main-area {
+    min-height: calc(100vh - 118px) !important;
+  }
+
+  .cg-page-header {
+    padding-top: 17px !important;
+  }
+}
