@@ -32,7 +32,7 @@ function LoginScreen({ onAuthenticated }) {
 
   return <div style={{minHeight:"100vh",background:"linear-gradient(180deg,#080907 0 38%,#F3F4EF 38%)",display:"grid",placeItems:"center",padding:24,fontFamily:font}}>
     <div style={{width:"100%",maxWidth:420,background:"#fff",borderRadius:18,padding:28,border:`1px solid ${palette.line}`,boxShadow:"0 26px 80px rgba(18,22,15,.20)"}}>
-      <div style={{display:"flex",justifyContent:"center",marginBottom:22}}><img src="/costa-gear-logo.png" alt="Costa Gear" style={{width:150,height:"auto"}}/></div>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><img src="/costa-gear-logo-login.svg" alt="Costa Gear Off-Road Accessories" style={{width:225,maxWidth:"78%",height:"auto",display:"block"}}/></div>
       <h1 style={{margin:0,color:palette.ink,fontSize:25,letterSpacing:"-.03em",fontWeight:800}}>Operations Portal</h1>
       <p style={{color:palette.muted,fontSize:13,lineHeight:1.55,margin:"8px 0 20px"}}>Sign in with an authorized Costa Gear account. Access is invite-only.</p>
       <form onSubmit={submit} style={{display:"grid",gap:13}}>
@@ -50,7 +50,7 @@ function AccessPending({ user }) {
   return <div style={{minHeight:"100vh",display:"grid",placeItems:"center",background:palette.bg,padding:24,fontFamily:font}}>
     <div style={{maxWidth:520,background:"white",borderRadius:16,padding:28,border:`1px solid ${palette.line}`,boxShadow:"0 18px 45px rgba(28,39,24,.08)"}}>
       <h2 style={{marginTop:0,color:palette.ink}}>Access not approved</h2>
-      <p style={{color:palette.muted,lineHeight:1.55}}>The account <strong>{user?.email}</strong> is authenticated but is not an approved Costa Gear Sourcing member.</p>
+      <p style={{color:palette.muted,lineHeight:1.55}}>The account <strong>{user?.email}</strong> is authenticated but is not an approved Costa Gear Operations member.</p>
       <button onClick={()=>supabase.auth.signOut()} style={{border:`1px solid ${palette.line}`,borderRadius:9,padding:"9px 12px",background:"white",cursor:"pointer",fontWeight:700}}>Sign out</button>
     </div>
   </div>;
