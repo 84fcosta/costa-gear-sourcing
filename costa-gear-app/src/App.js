@@ -84,7 +84,7 @@ export default function App() {
     <header className="cg-topbar" style={{ height: 96 }}>
       <div className="cg-topbar-inner">
         <button className="cg-logo-button" onClick={() => navigate("dashboard")} aria-label="Costa Gear dashboard">
-          <img className="cg-brand-logo" src="/costa-gear-logo.png" alt="Costa Gear Off-Road Accessories" style={{ width: 155, maxHeight: 84 }} />
+          <img className="cg-brand-logo" src="/costa-gear-logo-header.svg" alt="Costa Gear" style={{ width: 165, maxHeight: 88 }} />
         </button>
 
         <nav className="cg-primary-nav" aria-label="Costa Gear navigation">
