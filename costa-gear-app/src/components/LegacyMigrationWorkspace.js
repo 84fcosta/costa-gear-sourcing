@@ -20,6 +20,12 @@ import {
   migrateLegacyBrandMarketingItem,
   refreshLegacyBrandMarketingProposals,
 } from "../services/legacyBrandMarketingMigrationService";
+import {
+  loadLegacyCloseoutQueue,
+  migrateAllReadyLegacyCloseoutItems,
+  migrateLegacyCloseoutItem,
+  refreshLegacyCloseoutProposals,
+} from "../services/legacyCloseoutMigrationService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -50,13 +56,22 @@ const BATCHES = {
     migrateOne: migrateLegacyBrandMarketingItem,
     migrateAll: migrateAllReadyBrandMarketingItems,
   },
+  legacy_closeout: {
+    label: "Batch 4 · Legacy Closeout",
+    shortLabel: "Legacy Closeout",
+    description: "Final staging closeout. Confirmed supplier duplicates are moved to an archive hold, while residual project and system-reference files are preserved under governed archive folders. Nothing is deleted.",
+    load: loadLegacyCloseoutQueue,
+    refresh: refreshLegacyCloseoutProposals,
+    migrateOne: migrateLegacyCloseoutItem,
+    migrateAll: migrateAllReadyLegacyCloseoutItems,
+  },
 };
 
 function initialBatch() {
   try {
-    return sessionStorage.getItem("cg:legacy-migration-batch") || "brand_marketing";
+    return sessionStorage.getItem("cg:legacy-migration-batch") || "legacy_closeout";
   } catch (_) {
-    return "brand_marketing";
+    return "legacy_closeout";
   }
 }
 
@@ -86,7 +101,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   const [verifyWorking, setVerifyWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const config = BATCHES[batch] || BATCHES.brand_marketing;
+  const config = BATCHES[batch] || BATCHES.legacy_closeout;
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true);
