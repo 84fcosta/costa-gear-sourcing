@@ -1,8 +1,40 @@
 import { supabase } from "../supabase";
 import { moveOneDriveItem } from "./oneDriveAppFolderService";
-import { syncOneDriveDocumentIndex } from "./oneDriveDocumentIndexService";
 
 const BATCH_CODE = "products_suppliers";
+
+function extensionFromName(name) {
+  const match = String(name || "").match(/\.([A-Za-z0-9]{1,12})$/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function typeCodeFromName(name) {
+  const match = String(name || "").match(/^CG_([A-Z]{3})_/);
+  return match ? match[1] : null;
+}
+
+async function updateIndexedMove(queueRow, moved) {
+  const now = new Date().toISOString();
+  const destinationPath = `COSTA GEAR/${moved.destinationPath}`;
+  const { error } = await supabase
+    .from("onedrive_items")
+    .update({
+      name: moved.fileName,
+      path: destinationPath,
+      extension: extensionFromName(moved.fileName),
+      mime_type: moved.mimeType || null,
+      size_bytes: Number(moved.sizeBytes || 0),
+      web_url: moved.webUrl || null,
+      type_code: typeCodeFromName(moved.fileName),
+      naming_compliant: true,
+      naming_issue: null,
+      last_seen_at: now,
+      indexed_at: now,
+      is_deleted: false,
+    })
+    .eq("item_id", moved.itemId);
+  if (error) throw error;
+}
 
 async function linkIndexedEntity(queueRow, moved) {
   let entityType = null;
@@ -58,6 +90,7 @@ async function migrateWithoutRescan(queueRow) {
       .eq("id", queueRow.id);
     if (error) throw error;
 
+    await updateIndexedMove(queueRow, moved);
     await linkIndexedEntity(queueRow, moved);
     return moved;
   } catch (error) {
@@ -97,10 +130,6 @@ export async function migrateAllReadyProductSupplierItemsFast() {
         error: migrationError?.message || "Migration failed.",
       });
     }
-  }
-
-  if (results.some((result) => result.ok)) {
-    await syncOneDriveDocumentIndex();
   }
 
   return results;
