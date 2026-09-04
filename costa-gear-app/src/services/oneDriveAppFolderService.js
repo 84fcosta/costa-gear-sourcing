@@ -4,6 +4,16 @@ const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 
 export const ONE_DRIVE_APP_FOLDER_SCOPE = "Files.ReadWrite.AppFolder";
 
+export const COSTA_GEAR_FOLDER_STRUCTURE = [
+  { name: "00_ADMIN", children: ["Business_Legal", "Insurance_Compliance", "Agreements"] },
+  { name: "01_FINANCE", children: ["Expenses", "Revenue", "Banking", "Tax"] },
+  { name: "02_PRODUCTS", children: ["Product_Files", "Suppliers_Sourcing", "Costing_Pricing"] },
+  { name: "03_OPERATIONS", children: ["Purchase_Orders", "Logistics", "Inventory", "SOPs"] },
+  { name: "04_SALES_MARKETING", children: ["Sales", "Customers_Partners", "Marketing_Content", "Brand_Website"] },
+  { name: "05_TEMPLATES", children: [] },
+  { name: "99_ARCHIVE", children: [] },
+];
+
 let accessTokenProvider = null;
 
 export function configureOneDriveAccessTokenProvider(provider) {
@@ -195,7 +205,57 @@ export async function listOneDriveChildren(parentId) {
   return items;
 }
 
+export async function ensureCostaGearFolderStructure() {
+  const root = await getOneDriveAppFolder();
+  const rootChildren = await listOneDriveChildren(root.id);
+  const rootFolders = new Map(
+    rootChildren
+      .filter((item) => item?.folder)
+      .map((item) => [String(item.name).toLowerCase(), item])
+  );
+
+  let createdCount = 0;
+
+  for (const section of COSTA_GEAR_FOLDER_STRUCTURE) {
+    const sectionKey = section.name.toLowerCase();
+    let sectionFolder = rootFolders.get(sectionKey) || null;
+
+    if (!sectionFolder) {
+      sectionFolder = await ensureChildFolder(root.id, section.name);
+      rootFolders.set(sectionKey, sectionFolder);
+      createdCount += 1;
+    }
+
+    if (!section.children.length) continue;
+
+    const existingChildren = await listOneDriveChildren(sectionFolder.id);
+    const childFolders = new Set(
+      existingChildren
+        .filter((item) => item?.folder)
+        .map((item) => String(item.name).toLowerCase())
+    );
+
+    for (const childName of section.children) {
+      const childKey = childName.toLowerCase();
+      if (childFolders.has(childKey)) continue;
+      await ensureChildFolder(sectionFolder.id, childName);
+      childFolders.add(childKey);
+      createdCount += 1;
+    }
+  }
+
+  return {
+    rootName: root?.name || "COSTA GEAR",
+    createdCount,
+    governedFolderCount: COSTA_GEAR_FOLDER_STRUCTURE.reduce(
+      (total, section) => total + 1 + section.children.length,
+      0
+    ),
+  };
+}
+
 export async function scanOneDriveAppFolderTree() {
+  await ensureCostaGearFolderStructure();
   const root = await getOneDriveAppFolder();
   const items = [{ ...root, _relativePath: root?.name || "COSTA GEAR", _isRoot: true }];
 
