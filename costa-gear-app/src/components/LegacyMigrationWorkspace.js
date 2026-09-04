@@ -14,6 +14,12 @@ import {
 } from "../services/legacyProductSupplierMigrationService";
 import { migrateAllReadyProductSupplierItemsFast } from "../services/legacyProductSupplierBulkMigrationService";
 import { verifyLegacyProductSupplierDuplicateHashes } from "../services/legacyDuplicateVerificationService";
+import {
+  loadLegacyBrandMarketingQueue,
+  migrateAllReadyBrandMarketingItems,
+  migrateLegacyBrandMarketingItem,
+  refreshLegacyBrandMarketingProposals,
+} from "../services/legacyBrandMarketingMigrationService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -35,13 +41,22 @@ const BATCHES = {
     migrateOne: migrateLegacyProductSupplierItem,
     migrateAll: migrateAllReadyProductSupplierItemsFast,
   },
+  brand_marketing: {
+    label: "Batch 3 · Brand + Marketing",
+    shortLabel: "Brand + Marketing",
+    description: "Brand masters, brand-kit references and product marketing creatives. Product creative folders are preserved as canonical Marketing Content subfolders.",
+    load: loadLegacyBrandMarketingQueue,
+    refresh: refreshLegacyBrandMarketingProposals,
+    migrateOne: migrateLegacyBrandMarketingItem,
+    migrateAll: migrateAllReadyBrandMarketingItems,
+  },
 };
 
 function initialBatch() {
   try {
-    return sessionStorage.getItem("cg:legacy-migration-batch") || "products_suppliers";
+    return sessionStorage.getItem("cg:legacy-migration-batch") || "brand_marketing";
   } catch (_) {
-    return "products_suppliers";
+    return "brand_marketing";
   }
 }
 
@@ -71,7 +86,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   const [verifyWorking, setVerifyWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const config = BATCHES[batch] || BATCHES.products_suppliers;
+  const config = BATCHES[batch] || BATCHES.brand_marketing;
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -219,7 +234,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Duplicate verification reads content hashes only; it does not download, move, or delete files.</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Products + Suppliers duplicate verification reads content hashes only; migration never deletes legacy files.</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
