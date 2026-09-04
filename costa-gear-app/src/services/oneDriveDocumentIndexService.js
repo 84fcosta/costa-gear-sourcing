@@ -11,7 +11,9 @@ const TRANSACTIONAL_TYPES = new Set([
   "AGR", "TAX", "EXP", "REV", "BNK", "QUO", "PO", "LOG", "SAL", "AST",
 ]);
 
-const DATE_PATTERN = /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/;
+// Recognize plausible business/document dates, not arbitrary four-digit record keys like 0013.
+// Supported filename date forms: YYYY, YYYY-MM and YYYY-MM-DD.
+const DATE_PATTERN = /^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
 const VERSION_PATTERN = /^V\d{2}$/;
 
 function extensionFromName(name) {
