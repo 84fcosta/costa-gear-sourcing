@@ -7,7 +7,42 @@ import {
   refreshLegacyAdminFinanceProposals,
   setLegacyMigrationStatus,
 } from "../services/legacyDocumentMigrationService";
+import {
+  loadLegacyProductsSuppliersQueue,
+  migrateAllReadyProductSupplierItems,
+  migrateLegacyProductSupplierItem,
+  refreshLegacyProductsSuppliersProposals,
+} from "../services/legacyProductSupplierMigrationService";
 import "../legacy-migration.css";
+
+const BATCHES = {
+  admin_finance: {
+    label: "Batch 1 · Admin + Finance",
+    shortLabel: "Admin + Finance",
+    description: "Admin + Finance files from legacy staging. This batch is complete and remains available as the migration audit trail.",
+    load: loadLegacyAdminFinanceQueue,
+    refresh: refreshLegacyAdminFinanceProposals,
+    migrateOne: migrateLegacyQueueItem,
+    migrateAll: migrateAllReadyLegacyItems,
+  },
+  products_suppliers: {
+    label: "Batch 2 · Products + Suppliers",
+    shortLabel: "Products + Suppliers",
+    description: "Supplier catalogs, sourcing files and commercial offers. Exact-size duplicate candidates are held for review and never migrate automatically.",
+    load: loadLegacyProductsSuppliersQueue,
+    refresh: refreshLegacyProductsSuppliersProposals,
+    migrateOne: migrateLegacyProductSupplierItem,
+    migrateAll: migrateAllReadyProductSupplierItems,
+  },
+};
+
+function initialBatch() {
+  try {
+    return sessionStorage.getItem("cg:legacy-migration-batch") || "products_suppliers";
+  } catch (_) {
+    return "products_suppliers";
+  }
+}
 
 function statusLabel(row) {
   if (row.status === "migrated") return "Migrated";
@@ -22,36 +57,41 @@ function statusClass(row) {
   if (row.status === "migrated") return "migrated";
   if (row.status === "skipped") return "skipped";
   if (row.status === "error") return "error";
+  if (row.proposal_state === "possible_duplicate") return "duplicate";
   return row.proposal_state === "ready" ? "ready" : "review";
 }
 
 export default function LegacyMigrationWorkspace({ onBack }) {
+  const [batch, setBatch] = useState(initialBatch);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState(null);
   const [bulkWorking, setBulkWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const config = BATCHES[batch] || BATCHES.products_suppliers;
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true);
     setError("");
     try {
-      const data = refresh
-        ? await refreshLegacyAdminFinanceProposals()
-        : await loadLegacyAdminFinanceQueue();
+      const data = refresh ? await config.refresh() : await config.load();
       setRows(data);
     } catch (loadError) {
       setError(loadError?.message || "Unable to load the migration queue.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [config]);
 
   useEffect(() => {
+    try { sessionStorage.setItem("cg:legacy-migration-batch", batch); } catch (_) {}
+    setRows([]);
+    setNotice("");
+    setError("");
     (async () => {
       try {
-        const existing = await loadLegacyAdminFinanceQueue();
+        const existing = await config.load();
         if (existing.length) setRows(existing);
         else await load(true);
       } catch (_) {
@@ -60,12 +100,13 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         setLoading(false);
       }
     })();
-  }, [load]);
+  }, [batch, config, load]);
 
   const counts = useMemo(() => ({
     total: rows.length,
     ready: rows.filter((row) => row.proposal_state === "ready" && row.status === "review").length,
-    review: rows.filter((row) => row.proposal_state !== "ready" && row.status === "review").length,
+    review: rows.filter((row) => row.proposal_state === "needs_review" && row.status === "review").length,
+    duplicates: rows.filter((row) => row.proposal_state === "possible_duplicate" && row.status === "review").length,
     migrated: rows.filter((row) => row.status === "migrated").length,
     skipped: rows.filter((row) => row.status === "skipped").length,
   }), [rows]);
@@ -75,7 +116,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
     setError("");
     setNotice("");
     try {
-      await migrateLegacyQueueItem(row.id);
+      await config.migrateOne(row.id);
       setNotice(`Migrated: ${row.source_name}`);
       await load(false);
     } catch (migrationError) {
@@ -101,12 +142,12 @@ export default function LegacyMigrationWorkspace({ onBack }) {
 
   async function migrateReady() {
     if (!counts.ready) return;
-    if (!window.confirm(`Migrate all ${counts.ready} ready Admin + Finance documents? Files that still need review will not move.`)) return;
+    if (!window.confirm(`Migrate all ${counts.ready} ready ${config.shortLabel} documents? Needs-review and possible-duplicate files will not move.`)) return;
     setBulkWorking(true);
     setError("");
     setNotice("");
     try {
-      const results = await migrateAllReadyLegacyItems();
+      const results = await config.migrateAll();
       const ok = results.filter((result) => result.ok).length;
       const failed = results.length - ok;
       setNotice(`${ok} document${ok === 1 ? "" : "s"} migrated.${failed ? ` ${failed} failed and remain in the queue.` : ""}`);
@@ -125,7 +166,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div>
           <span className="cg-panel-eyebrow">Document Governance</span>
           <h2>Legacy Migration</h2>
-          <p>Batch 1 reviews Admin + Finance files from <strong>99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING</strong>. Nothing moves until you approve it.</p>
+          <p>{config.description} Source: <strong>99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING</strong>.</p>
         </div>
         <div className="cg-legacy-actions">
           {onBack ? <button className="cg-expense-btn" onClick={onBack}><RotateCcw size={15} />Back to Expenses</button> : null}
@@ -134,15 +175,22 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         </div>
       </div>
 
+      <div className="cg-legacy-tabs" role="tablist" aria-label="Legacy migration batches">
+        {Object.entries(BATCHES).map(([id, item]) => (
+          <button key={id} type="button" className={batch === id ? "active" : ""} onClick={() => setBatch(id)}>{item.label}</button>
+        ))}
+      </div>
+
       <div className="cg-legacy-kpis">
         <div><span>Batch files</span><strong>{counts.total}</strong></div>
         <div><span>Ready</span><strong>{counts.ready}</strong></div>
         <div><span>Needs review</span><strong>{counts.review}</strong></div>
+        <div><span>Possible dup.</span><strong>{counts.duplicates}</strong></div>
         <div><span>Migrated</span><strong>{counts.migrated}</strong></div>
-        <div><span>Kept in staging</span><strong>{counts.skipped}</strong></div>
+        <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Files outside COSTA GEAR remain inaccessible to the app.</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Possible duplicates and needs-review files never move through bulk migration.</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
@@ -182,7 +230,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                     </td>
                   </tr>
                 ))}
-                {!rows.length ? <tr><td colSpan="6" className="cg-expense-empty">No Admin + Finance legacy files found in staging.</td></tr> : null}
+                {!rows.length ? <tr><td colSpan="6" className="cg-expense-empty">No legacy files found for this batch.</td></tr> : null}
               </tbody>
             </table>
           </div>
