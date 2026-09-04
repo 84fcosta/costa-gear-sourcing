@@ -214,6 +214,19 @@ export async function listOneDriveChildren(parentId) {
   return items;
 }
 
+export async function getOneDriveItemContentHashes(itemId) {
+  if (!itemId) throw new Error("A OneDrive item ID is required to read content hashes.");
+  const item = await graphRequest(
+    `/me/drive/items/${encodeURIComponent(itemId)}?$select=id,size,file`
+  );
+  return {
+    itemId: item?.id || itemId,
+    sizeBytes: Number(item?.size || 0),
+    quickXorHash: item?.file?.hashes?.quickXorHash || null,
+    sha1Hash: item?.file?.hashes?.sha1Hash || null,
+  };
+}
+
 export async function ensureCostaGearFolderStructure() {
   const root = await getOneDriveAppFolder();
   const rootChildren = await listOneDriveChildren(root.id);
