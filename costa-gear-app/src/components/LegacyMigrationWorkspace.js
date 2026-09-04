@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, CheckCircle2, FileCheck2, Fingerprint, RefreshCw, RotateCcw, ShieldCheck, SkipForward } from "lucide-react";
+import { Archive, CheckCircle2, FileCheck2, Fingerprint, RefreshCw, RotateCcw, ShieldCheck, SkipForward, Trash2 } from "lucide-react";
 import {
   loadLegacyAdminFinanceQueue,
   migrateAllReadyLegacyItems,
@@ -26,6 +26,7 @@ import {
   migrateLegacyCloseoutItem,
   refreshLegacyCloseoutProposals,
 } from "../services/legacyCloseoutMigrationService";
+import { deleteEmptyLegacyStagingTree } from "../services/legacyStagingCleanupService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -59,7 +60,7 @@ const BATCHES = {
   legacy_closeout: {
     label: "Batch 4 · Legacy Closeout",
     shortLabel: "Legacy Closeout",
-    description: "Final staging closeout. Confirmed supplier duplicates are moved to an archive hold, while residual project and system-reference files are preserved under governed archive folders. Nothing is deleted.",
+    description: "Final staging closeout. Confirmed supplier duplicates are moved to an archive hold, while residual project and system-reference files are preserved under governed archive folders. After all files are cleared, a separate guarded cleanup can remove the empty staging tree.",
     load: loadLegacyCloseoutQueue,
     refresh: refreshLegacyCloseoutProposals,
     migrateOne: migrateLegacyCloseoutItem,
@@ -99,6 +100,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   const [workingId, setWorkingId] = useState(null);
   const [bulkWorking, setBulkWorking] = useState(false);
   const [verifyWorking, setVerifyWorking] = useState(false);
+  const [cleanupWorking, setCleanupWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const config = BATCHES[batch] || BATCHES.legacy_closeout;
@@ -212,7 +214,32 @@ export default function LegacyMigrationWorkspace({ onBack }) {
     }
   }
 
-  const busy = loading || bulkWorking || verifyWorking;
+  async function cleanupLegacyStaging() {
+    if (batch !== "legacy_closeout") return;
+    const approved = window.confirm(
+      "Delete COSTA_GEAR_LEGACY_STAGING and its empty folder tree? The app will first verify live in OneDrive that no files remain. Workspace/COSTA GEAR_LEGACY is outside the App Folder and will not be touched."
+    );
+    if (!approved) return;
+
+    setCleanupWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await deleteEmptyLegacyStagingTree();
+      if (result.alreadyRemoved) {
+        setNotice("Legacy staging tree was already removed.");
+      } else {
+        setNotice(`Legacy staging cleanup complete: ${result.foldersRemoved} empty folder${result.foldersRemoved === 1 ? "" : "s"} removed.`);
+      }
+    } catch (cleanupError) {
+      setError(cleanupError?.message || "Unable to remove the legacy staging tree.");
+    } finally {
+      setCleanupWorking(false);
+    }
+  }
+
+  const closeoutComplete = batch === "legacy_closeout" && counts.total > 0 && counts.migrated === counts.total && counts.ready === 0 && counts.review === 0;
+  const busy = loading || bulkWorking || verifyWorking || cleanupWorking;
 
   return (
     <div className="cg-legacy-shell">
@@ -228,6 +255,11 @@ export default function LegacyMigrationWorkspace({ onBack }) {
           {batch === "products_suppliers" && counts.duplicateCandidates ? (
             <button className="cg-expense-btn" onClick={verifyDuplicates} disabled={busy}>
               <Fingerprint size={15} />{verifyWorking ? "Verifying..." : `Verify duplicates (${counts.duplicateCandidates})`}
+            </button>
+          ) : null}
+          {closeoutComplete ? (
+            <button className="cg-expense-btn" onClick={cleanupLegacyStaging} disabled={busy}>
+              <Trash2 size={15} />{cleanupWorking ? "Checking and removing..." : "Remove empty staging tree"}
             </button>
           ) : null}
           <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button>
@@ -249,7 +281,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Products + Suppliers duplicate verification reads content hashes only; migration never deletes legacy files.</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
@@ -276,13 +308,13 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                     <td>
                       <div className="cg-legacy-row-actions">
                         {row.status === "review" && row.proposal_state === "ready" ? (
-                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking}><CheckCircle2 size={14} />Migrate</button>
+                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><CheckCircle2 size={14} />Migrate</button>
                         ) : null}
                         {row.status === "review" ? (
-                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking || verifyWorking}><Archive size={14} />Keep staging</button>
+                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><Archive size={14} />Keep staging</button>
                         ) : null}
                         {row.status === "skipped" ? (
-                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking}><SkipForward size={14} />Review again</button>
+                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><SkipForward size={14} />Review again</button>
                         ) : null}
                         {row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
                       </div>
