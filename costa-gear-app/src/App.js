@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ArchiveRestore,
   Boxes,
   Cloud,
   DollarSign,
@@ -16,6 +17,7 @@ import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
 import ExpenseWorkspace from "./components/ExpenseWorkspace";
+import LegacyMigrationWorkspace from "./components/LegacyMigrationWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import {
   connectMicrosoftOneDrive,
@@ -45,6 +47,7 @@ const pageMeta = {
   receiving: ["Receiving & Inventory", "Step 4 · Receive goods, confirm exceptions and make sellable stock available."],
   sales: ["Sales", "Step 5 · Record sales and measure realized revenue, profit and margin."],
   expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
+  migration: ["Legacy Migration", "Review staged documents before moving them into the governed Costa Gear repository."],
 };
 
 function readSessionValue(key, fallback, allowedValues = null) {
@@ -190,7 +193,7 @@ export default function App() {
   };
 
   const [title, subtitle] = pageMeta[workspace];
-  const showOneDriveControl = workspace === "expenses";
+  const showOneDriveControl = workspace === "expenses" || workspace === "migration";
 
   return <div className="cg-app-shell">
     <header className="cg-topbar" style={{ height: 96 }}>
@@ -205,7 +208,7 @@ export default function App() {
             <span className="cg-nav-label">{step && <b className="cg-nav-step">{step}</b>}<span>{label}</span></span>
           </button>)}
           <span className="cg-nav-divider" aria-hidden="true" />
-          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" || workspace === "migration" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
             <ReceiptText size={18} strokeWidth={1.9} />
             <span className="cg-nav-label"><span>Expenses</span></span>
           </button>
@@ -240,6 +243,11 @@ export default function App() {
                       ? "OneDrive connected"
                       : "Connect OneDrive"}
               </button>
+              {workspace === "expenses" ? (
+                <button type="button" className="cg-text-button" onClick={() => navigate("migration")} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <ArchiveRestore size={14} />Legacy migration
+                </button>
+              ) : null}
               {oneDriveMessage ? <span style={{ fontSize: 10.5, color: "#687166", maxWidth: 300, textAlign: "right" }}>{oneDriveMessage}</span> : null}
               {oneDriveAuth.connected && oneDriveAuth.username ? <span style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
             </div>
@@ -255,6 +263,7 @@ export default function App() {
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
           : workspace === "expenses" ? <ExpenseWorkspace key={oneDriveVersion} />
+          : workspace === "migration" ? <LegacyMigrationWorkspace onBack={() => navigate("expenses")} />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
