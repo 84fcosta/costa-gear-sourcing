@@ -89,6 +89,8 @@ function toIndexRow(item, now) {
     extension: isFolder ? null : extensionFromName(item?.name),
     mime_type: item?.file?.mimeType || null,
     size_bytes: Number(item?.size || 0),
+    quickxor_hash: isFolder ? null : item?.file?.hashes?.quickXorHash || null,
+    sha1_hash: isFolder ? null : item?.file?.hashes?.sha1Hash || null,
     web_url: item?.webUrl || null,
     etag: item?.eTag || null,
     created_datetime: item?.createdDateTime || null,
