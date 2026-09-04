@@ -11,6 +11,8 @@ const TRANSACTIONAL_TYPES = new Set([
   "AGR", "TAX", "EXP", "REV", "BNK", "QUO", "PO", "LOG", "SAL", "AST",
 ]);
 
+const LEGACY_STAGING_SEGMENT = "/99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING/";
+
 // Recognize plausible business/document dates, not arbitrary four-digit record keys like 0013.
 // Supported filename date forms: YYYY, YYYY-MM and YYYY-MM-DD.
 const DATE_PATTERN = /^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
@@ -19,6 +21,10 @@ const VERSION_PATTERN = /^V\d{2}$/;
 function extensionFromName(name) {
   const match = String(name || "").match(/\.([A-Za-z0-9]{1,12})$/);
   return match ? match[1].toLowerCase() : null;
+}
+
+function isLegacyStagingPath(path) {
+  return String(path || "").includes(LEGACY_STAGING_SEGMENT);
 }
 
 function analyzeNaming(name, isFolder) {
@@ -69,12 +75,16 @@ function analyzeNaming(name, isFolder) {
 
 function toIndexRow(item, now) {
   const isFolder = Boolean(item?.folder);
-  const naming = analyzeNaming(item?.name || "", isFolder);
+  const path = item?._relativePath || item?.name || "";
+  const naming = !isFolder && isLegacyStagingPath(path)
+    ? { typeCode: null, compliant: null, issue: "Legacy staging excluded from compliance" }
+    : analyzeNaming(item?.name || "", isFolder);
+
   return {
     item_id: item.id,
     parent_item_id: item?._isRoot ? null : item?.parentReference?.id || null,
     name: item?.name || "Unnamed",
-    path: item?._relativePath || item?.name || "",
+    path,
     is_folder: isFolder,
     extension: isFolder ? null : extensionFromName(item?.name),
     mime_type: item?.file?.mimeType || null,
