@@ -3,6 +3,7 @@ import { moveOneDriveItem } from "./oneDriveAppFolderService";
 
 const STAGING_ROOT = "COSTA GEAR/99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING";
 const BATCH_CODE = "legacy_closeout";
+const SUPPLIER_BATCH_CODE = "products_suppliers";
 
 function extensionFromName(name) {
   const match = String(name || "").match(/\.([A-Za-z0-9]{1,12})$/);
@@ -27,6 +28,11 @@ function safeToken(value, fallback = "Reference") {
 
 function isSupplierDuplicateCandidate(item) {
   return item.path.includes("/COSTA_GEAR_LEGACY_STAGING/Costa Gear - Suplliers/");
+}
+
+function isCloseoutQueueRow(row) {
+  return row?.batch_code === BATCH_CODE
+    || (row?.batch_code === SUPPLIER_BATCH_CODE && row?.duplicate_hash_match === true);
 }
 
 function proposalForItem(item, canonicalMatch, projectSequence) {
@@ -73,13 +79,22 @@ function proposalForItem(item, canonicalMatch, projectSequence) {
 }
 
 export async function loadLegacyCloseoutQueue() {
-  const { data, error } = await supabase
-    .from("legacy_document_migration_queue")
-    .select("*")
-    .eq("batch_code", BATCH_CODE)
-    .order("source_path", { ascending: true });
-  if (error) throw error;
-  return data || [];
+  const [closeoutResult, duplicateResult] = await Promise.all([
+    supabase
+      .from("legacy_document_migration_queue")
+      .select("*")
+      .eq("batch_code", BATCH_CODE),
+    supabase
+      .from("legacy_document_migration_queue")
+      .select("*")
+      .eq("batch_code", SUPPLIER_BATCH_CODE)
+      .eq("duplicate_hash_match", true),
+  ]);
+  if (closeoutResult.error) throw closeoutResult.error;
+  if (duplicateResult.error) throw duplicateResult.error;
+
+  return [...(closeoutResult.data || []), ...(duplicateResult.data || [])]
+    .sort((a, b) => String(a.source_path || "").localeCompare(String(b.source_path || "")));
 }
 
 export async function refreshLegacyCloseoutProposals() {
@@ -90,14 +105,18 @@ export async function refreshLegacyCloseoutProposals() {
       .eq("is_deleted", false)
       .eq("is_folder", false)
       .like("path", `${STAGING_ROOT}/%`),
-    supabase.from("legacy_document_migration_queue").select("*").eq("batch_code", BATCH_CODE),
+    supabase
+      .from("legacy_document_migration_queue")
+      .select("*")
+      .in("batch_code", [BATCH_CODE, SUPPLIER_BATCH_CODE]),
     supabase
       .from("onedrive_items")
       .select("item_id,name,path,size_bytes,quickxor_hash")
       .eq("is_deleted", false)
       .eq("is_folder", false)
       .not("quickxor_hash", "is", null)
-      .not("path", "like", `${STAGING_ROOT}/%`),
+      .not("path", "like", `${STAGING_ROOT}/%`)
+      .not("path", "like", "COSTA GEAR/99_ARCHIVE/Legacy_Duplicates/%"),
   ]);
   if (itemsResult.error) throw itemsResult.error;
   if (queueResult.error) throw queueResult.error;
@@ -127,17 +146,17 @@ export async function refreshLegacyCloseoutProposals() {
 
     return {
       item_id: item.item_id,
-      batch_code: BATCH_CODE,
+      batch_code: existing?.batch_code || BATCH_CODE,
       source_path: item.path,
       source_name: item.name,
       proposed_destination: proposal.destination,
       proposed_name: proposal.name,
       proposal_state: proposal.state,
-      status: existing?.status === "skipped" ? "skipped" : "review",
-      linked_expense_id: null,
-      linked_purchase_order_id: null,
-      linked_supplier_id: null,
-      linked_quote_id: null,
+      status: "review",
+      linked_expense_id: existing?.linked_expense_id || null,
+      linked_purchase_order_id: existing?.linked_purchase_order_id || null,
+      linked_supplier_id: existing?.linked_supplier_id || null,
+      linked_quote_id: existing?.linked_quote_id || null,
       duplicate_of_item_id: proposal.duplicateOfItemId,
       review_note: proposal.note,
       error_message: null,
@@ -221,26 +240,20 @@ export async function migrateLegacyCloseoutItem(id) {
     .from("legacy_document_migration_queue")
     .select("*")
     .eq("id", id)
-    .eq("batch_code", BATCH_CODE)
     .single();
   if (error) throw error;
+  if (!isCloseoutQueueRow(data)) throw new Error("This file is not part of the legacy closeout set.");
   if (data.status === "migrated") return data;
   if (data.proposal_state !== "ready" || data.status !== "review") throw new Error("This closeout file is not ready to migrate.");
   return migrateRow(data);
 }
 
 export async function migrateAllReadyLegacyCloseoutItems() {
-  const { data, error } = await supabase
-    .from("legacy_document_migration_queue")
-    .select("*")
-    .eq("batch_code", BATCH_CODE)
-    .eq("proposal_state", "ready")
-    .eq("status", "review")
-    .order("source_path", { ascending: true });
-  if (error) throw error;
+  const rows = (await loadLegacyCloseoutQueue())
+    .filter((row) => row.proposal_state === "ready" && row.status === "review");
 
   const results = [];
-  for (const row of data || []) {
+  for (const row of rows) {
     try {
       await migrateRow(row);
       results.push({ id: row.id, ok: true });
