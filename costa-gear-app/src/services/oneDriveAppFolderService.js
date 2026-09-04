@@ -38,9 +38,10 @@ async function getAccessToken() {
   return token;
 }
 
-async function graphRequest(path, options = {}) {
+async function graphRequest(pathOrUrl, options = {}) {
   const token = await getAccessToken();
-  const response = await fetch(`${GRAPH_ROOT}${path}`, {
+  const url = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : `${GRAPH_ROOT}${pathOrUrl}`;
+  const response = await fetch(url, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -178,7 +179,37 @@ async function ensureFolderPath(parts) {
 }
 
 export async function getOneDriveAppFolder() {
-  return graphRequest("/me/drive/special/approot?$select=id,name,webUrl,parentReference");
+  return graphRequest("/me/drive/special/approot?$select=id,name,webUrl,parentReference,eTag,createdDateTime,lastModifiedDateTime,size,folder");
+}
+
+export async function listOneDriveChildren(parentId) {
+  const items = [];
+  let next = `/me/drive/items/${encodeURIComponent(parentId)}/children?$select=id,name,webUrl,size,eTag,createdDateTime,lastModifiedDateTime,parentReference,file,folder&$top=200`;
+
+  while (next) {
+    const response = await graphRequest(next);
+    items.push(...(response?.value || []));
+    next = response?.["@odata.nextLink"] || null;
+  }
+
+  return items;
+}
+
+export async function scanOneDriveAppFolderTree() {
+  const root = await getOneDriveAppFolder();
+  const items = [{ ...root, _relativePath: root?.name || "COSTA GEAR", _isRoot: true }];
+
+  async function walk(parent, parentPath) {
+    const children = await listOneDriveChildren(parent.id);
+    for (const child of children) {
+      const path = `${parentPath}/${child.name}`;
+      items.push({ ...child, _relativePath: path, _isRoot: false });
+      if (child.folder) await walk(child, path);
+    }
+  }
+
+  await walk(root, root?.name || "COSTA GEAR");
+  return { root, items };
 }
 
 export async function testOneDriveConnection() {
