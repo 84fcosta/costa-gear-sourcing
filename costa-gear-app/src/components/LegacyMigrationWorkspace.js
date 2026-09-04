@@ -9,10 +9,10 @@ import {
 } from "../services/legacyDocumentMigrationService";
 import {
   loadLegacyProductsSuppliersQueue,
-  migrateAllReadyProductSupplierItems,
   migrateLegacyProductSupplierItem,
   refreshLegacyProductsSuppliersProposals,
 } from "../services/legacyProductSupplierMigrationService";
+import { migrateAllReadyProductSupplierItemsFast } from "../services/legacyProductSupplierBulkMigrationService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -32,7 +32,7 @@ const BATCHES = {
     load: loadLegacyProductsSuppliersQueue,
     refresh: refreshLegacyProductsSuppliersProposals,
     migrateOne: migrateLegacyProductSupplierItem,
-    migrateAll: migrateAllReadyProductSupplierItems,
+    migrateAll: migrateAllReadyProductSupplierItemsFast,
   },
 };
 
