@@ -41,14 +41,36 @@ function adminProposal(item) {
   const sourceName = item.name;
   const date = dateFromName(sourceName);
   const extension = extensionFromName(sourceName);
-  const description = baseDescription(sourceName);
+  let description = baseDescription(sourceName);
   const version = versionFromName(sourceName);
+  const semanticName = sourceName.toUpperCase().replace(/[_-]+/g, " ");
 
   let typeCode = "ADM";
   let key = "Corporate";
   let destination = ["00_ADMIN", "Business_Legal"];
+  let classificationNote = "Administrative document mapped by legacy folder.";
 
-  if (sourcePath.includes("/Contracts_Agreements/")) {
+  // Filename semantics override the legacy folder when the document's business purpose is clear.
+  // This prevents tax registrations from being treated as corporate/legal records simply because
+  // they lived under the old Admin hierarchy.
+  if (/\bPST\b/.test(semanticName)) {
+    typeCode = "TAX";
+    key = "PST";
+    destination = ["01_FINANCE", "Tax"];
+    description = cleanOneDriveNamePart(description.replace(/^PST_?/i, ""), "Application", 64);
+    classificationNote = "Tax document classified from filename semantics (PST).";
+  } else if (/\bGST\b/.test(semanticName) && /\bHST\b/.test(semanticName)) {
+    typeCode = "TAX";
+    key = "GST-HST";
+    destination = ["01_FINANCE", "Tax"];
+    description = cleanOneDriveNamePart(description.replace(/^GST_?HST_?/i, ""), "Registration", 64);
+    classificationNote = "Tax document classified from filename semantics (GST/HST).";
+  } else if (/\bCRA\b/.test(semanticName) || /\bTAX\b/.test(semanticName)) {
+    typeCode = "TAX";
+    key = /\bCRA\b/.test(semanticName) ? "CRA" : "Corporate";
+    destination = ["01_FINANCE", "Tax"];
+    classificationNote = "Tax document classified from filename semantics.";
+  } else if (sourcePath.includes("/Contracts_Agreements/")) {
     typeCode = "AGR";
     key = "General";
     destination = ["00_ADMIN", "Agreements"];
@@ -60,6 +82,7 @@ function adminProposal(item) {
     typeCode = "TAX";
     key = "Corporate";
     destination = ["01_FINANCE", "Tax"];
+    classificationNote = "Tax document mapped from legacy Compliance/Taxes folder.";
   }
 
   const parts = ["CG", typeCode, key, description];
@@ -72,7 +95,7 @@ function adminProposal(item) {
     proposed_name: proposedName,
     proposal_state: date || !["AGR", "INS", "TAX"].includes(typeCode) ? "ready" : "needs_review",
     linked_expense_id: null,
-    review_note: date ? "Administrative document mapped by legacy folder." : "Review document date before migration.",
+    review_note: date ? classificationNote : "Review document date before migration.",
   };
 }
 
