@@ -23,6 +23,7 @@ import {
   getMicrosoftOneDriveConfiguration,
 } from "./services/microsoftOneDriveAuth";
 import { testOneDriveConnection } from "./services/oneDriveAppFolderService";
+import { syncOneDriveDocumentIndex } from "./services/oneDriveDocumentIndexService";
 import "./brand.css";
 import "./legacy-overrides.css";
 import "./mobile.css";
@@ -112,7 +113,15 @@ export default function App() {
           try {
             const connection = await testOneDriveConnection();
             if (!active) return;
-            setOneDriveMessage(connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected");
+            let message = connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected";
+            try {
+              const index = await syncOneDriveDocumentIndex();
+              if (!active) return;
+              message += ` · Index synced (${index.itemCount} items)`;
+            } catch (_) {
+              message += " · Index sync needs attention";
+            }
+            setOneDriveMessage(message);
             setOneDriveVersion((version) => version + 1);
           } catch (error) {
             if (active) setOneDriveMessage(error?.message || "OneDrive authorization needs attention.");
@@ -164,7 +173,14 @@ export default function App() {
       if (authState?.redirecting) return;
       const connection = await testOneDriveConnection();
       setOneDriveAuth(authState);
-      setOneDriveMessage(connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected");
+      let message = connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected";
+      try {
+        const index = await syncOneDriveDocumentIndex();
+        message += ` · Index synced (${index.itemCount} items)`;
+      } catch (_) {
+        message += " · Index sync needs attention";
+      }
+      setOneDriveMessage(message);
       setOneDriveVersion((version) => version + 1);
     } catch (error) {
       setOneDriveMessage(error?.message || "Unable to connect OneDrive.");
