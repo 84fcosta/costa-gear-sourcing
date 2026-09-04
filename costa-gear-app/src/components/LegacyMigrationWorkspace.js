@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, CheckCircle2, FileCheck2, RefreshCw, RotateCcw, ShieldCheck, SkipForward } from "lucide-react";
+import { Archive, CheckCircle2, FileCheck2, Fingerprint, RefreshCw, RotateCcw, ShieldCheck, SkipForward } from "lucide-react";
 import {
   loadLegacyAdminFinanceQueue,
   migrateAllReadyLegacyItems,
@@ -13,6 +13,7 @@ import {
   refreshLegacyProductsSuppliersProposals,
 } from "../services/legacyProductSupplierMigrationService";
 import { migrateAllReadyProductSupplierItemsFast } from "../services/legacyProductSupplierBulkMigrationService";
+import { verifyLegacyProductSupplierDuplicateHashes } from "../services/legacyDuplicateVerificationService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -28,7 +29,7 @@ const BATCHES = {
   products_suppliers: {
     label: "Batch 2 · Products + Suppliers",
     shortLabel: "Products + Suppliers",
-    description: "Supplier catalogs, sourcing files and commercial offers. Exact-size duplicate candidates are held for review and never migrate automatically.",
+    description: "Supplier catalogs, sourcing files and commercial offers. Duplicate candidates are held for content-hash verification and never migrate automatically.",
     load: loadLegacyProductsSuppliersQueue,
     refresh: refreshLegacyProductsSuppliersProposals,
     migrateOne: migrateLegacyProductSupplierItem,
@@ -67,6 +68,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState(null);
   const [bulkWorking, setBulkWorking] = useState(false);
+  const [verifyWorking, setVerifyWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const config = BATCHES[batch] || BATCHES.products_suppliers;
@@ -107,6 +109,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
     ready: rows.filter((row) => row.proposal_state === "ready" && row.status === "review").length,
     review: rows.filter((row) => row.proposal_state === "needs_review" && row.status === "review").length,
     duplicates: rows.filter((row) => row.proposal_state === "possible_duplicate" && row.status === "review").length,
+    duplicateCandidates: rows.filter((row) => row.proposal_state === "possible_duplicate").length,
     migrated: rows.filter((row) => row.status === "migrated").length,
     skipped: rows.filter((row) => row.status === "skipped").length,
   }), [rows]);
@@ -160,6 +163,27 @@ export default function LegacyMigrationWorkspace({ onBack }) {
     }
   }
 
+  async function verifyDuplicates() {
+    if (batch !== "products_suppliers" || !counts.duplicateCandidates) return;
+    setVerifyWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await verifyLegacyProductSupplierDuplicateHashes();
+      setNotice(
+        `Duplicate verification complete: ${result.confirmed} confirmed, ${result.different} different-content, ${result.unavailable} unavailable.`
+      );
+      await load(false);
+    } catch (verifyError) {
+      setError(verifyError?.message || "Unable to verify duplicate content hashes.");
+      await load(false);
+    } finally {
+      setVerifyWorking(false);
+    }
+  }
+
+  const busy = loading || bulkWorking || verifyWorking;
+
   return (
     <div className="cg-legacy-shell">
       <div className="cg-legacy-heading">
@@ -170,8 +194,13 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         </div>
         <div className="cg-legacy-actions">
           {onBack ? <button className="cg-expense-btn" onClick={onBack}><RotateCcw size={15} />Back to Expenses</button> : null}
-          <button className="cg-expense-btn" onClick={() => load(true)} disabled={loading || bulkWorking}><RefreshCw size={15} />Refresh proposals</button>
-          <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || loading || bulkWorking}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button>
+          <button className="cg-expense-btn" onClick={() => load(true)} disabled={busy}><RefreshCw size={15} />Refresh proposals</button>
+          {batch === "products_suppliers" && counts.duplicateCandidates ? (
+            <button className="cg-expense-btn" onClick={verifyDuplicates} disabled={busy}>
+              <Fingerprint size={15} />{verifyWorking ? "Verifying..." : `Verify duplicates (${counts.duplicateCandidates})`}
+            </button>
+          ) : null}
+          <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button>
         </div>
       </div>
 
@@ -190,7 +219,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Possible duplicates and needs-review files never move through bulk migration.</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission. Duplicate verification reads content hashes only; it does not download, move, or delete files.</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
@@ -217,13 +246,13 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                     <td>
                       <div className="cg-legacy-row-actions">
                         {row.status === "review" && row.proposal_state === "ready" ? (
-                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking}><CheckCircle2 size={14} />Migrate</button>
+                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking}><CheckCircle2 size={14} />Migrate</button>
                         ) : null}
                         {row.status === "review" ? (
-                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking}><Archive size={14} />Keep staging</button>
+                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking || verifyWorking}><Archive size={14} />Keep staging</button>
                         ) : null}
                         {row.status === "skipped" ? (
-                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking}><SkipForward size={14} />Review again</button>
+                          <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking}><SkipForward size={14} />Review again</button>
                         ) : null}
                         {row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
                       </div>
