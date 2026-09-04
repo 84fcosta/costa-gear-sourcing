@@ -74,7 +74,7 @@ async function graphRequest(pathOrUrl, options = {}) {
   return body;
 }
 
-function cleanNamePart(value, fallback = "Document", maxLength = 56) {
+export function cleanOneDriveNamePart(value, fallback = "Document", maxLength = 56) {
   const cleaned = String(value || fallback)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -95,7 +95,7 @@ function fileExtension(file) {
 
 function paddedNumber(value, width = 4) {
   const normalized = String(Number(value));
-  return /^\d+$/.test(normalized) ? normalized.padStart(width, "0") : cleanNamePart(value, "Record", 20);
+  return /^\d+$/.test(normalized) ? normalized.padStart(width, "0") : cleanOneDriveNamePart(value, "Record", 20);
 }
 
 async function loadDocumentOwner(ownerType, ownerId) {
@@ -122,29 +122,34 @@ async function loadDocumentOwner(ownerType, ownerId) {
   throw new Error(`Unsupported document owner type: ${ownerType}.`);
 }
 
-function governedDocumentName({ file, ownerType, record }) {
-  const extension = fileExtension(file);
+export function governedBusinessDocumentName({ fileName, ownerType, record }) {
+  const extensionMatch = String(fileName || "").match(/\.([A-Za-z0-9]{1,10})$/);
+  const extension = extensionMatch ? `.${extensionMatch[1].toLowerCase()}` : "";
 
   if (ownerType === "expense") {
     const key = paddedNumber(record.expense_number);
-    const vendor = cleanNamePart(record.vendor, "Vendor", 36);
-    const description = cleanNamePart(record.description, "Expense", 60);
-    const date = cleanNamePart(record.expense_date, "Date", 10);
+    const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
+    const description = cleanOneDriveNamePart(record.description, "Expense", 60);
+    const date = cleanOneDriveNamePart(record.expense_date, "Date", 10);
     return `CG_EXP_${key}_${vendor}_${description}_${date}${extension}`;
   }
 
-  const key = cleanNamePart(record.asset_code || String(record.id).slice(0, 8), "Asset", 24);
-  const vendor = cleanNamePart(record.vendor, "Vendor", 36);
-  const description = cleanNamePart(record.asset_name, "Asset", 60);
-  const date = cleanNamePart(record.purchase_date, "Date", 10);
+  const key = cleanOneDriveNamePart(record.asset_code || String(record.id).slice(0, 8), "Asset", 24);
+  const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
+  const description = cleanOneDriveNamePart(record.asset_name, "Asset", 60);
+  const date = cleanOneDriveNamePart(record.purchase_date, "Date", 10);
   return `CG_AST_${key}_${vendor}_${description}_${date}${extension}`;
+}
+
+function governedDocumentName({ file, ownerType, record }) {
+  return governedBusinessDocumentName({ fileName: file?.name, ownerType, record });
 }
 
 function governedFolderPath({ ownerType, record, fallbackYear }) {
   const year = String(record.tax_year || fallbackYear || new Date().getFullYear());
 
   if (ownerType === "expense" || ownerType === "asset") {
-    return ["01_FINANCE", "Expenses", cleanNamePart(year, String(new Date().getFullYear()), 4)];
+    return ["01_FINANCE", "Expenses", cleanOneDriveNamePart(year, String(new Date().getFullYear()), 4)];
   }
 
   return [];
@@ -186,6 +191,10 @@ async function ensureFolderPath(parts) {
     current = await ensureChildFolder(current.id, part);
   }
   return current;
+}
+
+export async function ensureOneDriveFolderPath(parts) {
+  return ensureFolderPath(parts);
 }
 
 export async function getOneDriveAppFolder() {
@@ -279,6 +288,31 @@ export async function testOneDriveConnection() {
     folderId: folder?.id || null,
     folderName: folder?.name || "App Folder",
     webUrl: folder?.webUrl || null,
+  };
+}
+
+export async function moveOneDriveItem({ itemId, folderPath, newName }) {
+  if (!itemId) throw new Error("A OneDrive item ID is required for migration.");
+  if (!Array.isArray(folderPath) || !folderPath.length) throw new Error("A destination folder is required for migration.");
+  if (!newName) throw new Error("A governed filename is required for migration.");
+
+  const destination = await ensureFolderPath(folderPath);
+  const item = await graphRequest(`/me/drive/items/${encodeURIComponent(itemId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: newName,
+      parentReference: { id: destination.id },
+    }),
+  });
+
+  return {
+    itemId: item?.id || itemId,
+    webUrl: item?.webUrl || null,
+    fileName: item?.name || newName,
+    sizeBytes: Number(item?.size || 0),
+    mimeType: item?.file?.mimeType || null,
+    destinationPath: [...folderPath, item?.name || newName].join("/"),
   };
 }
 
