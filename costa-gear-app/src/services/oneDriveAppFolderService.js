@@ -1,3 +1,5 @@
+import { supabase } from "../supabase";
+
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 
 export const ONE_DRIVE_APP_FOLDER_SCOPE = "Files.ReadWrite.AppFolder";
@@ -61,21 +63,118 @@ async function graphRequest(path, options = {}) {
   return body;
 }
 
-function safeFileName(value) {
-  const cleaned = String(value || "document")
-    .replace(/[\\/:*?"<>|#%]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned || "document";
+function cleanNamePart(value, fallback = "Document", maxLength = 56) {
+  const cleaned = String(value || fallback)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " And ")
+    .replace(/['’]/g, "")
+    .replace(/[^A-Za-z0-9-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, maxLength)
+    .replace(/_+$/g, "");
+  return cleaned || fallback;
 }
 
-function uploadName({ file, ownerType, ownerId, year }) {
-  const extensionMatch = safeFileName(file.name).match(/(\.[^.]+)$/);
-  const extension = extensionMatch ? extensionMatch[1] : "";
-  const rawBase = extension ? safeFileName(file.name).slice(0, -extension.length) : safeFileName(file.name);
-  const shortOwner = String(ownerId || "record").slice(0, 8);
-  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  return safeFileName(`${year}_${ownerType}_${shortOwner}_${stamp}_${rawBase}${extension}`);
+function fileExtension(file) {
+  const match = String(file?.name || "").match(/\.([A-Za-z0-9]{1,10})$/);
+  return match ? `.${match[1].toLowerCase()}` : "";
+}
+
+function paddedNumber(value, width = 4) {
+  const normalized = String(Number(value));
+  return /^\d+$/.test(normalized) ? normalized.padStart(width, "0") : cleanNamePart(value, "Record", 20);
+}
+
+async function loadDocumentOwner(ownerType, ownerId) {
+  if (ownerType === "expense") {
+    const { data, error } = await supabase
+      .from("business_expenses")
+      .select("id,expense_number,expense_date,vendor,description,tax_year")
+      .eq("id", ownerId)
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (ownerType === "asset") {
+    const { data, error } = await supabase
+      .from("business_assets")
+      .select("id,asset_code,asset_name,purchase_date,vendor,tax_year")
+      .eq("id", ownerId)
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  throw new Error(`Unsupported document owner type: ${ownerType}.`);
+}
+
+function governedDocumentName({ file, ownerType, record }) {
+  const extension = fileExtension(file);
+
+  if (ownerType === "expense") {
+    const key = paddedNumber(record.expense_number);
+    const vendor = cleanNamePart(record.vendor, "Vendor", 36);
+    const description = cleanNamePart(record.description, "Expense", 60);
+    const date = cleanNamePart(record.expense_date, "Date", 10);
+    return `CG_EXP_${key}_${vendor}_${description}_${date}${extension}`;
+  }
+
+  const key = cleanNamePart(record.asset_code || String(record.id).slice(0, 8), "Asset", 24);
+  const vendor = cleanNamePart(record.vendor, "Vendor", 36);
+  const description = cleanNamePart(record.asset_name, "Asset", 60);
+  const date = cleanNamePart(record.purchase_date, "Date", 10);
+  return `CG_AST_${key}_${vendor}_${description}_${date}${extension}`;
+}
+
+function governedFolderPath({ ownerType, record, fallbackYear }) {
+  const year = String(record.tax_year || fallbackYear || new Date().getFullYear());
+
+  if (ownerType === "expense" || ownerType === "asset") {
+    return ["01_FINANCE", "Expenses", cleanNamePart(year, String(new Date().getFullYear()), 4)];
+  }
+
+  return [];
+}
+
+async function findChildFolder(parentId, name) {
+  const response = await graphRequest(
+    `/me/drive/items/${encodeURIComponent(parentId)}/children?$select=id,name,folder&$top=200`
+  );
+  return (response?.value || []).find(
+    (item) => item?.folder && String(item.name).toLowerCase() === String(name).toLowerCase()
+  ) || null;
+}
+
+async function ensureChildFolder(parentId, name) {
+  const existing = await findChildFolder(parentId, name);
+  if (existing) return existing;
+
+  try {
+    return await graphRequest(`/me/drive/items/${encodeURIComponent(parentId)}/children`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "fail",
+      }),
+    });
+  } catch (error) {
+    const afterConflict = await findChildFolder(parentId, name);
+    if (afterConflict) return afterConflict;
+    throw error;
+  }
+}
+
+async function ensureFolderPath(parts) {
+  let current = await getOneDriveAppFolder();
+  for (const part of parts) {
+    current = await ensureChildFolder(current.id, part);
+  }
+  return current;
 }
 
 export async function getOneDriveAppFolder() {
@@ -96,9 +195,13 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
   if (!file) throw new Error("Choose a document before uploading.");
   if (!ownerId) throw new Error("Save the expense or asset before uploading its document.");
 
-  const filename = uploadName({ file, ownerType, ownerId, year });
+  const record = await loadDocumentOwner(ownerType, ownerId);
+  const filename = governedDocumentName({ file, ownerType, record });
+  const folderPath = governedFolderPath({ ownerType, record, fallbackYear: year });
+  const destination = await ensureFolderPath(folderPath);
   const encodedName = encodeURIComponent(filename);
-  const item = await graphRequest(`/me/drive/special/approot:/${encodedName}:/content`, {
+
+  const item = await graphRequest(`/me/drive/items/${encodeURIComponent(destination.id)}:/${encodedName}:/content`, {
     method: "PUT",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
@@ -112,6 +215,7 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
     fileName: item?.name || filename,
     mimeType: file.type || null,
     sizeBytes: Number(item?.size ?? file.size ?? 0),
+    relativePath: [...folderPath, item?.name || filename].join("/"),
   };
 }
 
