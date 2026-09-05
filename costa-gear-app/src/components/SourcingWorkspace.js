@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import LegacyApp from "../LegacyApp";
 import SourcingDecisionLab from "./SourcingDecisionLab";
 import SupplierQuotationWorkspace from "./SupplierQuotationWorkspace";
-import ProductImagesWorkspace from "./ProductImagesWorkspace";
+import ProductMediaStrip from "./ProductMediaStrip";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
@@ -10,11 +10,11 @@ import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository"
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
 
 export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
-  const [view, setView] = useState(initialView);
+  const [view, setView] = useState(initialView === "images" ? "master" : initialView);
   const [handoffError, setHandoffError] = useState("");
   const [handoffBusy, setHandoffBusy] = useState(false);
 
-  useEffect(() => setView(initialView), [initialView]);
+  useEffect(() => setView(initialView === "images" ? "master" : initialView), [initialView]);
 
   const createBuyingDraft = async context => {
     if (!context?.quoteId || handoffBusy) return;
@@ -59,14 +59,15 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
         </div>
         <div className="cg-segmented">
           <button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button>
-          <button className={view === "images" ? "active" : ""} onClick={() => setView("images")}>Product Images</button>
           <button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button>
           <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button>
         </div>
       </div>
     </div>
-    {view === "master" && <div className="cg-legacy-embedded"><LegacyApp /></div>}
-    {view === "images" && <ProductImagesWorkspace />}
+    {view === "master" && <>
+      <div className="cg-module-embedded" style={{ paddingBottom: 0 }}><ProductMediaStrip /></div>
+      <div className="cg-legacy-embedded"><LegacyApp /></div>
+    </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
