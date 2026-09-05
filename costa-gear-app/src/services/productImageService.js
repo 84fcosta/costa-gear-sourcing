@@ -3,6 +3,7 @@ import { getOneDriveAppFolder, listOneDriveChildren } from "./oneDriveAppFolderS
 
 const PRODUCT_FILES_PATH = ["02_PRODUCTS", "Product_Files"];
 const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
+const SHORTCUT_RE = /\.url$/i;
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -47,10 +48,21 @@ function pickMainImage(images) {
   );
 }
 
+function pickSupplierShortcut(children) {
+  const shortcuts = (children || [])
+    .filter(item => item?.file && SHORTCUT_RE.test(item.name || "") && /^supplier/i.test(String(item.name || "").trim()))
+    .sort((a, b) => {
+      const aExact = normalize(a.name) === "supplier link.url" ? 0 : 1;
+      const bExact = normalize(b.name) === "supplier link.url" ? 0 : 1;
+      return aExact - bExact || String(a.name).localeCompare(String(b.name));
+    });
+  return shortcuts[0] || null;
+}
+
 async function loadProducts() {
   const { data, error } = await supabase
     .from("products")
-    .select("id,sku_id,legacy_sku,name,product_type,fitment,product_folder_path,main_image_item_id,main_image_name,image_sync_at")
+    .select("id,sku_id,legacy_sku,name,product_type,fitment,product_folder_path,product_folder_web_url,main_image_item_id,main_image_name,image_sync_at,supplier_link_name,supplier_link_web_url")
     .order("sku_id");
   if (error) throw error;
   return data || [];
@@ -84,6 +96,7 @@ async function syncFolderForProduct(product, productFilesRoot, knownFolder = nul
   const imageFiles = children
     .filter(item => item?.file && IMAGE_RE.test(item.name || ""))
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const supplierShortcut = pickSupplierShortcut(children);
 
   const rows = imageFiles.map(file => ({
     product_id: product.id,
@@ -107,8 +120,11 @@ async function syncFolderForProduct(product, productFilesRoot, knownFolder = nul
     .from("products")
     .update({
       product_folder_path: productFolderPath,
+      product_folder_web_url: folder.webUrl || null,
       main_image_item_id: main?.item_id || null,
       main_image_name: main?.file_name || null,
+      supplier_link_name: supplierShortcut?.name || null,
+      supplier_link_web_url: supplierShortcut?.webUrl || null,
       image_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -120,8 +136,11 @@ async function syncFolderForProduct(product, productFilesRoot, knownFolder = nul
     sku: product.sku_id,
     found: true,
     folderName: folder.name,
+    folderWebUrl: folder.webUrl || null,
     imageCount: rows.length,
     mainImageName: main?.file_name || null,
+    supplierLinkName: supplierShortcut?.name || null,
+    supplierLinkWebUrl: supplierShortcut?.webUrl || null,
   };
 }
 
