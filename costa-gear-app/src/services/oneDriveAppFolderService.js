@@ -441,7 +441,7 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
   if (!ownerId) throw new Error("Save the expense or asset before uploading its document.");
 
   const record = await loadDocumentOwner(ownerType, ownerId);
-  const filename = governedDocumentName({ fileName: file?.name, ownerType, record });
+  const filename = governedDocumentName({ file, ownerType, record });
   const folderPath = governedFolderPath({ ownerType, record, fallbackYear: year });
   const destination = await ensureFolderPath(folderPath);
   const encodedName = encodeURIComponent(filename);
