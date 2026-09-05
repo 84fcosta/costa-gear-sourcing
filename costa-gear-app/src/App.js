@@ -25,6 +25,7 @@ import {
   getMicrosoftOneDriveConfiguration,
 } from "./services/microsoftOneDriveAuth";
 import { testOneDriveConnection } from "./services/oneDriveAppFolderService";
+import { initializeSharedOneDriveRepository } from "./services/sharedOneDriveRepositoryService";
 import { syncOneDriveDocumentIndex } from "./services/oneDriveDocumentIndexService";
 import "./brand.css";
 import "./legacy-overrides.css";
@@ -86,6 +87,7 @@ export default function App() {
   const [oneDriveAuth, setOneDriveAuth] = useState(() => ({
     configured: getMicrosoftOneDriveConfiguration().configured,
     connected: false,
+    needsConsent: false,
     username: null,
   }));
 
@@ -105,6 +107,35 @@ export default function App() {
     try { window.sessionStorage.setItem("cg:sales-view", salesView); } catch (_) {}
   }, [salesView]);
 
+  const finalizeOneDriveConnection = async (state, activeCheck = () => true) => {
+    const setup = await initializeSharedOneDriveRepository({ microsoftAccount: state?.username || null });
+    if (!activeCheck()) return null;
+    if (setup.pendingOwnerSetup) {
+      return setup.message || "The shared Costa Gear repository still needs owner setup.";
+    }
+
+    const connection = await testOneDriveConnection();
+    if (!activeCheck()) return null;
+    let message = connection?.folderName
+      ? `${connection.sharedRepository ? "Shared repository" : "OneDrive"}: ${connection.folderName}`
+      : "OneDrive connected";
+
+    const successfulShares = (setup.shared || []).filter(item => item.ok);
+    const failedShares = (setup.shared || []).filter(item => !item.ok);
+    if (successfulShares.length) message += ` · Shared with ${successfulShares.map(item => item.email).join(", ")}`;
+    if (failedShares.length) message += ` · ${failedShares.length} collaborator invite needs attention`;
+
+    try {
+      const index = await syncOneDriveDocumentIndex();
+      if (!activeCheck()) return null;
+      message += ` · Index synced (${index.itemCount} items)`;
+    } catch (_) {
+      message += " · Index sync needs attention";
+    }
+
+    return message;
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -114,21 +145,15 @@ export default function App() {
         setOneDriveAuth(state);
         if (state.connected) {
           try {
-            const connection = await testOneDriveConnection();
-            if (!active) return;
-            let message = connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected";
-            try {
-              const index = await syncOneDriveDocumentIndex();
-              if (!active) return;
-              message += ` · Index synced (${index.itemCount} items)`;
-            } catch (_) {
-              message += " · Index sync needs attention";
-            }
+            const message = await finalizeOneDriveConnection(state, () => active);
+            if (!active || message === null) return;
             setOneDriveMessage(message);
             setOneDriveVersion((version) => version + 1);
           } catch (error) {
             if (active) setOneDriveMessage(error?.message || "OneDrive authorization needs attention.");
           }
+        } else if (state.needsConsent) {
+          setOneDriveMessage("OneDrive needs one-time permission renewal for the shared Costa Gear repository.");
         }
       } catch (_) {}
     })();
@@ -174,16 +199,9 @@ export default function App() {
     try {
       const authState = await connectMicrosoftOneDrive();
       if (authState?.redirecting) return;
-      const connection = await testOneDriveConnection();
       setOneDriveAuth(authState);
-      let message = connection?.folderName ? `Connected to ${connection.folderName}` : "OneDrive connected";
-      try {
-        const index = await syncOneDriveDocumentIndex();
-        message += ` · Index synced (${index.itemCount} items)`;
-      } catch (_) {
-        message += " · Index sync needs attention";
-      }
-      setOneDriveMessage(message);
+      const message = await finalizeOneDriveConnection(authState);
+      if (message !== null) setOneDriveMessage(message);
       setOneDriveVersion((version) => version + 1);
     } catch (error) {
       setOneDriveMessage(error?.message || "Unable to connect OneDrive.");
@@ -231,7 +249,7 @@ export default function App() {
                 className="cg-text-button"
                 onClick={connectOneDrive}
                 disabled={!oneDriveAuth.configured || oneDriveBusy || oneDriveAuth.connected}
-                title="Microsoft Graph permission: Files.ReadWrite.AppFolder"
+                title="Microsoft Graph permission: Files.ReadWrite"
                 style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
               >
                 <Cloud size={15} />
@@ -240,16 +258,18 @@ export default function App() {
                   : !oneDriveAuth.configured
                     ? "OneDrive setup required"
                     : oneDriveAuth.connected
-                      ? "OneDrive connected"
-                      : "Connect OneDrive"}
+                      ? "Shared OneDrive connected"
+                      : oneDriveAuth.needsConsent
+                        ? "Reconnect OneDrive"
+                        : "Connect OneDrive"}
               </button>
               {workspace === "expenses" ? (
                 <button type="button" className="cg-text-button" onClick={() => navigate("migration")} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                   <ArchiveRestore size={14} />Legacy migration
                 </button>
               ) : null}
-              {oneDriveMessage ? <span style={{ fontSize: 10.5, color: "#687166", maxWidth: 300, textAlign: "right" }}>{oneDriveMessage}</span> : null}
-              {oneDriveAuth.connected && oneDriveAuth.username ? <span style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
+              {oneDriveMessage ? <span style={{ fontSize: 10.5, color: "#687166", maxWidth: 360, textAlign: "right" }}>{oneDriveMessage}</span> : null}
+              {oneDriveAuth.username ? <span style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
             </div>
           ) : null}
         </div>
