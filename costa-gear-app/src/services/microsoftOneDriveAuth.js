@@ -77,9 +77,17 @@ function currentAccount(client) {
 }
 
 function interactionRequired(error) {
+  const code = String(error?.errorCode || error?.code || "").toLowerCase();
   return (
     error instanceof InteractionRequiredAuthError ||
-    ["interaction_required", "consent_required", "login_required"].includes(error?.errorCode)
+    [
+      "interaction_required",
+      "consent_required",
+      "login_required",
+      "monitor_window_timeout",
+      "timed_out",
+      "iframe_closed_prematurely",
+    ].includes(code)
   );
 }
 
