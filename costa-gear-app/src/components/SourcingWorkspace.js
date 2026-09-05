@@ -65,7 +65,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
       </div>
     </div>
     {view === "master" && <>
-      <div className="cg-module-embedded" style={{ paddingBottom: 0 }}><ProductMediaStrip /></div>
+      <ProductMediaStrip />
       <div className="cg-legacy-embedded"><LegacyApp /></div>
     </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}

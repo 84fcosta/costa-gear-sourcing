@@ -1,22 +1,147 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ExternalLink, Images, RefreshCw, X } from "lucide-react";
 import {
   loadProductImageOverview,
-  syncAllExistingProductImages,
   syncProductImages,
 } from "../services/productImageService";
 import { getMicrosoftOneDriveAuthState } from "../services/microsoftOneDriveAuth";
 
+function findProductActionGroup(sku) {
+  if (typeof document === "undefined") return null;
+
+  const skuNodes = Array.from(document.querySelectorAll("div")).filter(node =>
+    node.children.length === 0 && String(node.textContent || "").trim() === sku
+  );
+
+  for (const skuNode of skuNodes) {
+    let current = skuNode.parentElement;
+    let depth = 0;
+
+    while (current && depth < 7) {
+      const buttons = Array.from(current.querySelectorAll("button"));
+      const editButtons = buttons.filter(button => String(button.textContent || "").trim() === "Edit");
+      const deleteButtons = buttons.filter(button => String(button.textContent || "").trim() === "Del");
+
+      if (
+        editButtons.length === 1 &&
+        deleteButtons.length === 1 &&
+        editButtons[0].parentElement &&
+        editButtons[0].parentElement === deleteButtons[0].parentElement
+      ) {
+        return editButtons[0].parentElement;
+      }
+
+      current = current.parentElement;
+      depth += 1;
+    }
+  }
+
+  return null;
+}
+
+function sameTargets(a, b) {
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a.entries()) {
+    if (b.get(key) !== value) return false;
+  }
+  return true;
+}
+
+function ProductMediaControl({ row, connected, workingId, onOpen, onSync }) {
+  const images = row.images || [];
+  const main = images.find(image => image.item_id === row.main_image_item_id) || images[0] || null;
+  const syncing = workingId === row.id;
+
+  return (
+    <div
+      data-cg-product-media={row.sku_id}
+      style={{
+        order: -1,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        flexShrink: 0,
+        marginRight: 2,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => images.length && onOpen(row)}
+        disabled={!images.length}
+        title={images.length ? `View ${images.length} image${images.length === 1 ? "" : "s"}` : "No synced images yet"}
+        style={{
+          width: 170,
+          minHeight: 38,
+          border: "1px solid rgba(50,56,42,.11)",
+          borderRadius: 10,
+          background: images.length ? "#FAFBF8" : "#F6F7F3",
+          padding: "5px 8px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          textAlign: "left",
+          cursor: images.length ? "pointer" : "default",
+          color: "#20251F",
+          opacity: images.length ? 1 : 0.72,
+        }}
+      >
+        <Images size={15} color={images.length ? "#858C38" : "#8A9187"} style={{ flex: "0 0 auto" }} />
+        <span style={{ minWidth: 0, display: "block" }}>
+          <strong style={{ display: "block", fontSize: 11.5, lineHeight: 1.15 }}>
+            {images.length} image{images.length === 1 ? "" : "s"}
+          </strong>
+          <small
+            style={{
+              display: "block",
+              marginTop: 2,
+              color: "#7B8378",
+              fontSize: 9.5,
+              lineHeight: 1.1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {main?.file_name || "Not synced"}
+          </small>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onSync(row)}
+        disabled={!connected || syncing}
+        title={!connected ? "Connect OneDrive in Expenses first" : `Sync images for ${row.sku_id}`}
+        style={{
+          width: 34,
+          height: 34,
+          border: "1px solid rgba(50,56,42,.11)",
+          borderRadius: 9,
+          background: "#fff",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: !connected || syncing ? "not-allowed" : "pointer",
+          opacity: !connected || syncing ? 0.45 : 1,
+          color: "#4F594D",
+          flex: "0 0 auto",
+        }}
+      >
+        <RefreshCw size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function ProductMediaStrip() {
   const [rows, setRows] = useState([]);
   const [connected, setConnected] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [workingId, setWorkingId] = useState(null);
   const [galleryRow, setGalleryRow] = useState(null);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+  const [targets, setTargets] = useState(() => new Map());
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [overview, auth] = await Promise.all([
         loadProductImageOverview(),
@@ -25,114 +150,82 @@ export default function ProductMediaStrip() {
       setRows(overview || []);
       setConnected(Boolean(auth?.connected));
     } catch (e) {
-      setError(e?.message || "Unable to load product images.");
+      console.error("Unable to load product images", e);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const synced = useMemo(
-    () => rows.filter(row => row.images?.length).sort((a, b) => String(a.sku_id).localeCompare(String(b.sku_id))),
-    [rows]
-  );
+  useEffect(() => {
+    let timer = null;
 
-  async function syncAll() {
-    if (!connected) return;
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const result = await syncAllExistingProductImages();
-      setNotice(`${result.foldersMatched} product folders matched · ${result.imagesSynced} images synced.`);
-      await load();
-    } catch (e) {
-      setError(e?.message || "Unable to sync product images.");
-    } finally {
-      setBusy(false);
-    }
-  }
+    const refreshTargets = () => {
+      const next = new Map();
+      for (const row of rows) {
+        const target = findProductActionGroup(row.sku_id);
+        if (target) next.set(row.id, target);
+      }
+      setTargets(previous => sameTargets(previous, next) ? previous : next);
+    };
+
+    const scheduleRefresh = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refreshTargets, 30);
+    };
+
+    refreshTargets();
+    const observer = new MutationObserver(scheduleRefresh);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", scheduleRefresh);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleRefresh);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [rows]);
 
   async function syncOne(row) {
-    if (!connected) return;
-    setWorkingId(row.id); setError(""); setNotice("");
+    if (!connected || workingId) return;
+    setWorkingId(row.id);
     try {
-      const result = await syncProductImages(row.id);
-      setNotice(result.found
-        ? `${row.sku_id}: ${result.imageCount} images synced.`
-        : `No OneDrive folder found for ${row.sku_id}.`);
-      await load();
+      await syncProductImages(row.id);
+      const [overview, auth] = await Promise.all([
+        loadProductImageOverview(),
+        getMicrosoftOneDriveAuthState(),
+      ]);
+      const refreshedRows = overview || [];
+      setRows(refreshedRows);
+      setConnected(Boolean(auth?.connected));
+      if (galleryRow?.id === row.id) {
+        setGalleryRow(refreshedRows.find(item => item.id === row.id) || null);
+      }
     } catch (e) {
-      setError(e?.message || `Unable to sync ${row.sku_id}.`);
+      window.alert(e?.message || `Unable to sync ${row.sku_id}.`);
     } finally {
       setWorkingId(null);
     }
   }
 
+  const portals = rows.map(row => {
+    const target = targets.get(row.id);
+    if (!target) return null;
+    return createPortal(
+      <ProductMediaControl
+        row={row}
+        connected={connected}
+        workingId={workingId}
+        onOpen={setGalleryRow}
+        onSync={syncOne}
+      />,
+      target,
+      `product-media-${row.id}`
+    );
+  });
+
   return (
     <>
-      <div style={{
-        margin: "0 0 14px",
-        padding: "12px 16px",
-        border: "1px solid rgba(50,56,42,.11)",
-        borderRadius: 14,
-        background: "#FAFBF8",
-        boxShadow: "0 6px 20px rgba(28,39,24,.035)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <Images size={17} color="#858C38" />
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#20251F" }}>Product images</div>
-              <div style={{ fontSize: 11, color: "#687166", marginTop: 1 }}>
-                {synced.length} product{synced.length === 1 ? "" : "s"} with synced OneDrive images
-                {!connected ? " · Connect OneDrive in Expenses to sync" : ""}
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="cg-expense-btn compact"
-            onClick={syncAll}
-            disabled={!connected || busy}
-            title={!connected ? "Connect OneDrive in Expenses first" : "Sync product image folders from OneDrive"}
-          >
-            <RefreshCw size={14} />{busy ? "Syncing..." : "Sync images"}
-          </button>
-        </div>
-
-        {synced.length ? (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {synced.map(row => {
-              const main = row.images.find(image => image.item_id === row.main_image_item_id) || row.images[0];
-              return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => setGalleryRow(row)}
-                  title={`${row.name || row.sku_id} · ${row.images.length} image${row.images.length === 1 ? "" : "s"}`}
-                  style={{
-                    border: "1px solid rgba(50,56,42,.12)",
-                    borderRadius: 999,
-                    background: "white",
-                    padding: "6px 9px",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    color: "#20251F",
-                    fontSize: 11.5,
-                  }}
-                >
-                  <strong>{row.sku_id}</strong>
-                  <span style={{ color: "#687166" }}>{row.images.length}</span>
-                  {main?.file_name ? <span style={{ color: "#8A9187", maxWidth: 115, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{main.file_name}</span> : null}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-
-        {notice ? <div style={{ marginTop: 8, fontSize: 11, color: "#4D7D57" }}>{notice}</div> : null}
-        {error ? <div style={{ marginTop: 8, fontSize: 11, color: "#B65145" }}>{error}</div> : null}
-      </div>
+      {portals}
 
       {galleryRow ? (
         <div
