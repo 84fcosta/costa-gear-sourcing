@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, FolderOpen, Image as ImageIcon, Link2, RefreshCw } from "lucide-react";
+import { ExternalLink, FolderOpen, RefreshCw } from "lucide-react";
 import { loadProductImageOverview, syncProductImages } from "../services/productImageService";
 import { getMicrosoftOneDriveAuthState } from "../services/microsoftOneDriveAuth";
 
-const MEDIA_WIDTH = 472;
-const ACTION_WIDTH = 720;
-const ROW_MIN_WIDTH = 1220;
+const MEDIA_WIDTH = 220;
+const ACTION_WIDTH = 468;
+const ROW_MIN_WIDTH = 1060;
 
 function findProductLayout(sku) {
   if (typeof document === "undefined") return null;
@@ -134,13 +134,7 @@ function ProductTableHeader() {
         <span style={label}>SKU</span><span style={label}>Product / Details</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: `${MEDIA_WIDTH}px 120px 112px`, gap: 8 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "96px 96px 112px 112px 32px", gap: 6 }}>
-          <span style={label}>Image 1</span>
-          <span style={label}>Image 2</span>
-          <span style={label}>Other images</span>
-          <span style={label}>Supplier link</span>
-          <span style={{ ...label, textAlign: "center" }}>Sync</span>
-        </div>
+        <span style={label}>Product Images</span>
         <span style={{ ...label, textAlign: "right" }}>Cost / Quotes</span>
         <span style={{ ...label, textAlign: "center" }}>Actions</span>
       </div>
@@ -148,11 +142,12 @@ function ProductTableHeader() {
   );
 }
 
-function DirectLinkButton({ href, label, title, icon: Icon, disabled = false }) {
-  const enabled = Boolean(href) && !disabled;
+function ProductImagesButton({ href, count }) {
+  const enabled = Boolean(href);
+  const label = `${count} image${count === 1 ? "" : "s"}`;
   const content = (
     <>
-      <Icon size={12} style={{ flex: "0 0 auto" }} />
+      <FolderOpen size={13} style={{ flex: "0 0 auto" }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
       {enabled ? <ExternalLink size={9} style={{ flex: "0 0 auto", opacity: .62 }} /> : null}
     </>
@@ -165,37 +160,32 @@ function DirectLinkButton({ href, label, title, icon: Icon, disabled = false }) 
     borderRadius: 8,
     background: enabled ? "#FAFBF8" : "#F5F6F2",
     color: enabled ? "#2B3229" : "#9AA097",
-    padding: "4px 7px",
+    padding: "4px 9px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    gap: 6,
     fontSize: 10.5,
-    fontWeight: 650,
+    fontWeight: 700,
     textDecoration: "none",
     cursor: enabled ? "pointer" : "default",
     boxSizing: "border-box",
   };
 
   return enabled ? (
-    <a href={href} target="_blank" rel="noreferrer" title={title || label} style={style}>{content}</a>
+    <a href={href} target="_blank" rel="noreferrer" title="Open product image folder in OneDrive" style={style}>{content}</a>
   ) : (
-    <span title={title || label} style={style}>{content}</span>
+    <span title="Product image folder not synced" style={style}>{content}</span>
   );
 }
 
 function ProductMediaControl({ row, connected, workingId, onSync }) {
-  const images = [...(row.images || [])].sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99) || String(a.file_name).localeCompare(String(b.file_name)));
-  const first = images[0] || null;
-  const second = images[1] || null;
+  const imageCount = row.images?.length || 0;
   const syncing = workingId === row.id;
 
   return (
-    <div data-cg-product-media={row.sku_id} style={{ gridColumn: "1", gridRow: "1", display: "grid", gridTemplateColumns: "96px 96px 112px 112px 32px", alignItems: "center", gap: 6, width: MEDIA_WIDTH, minWidth: 0 }}>
-      <DirectLinkButton href={first?.web_url} label="Image 1" title={first?.file_name || "No image 1 synced"} icon={ImageIcon} />
-      <DirectLinkButton href={second?.web_url} label="Image 2" title={second?.file_name || "No image 2 synced"} icon={ImageIcon} />
-      <DirectLinkButton href={row.product_folder_web_url} label="Other images" title={row.product_folder_web_url ? `Open ${row.sku_id} product folder in OneDrive` : "Product folder not synced"} icon={FolderOpen} />
-      <DirectLinkButton href={row.supplier_link_web_url} label="Supplier link" title={row.supplier_link_name || "No supplier shortcut found"} icon={Link2} />
+    <div data-cg-product-media={row.sku_id} style={{ gridColumn: "1", gridRow: "1", display: "grid", gridTemplateColumns: "180px 32px", alignItems: "center", gap: 8, width: MEDIA_WIDTH, minWidth: 0 }}>
+      <ProductImagesButton href={row.product_folder_web_url} count={imageCount} />
       <button type="button" onClick={() => onSync(row)} disabled={!connected || syncing} title={!connected ? "Connect OneDrive in Expenses first" : `Sync files for ${row.sku_id}`}
         style={{ width: 32, height: 30, border: "1px solid rgba(50,56,42,.11)", borderRadius: 8, background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: !connected || syncing ? "not-allowed" : "pointer", opacity: !connected || syncing ? .45 : 1, color: "#4F594D" }}>
         <RefreshCw size={13} />
