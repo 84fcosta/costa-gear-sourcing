@@ -1,8 +1,11 @@
 import { supabase } from "../supabase";
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
+const REPOSITORY_KEY = "costa_gear";
 
-export const ONE_DRIVE_APP_FOLDER_SCOPE = "Files.ReadWrite.AppFolder";
+export const ONE_DRIVE_FILES_SCOPE = "Files.ReadWrite";
+// Backward-compatible export used by existing UI modules.
+export const ONE_DRIVE_APP_FOLDER_SCOPE = ONE_DRIVE_FILES_SCOPE;
 
 export const COSTA_GEAR_FOLDER_STRUCTURE = [
   { name: "00_ADMIN", children: ["Business_Legal", "Insurance_Compliance", "Agreements"] },
@@ -15,6 +18,7 @@ export const COSTA_GEAR_FOLDER_STRUCTURE = [
 ];
 
 let accessTokenProvider = null;
+let repositoryConfigCache = undefined;
 
 export function configureOneDriveAccessTokenProvider(provider) {
   accessTokenProvider = typeof provider === "function" ? provider : null;
@@ -31,15 +35,15 @@ export function isOneDriveConfigured() {
 export function getOneDriveConfiguration() {
   return {
     configured: isOneDriveConfigured(),
-    permission: ONE_DRIVE_APP_FOLDER_SCOPE,
-    storage: "OneDrive App Folder",
+    permission: ONE_DRIVE_FILES_SCOPE,
+    storage: "Shared Costa Gear OneDrive repository",
   };
 }
 
 async function getAccessToken() {
   if (!accessTokenProvider) {
     throw new Error(
-      "OneDrive authentication is not configured yet. Configure the Microsoft Entra client and provide a delegated access-token provider before uploading documents."
+      "OneDrive authentication is not configured yet. Connect Microsoft OneDrive before uploading documents."
     );
   }
 
@@ -74,6 +78,102 @@ async function graphRequest(pathOrUrl, options = {}) {
   return body;
 }
 
+async function loadRepositoryConfig(force = false) {
+  if (!force && repositoryConfigCache !== undefined) return repositoryConfigCache;
+  const { data, error } = await supabase
+    .from("onedrive_repository_config")
+    .select("repository_key,drive_id,root_item_id,root_name,root_web_url,owner_microsoft_account,configured_by,configured_at,updated_at")
+    .eq("repository_key", REPOSITORY_KEY)
+    .maybeSingle();
+  if (error) throw error;
+  repositoryConfigCache = data || null;
+  return repositoryConfigCache;
+}
+
+export async function getOneDriveRepositoryConfig(force = false) {
+  return loadRepositoryConfig(force);
+}
+
+function clearRepositoryConfigCache() {
+  repositoryConfigCache = undefined;
+}
+
+async function driveItemPath(itemId, suffix = "") {
+  const config = await loadRepositoryConfig();
+  if (config?.drive_id) {
+    return `/drives/${encodeURIComponent(config.drive_id)}/items/${encodeURIComponent(itemId)}${suffix}`;
+  }
+  return `/me/drive/items/${encodeURIComponent(itemId)}${suffix}`;
+}
+
+async function currentBootstrapAppFolder() {
+  return graphRequest("/me/drive/special/approot?$select=id,name,webUrl,parentReference,eTag,createdDateTime,lastModifiedDateTime,size,folder");
+}
+
+export async function registerCurrentAppFolderAsSharedRepository({ microsoftAccount = null } = {}) {
+  const existing = await loadRepositoryConfig(true);
+  if (existing) return existing;
+
+  const [root, drive, userResult] = await Promise.all([
+    currentBootstrapAppFolder(),
+    graphRequest("/me/drive?$select=id,driveType,owner"),
+    supabase.auth.getUser(),
+  ]);
+
+  if (!root?.id || !drive?.id) {
+    throw new Error("Unable to identify the current Costa Gear OneDrive repository.");
+  }
+
+  const payload = {
+    repository_key: REPOSITORY_KEY,
+    drive_id: drive.id,
+    root_item_id: root.id,
+    root_name: root.name || "COSTA GEAR",
+    root_web_url: root.webUrl || null,
+    owner_microsoft_account: microsoftAccount || null,
+    configured_by: userResult?.data?.user?.id || null,
+    configured_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("onedrive_repository_config")
+    .upsert(payload, { onConflict: "repository_key" })
+    .select()
+    .single();
+  if (error) throw error;
+  clearRepositoryConfigCache();
+  repositoryConfigCache = data;
+  return data;
+}
+
+export async function shareOneDriveRepositoryWithEmail(email) {
+  const recipient = String(email || "").trim();
+  if (!recipient) throw new Error("Enter a Microsoft account email to share the repository.");
+
+  const config = await loadRepositoryConfig(true);
+  if (!config?.drive_id || !config?.root_item_id) {
+    throw new Error("Register the shared Costa Gear repository before inviting collaborators.");
+  }
+
+  const response = await graphRequest(
+    `/drives/${encodeURIComponent(config.drive_id)}/items/${encodeURIComponent(config.root_item_id)}/invite`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipients: [{ email: recipient }],
+        message: "Costa Gear Operations shared repository access.",
+        requireSignIn: true,
+        sendInvitation: true,
+        roles: ["write"],
+      }),
+    }
+  );
+
+  return { email: recipient, permissions: response?.value || [] };
+}
+
 export function cleanOneDriveNamePart(value, fallback = "Document", maxLength = 56) {
   const cleaned = String(value || fallback)
     .normalize("NFKD")
@@ -86,11 +186,6 @@ export function cleanOneDriveNamePart(value, fallback = "Document", maxLength = 
     .slice(0, maxLength)
     .replace(/_+$/g, "");
   return cleaned || fallback;
-}
-
-function fileExtension(file) {
-  const match = String(file?.name || "").match(/\.([A-Za-z0-9]{1,10})$/);
-  return match ? `.${match[1].toLowerCase()}` : "";
 }
 
 function paddedNumber(value, width = 4) {
@@ -156,10 +251,8 @@ function governedFolderPath({ ownerType, record, fallbackYear }) {
 }
 
 async function findChildFolder(parentId, name) {
-  const response = await graphRequest(
-    `/me/drive/items/${encodeURIComponent(parentId)}/children?$select=id,name,folder&$top=200`
-  );
-  return (response?.value || []).find(
+  const children = await listOneDriveChildren(parentId);
+  return children.find(
     (item) => item?.folder && String(item.name).toLowerCase() === String(name).toLowerCase()
   ) || null;
 }
@@ -169,7 +262,8 @@ async function ensureChildFolder(parentId, name) {
   if (existing) return existing;
 
   try {
-    return await graphRequest(`/me/drive/items/${encodeURIComponent(parentId)}/children`, {
+    const path = await driveItemPath(parentId, "/children");
+    return await graphRequest(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -198,12 +292,20 @@ export async function ensureOneDriveFolderPath(parts) {
 }
 
 export async function getOneDriveAppFolder() {
-  return graphRequest("/me/drive/special/approot?$select=id,name,webUrl,parentReference,eTag,createdDateTime,lastModifiedDateTime,size,folder");
+  const config = await loadRepositoryConfig();
+  if (!config?.drive_id || !config?.root_item_id) return currentBootstrapAppFolder();
+  return graphRequest(
+    `/drives/${encodeURIComponent(config.drive_id)}/items/${encodeURIComponent(config.root_item_id)}?$select=id,name,webUrl,parentReference,eTag,createdDateTime,lastModifiedDateTime,size,folder`
+  );
 }
 
 export async function listOneDriveChildren(parentId) {
   const items = [];
-  let next = `/me/drive/items/${encodeURIComponent(parentId)}/children?$select=id,name,webUrl,size,eTag,createdDateTime,lastModifiedDateTime,parentReference,file,folder&$top=200`;
+  const firstPath = await driveItemPath(
+    parentId,
+    "/children?$select=id,name,webUrl,size,eTag,createdDateTime,lastModifiedDateTime,parentReference,file,folder&$top=200"
+  );
+  let next = firstPath;
 
   while (next) {
     const response = await graphRequest(next);
@@ -216,9 +318,8 @@ export async function listOneDriveChildren(parentId) {
 
 export async function getOneDriveItemContentHashes(itemId) {
   if (!itemId) throw new Error("A OneDrive item ID is required to read content hashes.");
-  const item = await graphRequest(
-    `/me/drive/items/${encodeURIComponent(itemId)}?$select=id,size,file`
-  );
+  const path = await driveItemPath(itemId, "?$select=id,size,file");
+  const item = await graphRequest(path);
   return {
     itemId: item?.id || itemId,
     sizeBytes: Number(item?.size || 0),
@@ -295,12 +396,17 @@ export async function scanOneDriveAppFolderTree() {
 }
 
 export async function testOneDriveConnection() {
-  const folder = await getOneDriveAppFolder();
+  const [folder, config] = await Promise.all([
+    getOneDriveAppFolder(),
+    loadRepositoryConfig(),
+  ]);
   return {
     connected: true,
     folderId: folder?.id || null,
-    folderName: folder?.name || "App Folder",
+    folderName: folder?.name || "Costa Gear repository",
     webUrl: folder?.webUrl || null,
+    sharedRepository: Boolean(config),
+    driveId: config?.drive_id || folder?.parentReference?.driveId || null,
   };
 }
 
@@ -310,7 +416,8 @@ export async function moveOneDriveItem({ itemId, folderPath, newName }) {
   if (!newName) throw new Error("A governed filename is required for migration.");
 
   const destination = await ensureFolderPath(folderPath);
-  const item = await graphRequest(`/me/drive/items/${encodeURIComponent(itemId)}`, {
+  const itemPath = await driveItemPath(itemId);
+  const item = await graphRequest(itemPath, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -338,8 +445,9 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
   const folderPath = governedFolderPath({ ownerType, record, fallbackYear: year });
   const destination = await ensureFolderPath(folderPath);
   const encodedName = encodeURIComponent(filename);
+  const uploadPath = await driveItemPath(destination.id, `:/${encodedName}:/content`);
 
-  const item = await graphRequest(`/me/drive/items/${encodeURIComponent(destination.id)}:/${encodedName}:/content`, {
+  const item = await graphRequest(uploadPath, {
     method: "PUT",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
@@ -359,7 +467,6 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
 
 export async function deleteBusinessDocumentFromOneDrive(itemId) {
   if (!itemId) return;
-  await graphRequest(`/me/drive/items/${encodeURIComponent(itemId)}`, {
-    method: "DELETE",
-  });
+  const path = await driveItemPath(itemId);
+  await graphRequest(path, { method: "DELETE" });
 }

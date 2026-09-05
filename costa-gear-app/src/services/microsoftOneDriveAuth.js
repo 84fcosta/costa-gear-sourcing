@@ -3,7 +3,7 @@ import {
   PublicClientApplication,
 } from "@azure/msal-browser";
 import {
-  ONE_DRIVE_APP_FOLDER_SCOPE,
+  ONE_DRIVE_FILES_SCOPE,
   clearOneDriveAccessTokenProvider,
   configureOneDriveAccessTokenProvider,
 } from "./oneDriveAppFolderService";
@@ -13,7 +13,7 @@ const CANONICAL_APP_ORIGIN = "https://ops.costagear.ca";
 const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || DEFAULT_MICROSOFT_CLIENT_ID).trim();
 const authority = (process.env.REACT_APP_MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/consumers").trim();
 const configuredRedirectUri = (process.env.REACT_APP_MICROSOFT_REDIRECT_URI || "").trim();
-const graphScopes = [ONE_DRIVE_APP_FOLDER_SCOPE];
+const graphScopes = [ONE_DRIVE_FILES_SCOPE];
 
 let clientPromise = null;
 
@@ -39,7 +39,7 @@ export function getMicrosoftOneDriveConfiguration() {
     clientIdPresent: Boolean(clientId),
     authority,
     redirectUri: redirectUri(),
-    permission: ONE_DRIVE_APP_FOLDER_SCOPE,
+    permission: ONE_DRIVE_FILES_SCOPE,
   };
 }
 
@@ -104,17 +104,34 @@ else clearOneDriveAccessTokenProvider();
 
 export async function getMicrosoftOneDriveAuthState() {
   if (!clientId) {
-    return { configured: false, connected: false, accountName: null, username: null };
+    return { configured: false, connected: false, needsConsent: false, accountName: null, username: null };
   }
 
   const client = await getClient();
   const account = currentAccount(client);
-  return {
-    configured: true,
-    connected: Boolean(account),
-    accountName: account?.name || null,
-    username: account?.username || null,
-  };
+  if (!account) {
+    return { configured: true, connected: false, needsConsent: false, accountName: null, username: null };
+  }
+
+  try {
+    await client.acquireTokenSilent({ account, scopes: graphScopes });
+    return {
+      configured: true,
+      connected: true,
+      needsConsent: false,
+      accountName: account.name || null,
+      username: account.username || null,
+    };
+  } catch (error) {
+    if (!interactionRequired(error)) throw error;
+    return {
+      configured: true,
+      connected: false,
+      needsConsent: true,
+      accountName: account.name || null,
+      username: account.username || null,
+    };
+  }
 }
 
 export async function connectMicrosoftOneDrive() {
@@ -141,6 +158,7 @@ export async function connectMicrosoftOneDrive() {
       return {
         configured: true,
         connected: true,
+        needsConsent: false,
         accountName: account.name || null,
         username: account.username || null,
       };
