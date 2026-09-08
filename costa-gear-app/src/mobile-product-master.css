@@ -3,7 +3,7 @@
 @media (max-width:680px) {
   .cg-mobile-product-master {
     display:block;
-    padding: 4px 4px 18px;
+    padding:4px 4px 18px;
   }
 
   .cg-mobile-product-master-head {
@@ -11,7 +11,7 @@
     align-items:center;
     justify-content:space-between;
     gap:12px;
-    margin: 2px 0 12px;
+    margin:2px 0 12px;
   }
 
   .cg-mobile-product-master-head h2 {
@@ -28,10 +28,7 @@
   }
 
   .cg-mobile-product-add,
-  .cg-mobile-product-controls button,
-  .cg-mobile-product-edit,
-  .cg-mobile-product-images,
-  .cg-mobile-product-view {
+  .cg-mobile-product-controls button {
     border:1px solid rgba(50,56,42,.12);
     border-radius:12px;
     font-weight:800;
@@ -45,7 +42,7 @@
     min-height:44px;
     padding:0 14px;
     border-color:rgba(114,122,48,.55);
-    color:white;
+    color:#fff;
     background:linear-gradient(180deg,#929A44,#747B31);
   }
 
@@ -61,9 +58,14 @@
     box-shadow:0 5px 16px rgba(28,39,24,.035);
   }
 
-  .cg-mobile-product-search svg { color:#6d7769; flex:0 0 auto; }
+  .cg-mobile-product-search svg {
+    color:#6d7769;
+    flex:0 0 auto;
+  }
+
   .cg-mobile-product-search input {
     width:100%;
+    min-width:0;
     border:0;
     outline:0;
     background:transparent;
@@ -82,6 +84,7 @@
   .cg-mobile-product-controls select,
   .cg-mobile-product-filter-panel select {
     width:100%;
+    min-width:0;
     min-height:44px;
     border:1px solid rgba(50,56,42,.13);
     border-radius:12px;
@@ -130,41 +133,40 @@
     font-weight:800;
   }
 
-  .cg-mobile-product-list { display:grid; gap:11px; }
+  .cg-mobile-product-list {
+    display:grid;
+    gap:12px;
+  }
 
-  .cg-mobile-product-card {
-    overflow:hidden;
+  /* Product Master card styles are deliberately namespaced to avoid
+     colliding with Product Cost Snapshot mobile cards. */
+  .cg-mobile-product-master .cg-mobile-master-card {
+    width:100%;
+    min-width:0;
+    display:block;
+    padding:15px;
     border:1px solid rgba(50,56,42,.11);
     border-radius:16px;
     background:#fff;
     box-shadow:0 5px 18px rgba(28,39,24,.045);
+    overflow:hidden;
   }
 
-  .cg-mobile-product-card-main {
-    appearance:none;
+  .cg-mobile-product-master .cg-mobile-master-card-head {
     width:100%;
-    border:0;
-    background:#fff;
-    padding:14px;
-    text-align:left;
-    color:#20251f;
-  }
-
-  .cg-mobile-product-card-top {
+    min-width:0;
     display:flex;
-    justify-content:space-between;
     align-items:center;
+    justify-content:space-between;
     gap:10px;
-    margin-bottom:9px;
+    margin-bottom:10px;
   }
 
-  .cg-mobile-product-card-top svg { color:#98a08f; flex:0 0 auto; }
-
-  .cg-mobile-product-sku {
-    flex:0 0 auto;
+  .cg-mobile-product-master .cg-mobile-master-sku {
     display:inline-flex;
     align-items:center;
     min-height:28px;
+    max-width:100%;
     padding:4px 9px;
     border-radius:8px;
     background:#f1f3e5;
@@ -178,146 +180,125 @@
     overflow-wrap:normal;
   }
 
-  .cg-mobile-product-name {
-    display:block;
-    font-size:16px;
-    line-height:1.28;
-    letter-spacing:-.01em;
-    overflow:visible;
-    white-space:normal;
-    word-break:normal;
+  .cg-mobile-product-master .cg-mobile-master-images-link {
+    flex:0 0 auto;
+    min-height:34px;
+    padding:0 9px;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    border:0;
+    border-radius:999px;
+    background:#f4f6f2;
+    color:#4e6a8e;
+    font-size:11.5px;
+    font-weight:800;
+    white-space:nowrap;
   }
 
-  .cg-mobile-product-detail-row {
+  .cg-mobile-product-master .cg-mobile-master-images-link:disabled {
+    color:#9aa29a;
+    opacity:.72;
+  }
+
+  .cg-mobile-product-master .cg-mobile-master-card h3 {
+    width:100%;
+    min-width:0;
+    margin:0;
+    color:#20251f;
+    font-size:16.5px;
+    line-height:1.3;
+    font-weight:850;
+    letter-spacing:-.015em;
+    white-space:normal;
+    word-break:normal;
+    overflow-wrap:break-word;
+  }
+
+  .cg-mobile-product-master .cg-mobile-master-fitment {
+    width:100%;
+    min-width:0;
     display:grid;
-    grid-template-columns:64px minmax(0,1fr);
-    gap:8px;
-    align-items:start;
-    margin-top:10px;
+    gap:4px;
+    margin-top:11px;
     padding-top:10px;
     border-top:1px solid rgba(50,56,42,.07);
   }
 
-  .cg-mobile-product-detail-row span,
-  .cg-mobile-product-detail-grid span,
-  .cg-mobile-product-commercial > div > span {
-    color:#788176;
+  .cg-mobile-product-master .cg-mobile-master-fitment > span,
+  .cg-mobile-product-master .cg-mobile-master-metrics span {
+    color:#7a8378;
     font-size:10px;
-    font-weight:800;
-    text-transform:uppercase;
+    font-weight:850;
     letter-spacing:.04em;
+    text-transform:uppercase;
   }
 
-  .cg-mobile-product-detail-row strong {
+  .cg-mobile-product-master .cg-mobile-master-fitment strong {
+    width:100%;
+    min-width:0;
     color:#5f695d;
     font-size:12.5px;
-    line-height:1.35;
+    line-height:1.4;
     font-weight:750;
     white-space:normal;
-    overflow:visible;
+    word-break:normal;
+    overflow-wrap:break-word;
   }
 
-  .cg-mobile-product-detail-grid {
-    display:grid;
-    grid-template-columns:minmax(0, .72fr) minmax(0, 1.28fr);
-    gap:8px;
-    margin-top:8px;
+  .cg-mobile-product-master .cg-mobile-master-tags {
+    width:100%;
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    margin-top:10px;
   }
 
-  .cg-mobile-product-detail-grid > div {
-    min-width:0;
-    display:grid;
-    gap:3px;
-    padding:8px 9px;
-    border-radius:10px;
-    background:#f7f8f4;
-  }
-
-  .cg-mobile-product-detail-grid strong {
-    color:#4f594d;
-    font-size:11.5px;
-    line-height:1.3;
-    font-weight:800;
-    white-space:normal;
-    overflow-wrap:anywhere;
-  }
-
-  .cg-mobile-product-commercial {
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto;
-    gap:10px;
+  .cg-mobile-product-master .cg-mobile-master-tags span {
+    max-width:100%;
+    min-height:25px;
+    display:inline-flex;
     align-items:center;
-    padding:11px 12px 11px 14px;
-    border-top:1px solid rgba(50,56,42,.08);
-    background:#fafbf8;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#f6f7f3;
+    color:#657064;
+    font-size:10.5px;
+    line-height:1.25;
+    font-weight:750;
+    white-space:normal;
   }
 
-  .cg-mobile-product-commercial > div {
+  .cg-mobile-product-master .cg-mobile-master-metrics {
+    width:100%;
     min-width:0;
     display:grid;
-    gap:2px;
+    grid-template-columns:minmax(0,1.7fr) minmax(72px,.65fr) minmax(72px,.65fr);
+    gap:8px;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid rgba(50,56,42,.08);
   }
 
-  .cg-mobile-product-commercial > div > strong {
-    color:#4d7d57;
-    font-size:14.5px;
+  .cg-mobile-product-master .cg-mobile-master-metrics > div {
+    min-width:0;
+    display:grid;
+    gap:4px;
+    align-content:start;
+  }
+
+  .cg-mobile-product-master .cg-mobile-master-metrics strong {
+    min-width:0;
+    color:#293127;
+    font-size:13px;
     line-height:1.25;
     font-weight:900;
     white-space:normal;
+    overflow-wrap:break-word;
   }
 
-  .cg-mobile-product-commercial small {
-    color:#727b70;
-    font-size:11px;
-  }
-
-  .cg-mobile-product-images {
-    min-height:43px;
-    padding:6px 10px;
-    background:#fff;
-    color:#4e6a8e;
-    flex-wrap:wrap;
-    row-gap:0;
-  }
-
-  .cg-mobile-product-images strong {
-    font-size:13px;
-    line-height:1;
-  }
-
-  .cg-mobile-product-images span {
-    width:100%;
-    margin-top:-1px;
-    color:#687268;
-    font-size:9.5px;
-    line-height:1;
-    text-align:center;
-  }
-
-  .cg-mobile-product-card-foot {
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto;
-    gap:8px;
-    padding:10px 12px 12px;
-    border-top:1px solid rgba(50,56,42,.07);
-    background:#fff;
-  }
-
-  .cg-mobile-product-view,
-  .cg-mobile-product-edit {
-    min-height:40px;
-    padding:0 12px;
-    background:#fff;
-  }
-
-  .cg-mobile-product-view {
-    justify-content:flex-start;
-    color:#747b31;
-    border-color:rgba(116,123,49,.22);
-  }
-
-  .cg-mobile-product-edit {
-    color:#343b32;
+  .cg-mobile-product-master .cg-mobile-master-metrics > div:first-child strong {
+    color:#4d7d57;
   }
 
   .cg-mobile-product-empty {
@@ -325,5 +306,15 @@
     text-align:center;
     color:#697267;
     font-size:14px;
+  }
+
+  @media (max-width:390px) {
+    .cg-mobile-product-master .cg-mobile-master-metrics {
+      grid-template-columns:minmax(0,1fr) minmax(0,.55fr);
+    }
+
+    .cg-mobile-product-master .cg-mobile-master-metrics > div:first-child {
+      grid-column:1 / -1;
+    }
   }
 }
