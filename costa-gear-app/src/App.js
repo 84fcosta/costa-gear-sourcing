@@ -12,7 +12,7 @@ import {
   Truck,
 } from "lucide-react";
 import BuyingDecisionWorkspace from "./components/BuyingDecisionWorkspace";
-import ReceivingInventoryWorkspace from "./components/ReceivingInventoryWorkspace";
+import ReceivingInventoryWorkspace from "./components/ResponsiveInventoryWorkspace";
 import OperationalDashboard from "./components/OperationalDashboard";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
