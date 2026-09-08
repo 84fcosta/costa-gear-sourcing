@@ -6,6 +6,7 @@ import { loadOperationalDashboardData, updateProductReorderPoint } from "../serv
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",oliveLight:"#A4AA55",green:"#4D7D57",red:"#B65145",amber:"#A87818",blue:"#4E6A8E",muted:"#647062",line:"#E0E3DB",soft:"#F4F5F1"};
 const salesConsumedStatuses=new Set(["Confirmed","Paid","Shipped","Completed"]);
 const salesOpenStatuses=new Set(["Confirmed","Paid","Shipped"]);
+const dashboardPeriods=["15D","1M","3M","6M","YTD","1Y","All"];
 const money=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0});
 const money2=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2});
 const number=v=>Number(v||0).toLocaleString("en-CA");
@@ -16,6 +17,19 @@ const latestByProduct=quotes=>{const map=new Map();for(const q of quotes){const 
 const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 const monthLabel=d=>d.toLocaleDateString("en-CA",{month:"short"});
 const orderDate=o=>o.sold_date||o.created_at;
+
+function salesWindow(period,now=new Date()){
+  const end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  let start;
+  if(period==="15D")start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-14);
+  else if(period==="1M")start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-29);
+  else if(period==="3M")start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-89);
+  else if(period==="6M")start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-179);
+  else if(period==="YTD")start=new Date(now.getFullYear(),0,1);
+  else if(period==="1Y")start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-364);
+  else start=new Date(0);
+  return {start,end};
+}
 
 function KpiCard({label,value,sub,tone="neutral",onClick}){
   return <button className={`cg-kpi-card tone-${tone}`} onClick={onClick} disabled={!onClick}>
@@ -70,7 +84,7 @@ function TopProductsChart({rows,mode,setMode}){
   const max=Math.max(1,...ranked.map(valueFor));
   return <>
     <div className="cg-mini-tabs" role="group" aria-label="Top product metric">
-      {[['revenue','Revenue'],['profit','Profit'],['units','Units']].map(([id,label])=><button key={id} className={mode===id?"active":""} onClick={()=>setMode(id)}>{label}</button>)}
+      {[["revenue","Revenue"],["profit","Profit"],["units","Units"]].map(([id,label])=><button key={id} className={mode===id?"active":""} onClick={()=>setMode(id)}>{label}</button>)}
     </div>
     <div className="cg-hbars">
       {!ranked.length&&<div className="cg-empty-chart">Sales history will populate this chart.</div>}
@@ -123,6 +137,7 @@ export default function OperationalDashboard({onNavigate}){
   const [savingId,setSavingId]=useState("");
   const [reorderDrafts,setReorderDrafts]=useState({});
   const [topMode,setTopMode]=useState("revenue");
+  const [dashboardPeriod,setDashboardPeriod]=useState("1M");
 
   const load=async()=>{setLoading(true);setError("");try{const d=await loadOperationalDashboardData();setData(d);setReorderDrafts(Object.fromEntries(d.products.map(p=>[p.id,String(p.reorder_point||0)])));}catch(e){setError(e?.message||"Unable to load dashboard.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
@@ -181,6 +196,8 @@ export default function OperationalDashboard({onNavigate}){
     const previousMonth=new Date(now.getFullYear(),now.getMonth()-1,1);
     const mtd=aggregateSales(monthStart,nextMonth);
     const previous=aggregateSales(previousMonth,monthStart);
+    const selectedWindow=salesWindow(dashboardPeriod,now);
+    const selectedSales=aggregateSales(selectedWindow.start,selectedWindow.end);
 
     const trend=[];
     for(let offset=5;offset>=0;offset--){
@@ -222,10 +239,10 @@ export default function OperationalDashboard({onNavigate}){
     activities.sort((a,b)=>new Date(b.date)-new Date(a.date));
 
     return {
-      mtd,previous,trend,inTransitUnits,openCommittedUnits,damagedUnits,actions:actions.slice(0,5),activities:activities.slice(0,5),
+      mtd,previous,selectedSales,trend,inTransitUnits,openCommittedUnits,damagedUnits,actions:actions.slice(0,5),activities:activities.slice(0,5),
       stale,incomplete,lowStock,reorderUnset,activeOrders,productsById,poItemById,receiptById,
     };
-  },[data,performance]);
+  },[data,performance,dashboardPeriod]);
 
   const saveReorder=async productId=>{setSavingId(productId);setError("");try{await updateProductReorderPoint(productId,reorderDrafts[productId]);await load();}catch(e){setError(e?.message||"Unable to save reorder point.");}finally{setSavingId("");}};
 
@@ -236,6 +253,8 @@ export default function OperationalDashboard({onNavigate}){
   const inventoryRows=[...performance.productMetrics].sort((a,b)=>a.product.sku_id.localeCompare(b.product.sku_id));
   const inventoryValue=performance.summary.totalInventoryValueCad;
   const availableUnits=performance.summary.totalAvailableUnits;
+  const selectedSales=dashboard.selectedSales;
+  const transactionText=`${number(selectedSales.sales)} completed transaction${selectedSales.sales===1?"":"s"}`;
 
   return <div className="cg-dashboard-root">
     <div className="cg-dashboard-sentinel" aria-hidden="true"/>
@@ -247,10 +266,17 @@ export default function OperationalDashboard({onNavigate}){
         <button onClick={load}>Refresh</button>
       </div>
 
+      <div role="group" aria-label="Sales dashboard period" style={{display:"flex",gap:6,flexWrap:"wrap",margin:"2px 0 12px"}}>
+        {dashboardPeriods.map(period=>{
+          const active=dashboardPeriod===period;
+          return <button key={period} type="button" aria-pressed={active} onClick={()=>setDashboardPeriod(period)} style={{border:`1px solid ${active?C.oliveDark:C.line}`,background:active?C.oliveDark:"#fff",color:active?"#fff":C.ink,borderRadius:8,padding:"6px 11px",fontSize:10.5,fontWeight:850,cursor:"pointer",minWidth:42}}>{period}</button>;
+        })}
+      </div>
+
       <div className="cg-kpi-grid">
-        <KpiCard label="Sales MTD" value={money(dashboard.mtd.revenue)} sub={`${number(dashboard.mtd.units)} units · ${deltaText(dashboard.mtd.revenue,dashboard.previous.revenue)}`} tone="good" onClick={()=>onNavigate?.("sales")}/>
-        <KpiCard label="Gross Profit MTD" value={money(dashboard.mtd.profit)} sub={`${number(dashboard.mtd.sales)} completed transaction${dashboard.mtd.sales===1?"":"s"}`} tone={dashboard.mtd.profit>=0?"good":"bad"} onClick={()=>onNavigate?.("sales")}/>
-        <KpiCard label="Gross Margin" value={pct(dashboard.mtd.margin)} sub="Realized margin after COGS and direct selling costs" tone={dashboard.mtd.margin===null?"neutral":dashboard.mtd.margin>=40?"good":"warn"} onClick={()=>onNavigate?.("performance")}/>
+        <KpiCard label={`Sales ${dashboardPeriod}`} value={money(selectedSales.revenue)} sub={`${number(selectedSales.units)} units · ${transactionText}`} tone="good" onClick={()=>onNavigate?.("sales")}/>
+        <KpiCard label={`Gross Profit ${dashboardPeriod}`} value={money(selectedSales.profit)} sub={transactionText} tone={selectedSales.profit>=0?"good":"bad"} onClick={()=>onNavigate?.("sales")}/>
+        <KpiCard label={`Gross Margin ${dashboardPeriod}`} value={pct(selectedSales.margin)} sub="Realized margin after COGS and direct selling costs" tone={selectedSales.margin===null?"neutral":selectedSales.margin>=40?"good":"warn"} onClick={()=>onNavigate?.("performance")}/>
         <KpiCard label="Inventory Value" value={money(inventoryValue)} sub={`${number(availableUnits)} sellable units available`} tone="neutral" onClick={()=>onNavigate?.("receiving")}/>
         <KpiCard label="Available Units" value={number(availableUnits)} sub={`${number(dashboard.openCommittedUnits)} units currently reserved`} tone="info" onClick={()=>onNavigate?.("receiving")}/>
         <KpiCard label="Units in Transit" value={number(dashboard.inTransitUnits)} sub={`${dashboard.activeOrders.length} open buying decision / PO${dashboard.activeOrders.length===1?"":"s"}`} tone="info" onClick={()=>onNavigate?.("shipments")}/>
