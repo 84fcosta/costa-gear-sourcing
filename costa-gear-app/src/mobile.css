@@ -1,110 +1,590 @@
-/* Mobile-specific shell adjustments. Keep the logo readable while making every module reachable. */
+/* Costa Gear mobile UX layer.
+   Desktop remains governed by brand.css. This file only adds tablet and phone behavior. */
+
+.cg-mobile-bottom-nav,
+.cg-mobile-more-backdrop {
+  display: none;
+}
+
+@media (min-width: 681px) and (max-width: 1024px) {
+  .cg-page-content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .cg-dashboard-shell {
+    gap: 12px !important;
+  }
+
+  .cg-dashboard-grid-primary,
+  .cg-dashboard-grid-secondary,
+  .cg-dashboard-grid-bottom {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cg-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 680px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Compact top shell. Primary module navigation moves to the bottom bar. */
   .cg-topbar {
-    height: 118px !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 420 !important;
   }
 
   .cg-topbar-inner {
-    position: relative !important;
-    display: block !important;
-    height: 100% !important;
-    padding: 0 8px !important;
+    height: 66px !important;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
   }
 
   .cg-logo-button {
-    position: absolute !important;
-    top: 3px !important;
-    left: 10px !important;
-    height: 61px !important;
-    z-index: 2 !important;
+    position: static !important;
+    height: 60px !important;
+    flex: 0 0 auto !important;
   }
 
   .cg-brand-logo {
-    width: 126px !important;
-    max-height: 60px !important;
+    width: 118px !important;
+    max-height: 56px !important;
     object-fit: contain !important;
+  }
+
+  .cg-primary-nav {
+    display: none !important;
   }
 
   .cg-account-control {
     top: 12px !important;
-    right: 9px !important;
+    right: 10px !important;
+    z-index: 430 !important;
   }
 
   .cg-account-control button {
     min-height: 38px !important;
-    padding: 8px 11px !important;
-    font-size: 11px !important;
-  }
-
-  .cg-primary-nav {
-    position: absolute !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    height: 54px !important;
-    margin: 0 !important;
-    padding: 0 6px !important;
-    gap: 2px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-  }
-
-  .cg-primary-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .cg-nav-button {
-    min-width: 64px !important;
-    width: 64px !important;
-    flex: 0 0 64px !important;
-    padding: 4px 5px !important;
-    gap: 2px !important;
-    font-size: 8.5px !important;
-    scroll-snap-align: start;
-  }
-
-  .cg-nav-button svg {
-    width: 18px !important;
-    height: 18px !important;
-  }
-
-  .cg-nav-label {
-    display: flex !important;
-    height: auto !important;
-    gap: 3px !important;
-    line-height: 1 !important;
-  }
-
-  .cg-nav-label > span {
-    display: block !important;
-    max-width: 50px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 8px !important;
-  }
-
-  .cg-nav-step {
-    width: 14px !important;
-    height: 14px !important;
-    font-size: 7px !important;
-  }
-
-  .cg-nav-divider {
-    flex: 0 0 1px;
-    height: 30px;
-    align-self: center;
-    background: rgba(255,255,255,.15);
+    padding: 7px 10px !important;
+    font-size: 10px !important;
   }
 
   .cg-main-area {
-    min-height: calc(100vh - 118px) !important;
+    min-height: calc(100vh - 66px) !important;
+    padding-bottom: 8px !important;
   }
 
   .cg-page-header {
-    padding-top: 17px !important;
+    padding: 13px 14px 11px !important;
+  }
+
+  .cg-page-eyebrow {
+    font-size: 8.5px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .cg-page-header h1,
+  .cg-main-area h1 {
+    font-size: 21px !important;
+    line-height: 1.15 !important;
+  }
+
+  .cg-page-header p {
+    margin-top: 4px !important;
+    font-size: 10.5px !important;
+    line-height: 1.4 !important;
+  }
+
+  .cg-page-content {
+    padding: 10px 10px 18px !important;
+  }
+
+  .cg-page-header-with-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .cg-page-header-actions {
+    width: 100% !important;
+    align-items: stretch !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .cg-page-header-actions .cg-text-button {
+    width: 100% !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+  }
+
+  .cg-page-header-action-message,
+  .cg-page-header-action-account {
+    grid-column: 1 / -1;
+    max-width: none !important;
+    text-align: left !important;
+    font-size: 9.5px !important;
+  }
+
+  /* Bottom navigation is thumb-friendly and always available. */
+  .cg-mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 600;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: calc(66px + env(safe-area-inset-bottom, 0px));
+    padding: 5px 4px env(safe-area-inset-bottom, 0px);
+    border-top: 1px solid rgba(164, 170, 85, .28);
+    background: rgba(9, 10, 8, .98);
+    box-shadow: 0 -7px 24px rgba(0, 0, 0, .18);
+    backdrop-filter: blur(14px);
+  }
+
+  .cg-mobile-bottom-nav button {
+    appearance: none;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #bfc5bc;
+    min-width: 0;
+    min-height: 54px;
+    padding: 5px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 8.5px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .cg-mobile-bottom-nav button.active {
+    color: #fff;
+    background: linear-gradient(180deg, rgba(146, 154, 68, .94), rgba(116, 123, 49, .98));
+  }
+
+  .cg-mobile-bottom-nav button svg {
+    flex: 0 0 auto;
+  }
+
+  /* More sheet for lower-frequency modules. */
+  .cg-mobile-more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 700;
+    display: flex;
+    align-items: flex-end;
+    justify-content: stretch;
+    background: rgba(7, 8, 7, .48);
+    backdrop-filter: blur(3px);
+  }
+
+  .cg-mobile-more-sheet {
+    width: 100%;
+    max-height: 78vh;
+    padding: 8px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+    border-radius: 20px 20px 0 0;
+    background: #fff;
+    box-shadow: 0 -20px 50px rgba(0, 0, 0, .22);
+    animation: cg-mobile-sheet-in .18s ease-out;
+  }
+
+  @keyframes cg-mobile-sheet-in {
+    from { transform: translateY(18px); opacity: .7; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .cg-mobile-sheet-handle {
+    width: 42px;
+    height: 4px;
+    margin: 2px auto 12px;
+    border-radius: 999px;
+    background: #d8ddd3;
+  }
+
+  .cg-mobile-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .cg-mobile-sheet-head > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .cg-mobile-sheet-head strong {
+    font-size: 18px;
+    color: var(--cg-ink);
+  }
+
+  .cg-mobile-sheet-head span {
+    font-size: 10.5px;
+    color: var(--cg-muted);
+  }
+
+  .cg-mobile-sheet-head button {
+    min-height: 40px;
+    padding: 7px 12px;
+    border: 1px solid var(--cg-line);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--cg-ink);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .cg-mobile-sheet-links {
+    display: grid;
+    gap: 8px;
+  }
+
+  .cg-mobile-sheet-links > button {
+    width: 100%;
+    min-height: 66px;
+    padding: 11px 12px;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    border: 1px solid var(--cg-line);
+    border-radius: 12px;
+    background: #fafbf8;
+    color: var(--cg-ink);
+  }
+
+  .cg-mobile-sheet-links > button.active {
+    border-color: rgba(133, 140, 56, .65);
+    background: #f2f4e7;
+  }
+
+  .cg-mobile-sheet-links > button span {
+    display: grid;
+    gap: 2px;
+  }
+
+  .cg-mobile-sheet-links > button strong {
+    font-size: 13px;
+  }
+
+  .cg-mobile-sheet-links > button small {
+    font-size: 10px;
+    color: var(--cg-muted);
+  }
+
+  /* Shared mobile controls. */
+  .cg-segmented {
+    width: 100% !important;
+    overflow-x: auto !important;
+    justify-content: flex-start !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cg-segmented button {
+    flex: 1 0 auto !important;
+    min-height: 40px !important;
+  }
+
+  .cg-text-button,
+  .cg-dashboard-toolbar button,
+  .cg-mini-tabs button {
+    min-height: 40px !important;
+  }
+
+  /* Dashboard phone layout. */
+  .cg-dashboard-shell {
+    gap: 10px !important;
+  }
+
+  .cg-dashboard-toolbar {
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .cg-dashboard-toolbar > div {
+    gap: 3px !important;
+  }
+
+  .cg-dashboard-toolbar strong {
+    font-size: 14px !important;
+  }
+
+  .cg-dashboard-toolbar span {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  .cg-dashboard-toolbar button {
+    flex: 0 0 auto;
+    padding: 7px 10px !important;
+  }
+
+  .cg-dashboard-shell > [role="group"][aria-label="Sales dashboard period"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -2px 2px !important;
+    padding: 1px 2px 4px !important;
+  }
+
+  .cg-dashboard-shell > [role="group"][aria-label="Sales dashboard period"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cg-dashboard-shell > [role="group"][aria-label="Sales dashboard period"] button {
+    flex: 0 0 auto;
+    min-width: 46px !important;
+    min-height: 38px !important;
+    padding: 7px 11px !important;
+    font-size: 10.5px !important;
+  }
+
+  .cg-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .cg-kpi-card {
+    min-height: 102px !important;
+    padding: 11px !important;
+    border-radius: 12px !important;
+    gap: 3px !important;
+  }
+
+  .cg-kpi-card .cg-kpi-label {
+    font-size: 8.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  .cg-kpi-card strong {
+    font-size: 20px !important;
+  }
+
+  .cg-kpi-card .cg-kpi-sub {
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+  }
+
+  .cg-dashboard-grid,
+  .cg-dashboard-grid-primary,
+  .cg-dashboard-grid-secondary,
+  .cg-dashboard-grid-bottom {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .cg-dashboard-panel {
+    padding: 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .cg-panel-head {
+    margin-bottom: 10px !important;
+  }
+
+  .cg-panel-head h3 {
+    font-size: 14px !important;
+  }
+
+  .cg-panel-eyebrow {
+    font-size: 8px !important;
+  }
+
+  .cg-chart-wrap {
+    min-height: 198px !important;
+  }
+
+  .cg-chart-legend {
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    margin: 0 0 -3px !important;
+    font-size: 9px !important;
+  }
+
+  .cg-sales-chart {
+    width: 100% !important;
+    height: 198px !important;
+  }
+
+  .cg-mini-tabs {
+    display: flex !important;
+    width: fit-content !important;
+    max-width: 100%;
+    overflow-x: auto;
+    margin-bottom: 10px !important;
+  }
+
+  .cg-mini-tabs button {
+    padding: 7px 10px !important;
+  }
+
+  .cg-hbars {
+    gap: 12px !important;
+  }
+
+  .cg-hbar-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto 8px !important;
+    gap: 5px 10px !important;
+  }
+
+  .cg-hbar-label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .cg-hbar-label strong {
+    font-size: 10.5px !important;
+  }
+
+  .cg-hbar-label span {
+    font-size: 9px !important;
+  }
+
+  .cg-hbar-value {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    font-size: 10.5px !important;
+  }
+
+  .cg-hbar-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .cg-inventory-health {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .cg-donut {
+    width: 112px !important;
+    height: 112px !important;
+    margin: 0 auto !important;
+  }
+
+  .cg-donut:after {
+    width: 70px !important;
+    height: 70px !important;
+  }
+
+  .cg-donut strong {
+    font-size: 21px !important;
+  }
+
+  .cg-donut-legend {
+    width: 100% !important;
+  }
+
+  .cg-margin-chart {
+    gap: 11px !important;
+  }
+
+  .cg-margin-target {
+    font-size: 8.5px !important;
+  }
+
+  .cg-margin-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto 8px !important;
+    gap: 5px 10px !important;
+  }
+
+  .cg-margin-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .cg-margin-value {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .cg-margin-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .cg-action-row,
+  .cg-activity-list button {
+    min-height: 56px !important;
+    padding-top: 9px !important;
+    padding-bottom: 9px !important;
+  }
+
+  .cg-action-row small,
+  .cg-activity-list button small {
+    white-space: normal !important;
+    line-height: 1.35 !important;
+  }
+
+  .cg-dashboard-details summary {
+    min-height: 48px !important;
+    padding: 11px 12px !important;
+  }
+
+  .cg-dashboard-details-body {
+    padding: 0 10px 10px !important;
+  }
+
+  .cg-dashboard-table-wrap {
+    max-height: 320px !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cg-dashboard-table-wrap table {
+    min-width: 620px !important;
+  }
+
+  /* Generic embedded workspaces remain usable until their card layouts arrive in later phases. */
+  .cg-module-embedded [style*="grid-template-columns: 300px 1fr"],
+  .cg-module-embedded [style*="grid-template-columns: 290px 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cg-module-embedded [style*="grid-template-columns: 300px 1fr"] > div:first-child,
+  .cg-module-embedded [style*="grid-template-columns: 290px 1fr"] > div:first-child {
+    position: relative !important;
+    top: auto !important;
+    max-height: 250px !important;
+  }
+
+  .cg-main-area [style*="grid-template-columns: repeat(4"],
+  .cg-main-area [style*="grid-template-columns: repeat(5"],
+  .cg-main-area [style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr !important;
   }
 }
