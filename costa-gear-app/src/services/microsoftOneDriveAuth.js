@@ -2,6 +2,7 @@ import {
   InteractionRequiredAuthError,
   PublicClientApplication,
 } from "@azure/msal-browser";
+import { supabase } from "../supabase";
 import {
   clearOneDriveAccessTokenProvider,
   configureOneDriveAccessTokenProvider,
@@ -11,12 +12,14 @@ const DEFAULT_MICROSOFT_CLIENT_ID = "27622880-a323-4be9-a1e7-8f23ed948f7c";
 const CANONICAL_APP_ORIGIN = "https://ops.costagear.ca";
 const ONE_DRIVE_APP_FOLDER_SCOPE = "Files.ReadWrite.AppFolder";
 const LOGIN_HINT_STORAGE_KEY = "cg:microsoft-login-hint";
+const BACKEND_FUNCTION = "onedrive-auth";
 const clientId = (process.env.REACT_APP_MICROSOFT_CLIENT_ID || DEFAULT_MICROSOFT_CLIENT_ID).trim();
 const authority = (process.env.REACT_APP_MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/consumers").trim();
 const configuredRedirectUri = (process.env.REACT_APP_MICROSOFT_REDIRECT_URI || "").trim();
 const graphScopes = [ONE_DRIVE_APP_FOLDER_SCOPE];
 
 let clientPromise = null;
+let backendTokenCache = null;
 
 function isLocalDevelopment() {
   if (typeof window === "undefined") return false;
@@ -86,6 +89,68 @@ function interactionRequired(error) {
   );
 }
 
+async function invokeBackend(action, payload = {}) {
+  const { data, error } = await supabase.functions.invoke(BACKEND_FUNCTION, {
+    body: { action, ...payload },
+  });
+
+  if (error) {
+    const backendError = new Error(error.message || "OneDrive backend request failed.");
+    backendError.backendUnavailable = true;
+    throw backendError;
+  }
+
+  if (data?.error) {
+    const backendError = new Error(data.error);
+    backendError.code = data.code || null;
+    backendError.needsConsent = Boolean(data.needsConsent);
+    throw backendError;
+  }
+
+  return data || {};
+}
+
+async function getBackendStatus() {
+  try {
+    return await invokeBackend("status");
+  } catch (_) {
+    return null;
+  }
+}
+
+function normalizeBackendState(state) {
+  return {
+    configured: Boolean(state?.configured),
+    connected: Boolean(state?.connected),
+    needsConsent: Boolean(state?.needsConsent),
+    accountName: state?.accountName || null,
+    username: state?.username || null,
+    permission: state?.permission || ONE_DRIVE_APP_FOLDER_SCOPE,
+    backend: true,
+    lastError: state?.lastError || null,
+  };
+}
+
+async function acquireBackendToken() {
+  if (
+    backendTokenCache?.accessToken &&
+    Number(backendTokenCache.expiresAt || 0) > Date.now() + 60_000
+  ) {
+    return backendTokenCache.accessToken;
+  }
+
+  const token = await invokeBackend("token");
+  if (!token?.accessToken) {
+    throw new Error("OneDrive backend did not return a valid access token.");
+  }
+
+  backendTokenCache = {
+    accessToken: token.accessToken,
+    expiresAt: Number(token.expiresAt || (Date.now() + Number(token.expiresIn || 3600) * 1000)),
+  };
+  return backendTokenCache.accessToken;
+}
+
 async function restoreMicrosoftSession(client) {
   if (!isTopLevelWindow()) return null;
   const hint = readLoginHint();
@@ -112,6 +177,7 @@ export function getMicrosoftOneDriveConfiguration() {
     authority,
     redirectUri: redirectUri(),
     permission: ONE_DRIVE_APP_FOLDER_SCOPE,
+    persistentBackend: true,
   };
 }
 
@@ -149,11 +215,13 @@ function currentAccount(client) {
   return account;
 }
 
-async function acquireOneDriveToken() {
+async function acquireBrowserToken() {
   const client = await getClient();
   let account = currentAccount(client);
   if (!account) account = await restoreMicrosoftSession(client);
-  if (!account) throw new Error("OneDrive authorization needs to be renewed. Use Reconnect OneDrive in the Expenses module.");
+  if (!account) {
+    throw new Error("OneDrive authorization needs to be renewed. Use Reconnect OneDrive in the Expenses module.");
+  }
 
   try {
     const response = await client.acquireTokenSilent({ account, scopes: graphScopes });
@@ -167,10 +235,18 @@ async function acquireOneDriveToken() {
   }
 }
 
+async function acquireOneDriveToken() {
+  const backend = await getBackendStatus();
+  if (backend?.configured && backend?.connected) {
+    return acquireBackendToken();
+  }
+  return acquireBrowserToken();
+}
+
 if (clientId) configureOneDriveAccessTokenProvider(acquireOneDriveToken);
 else clearOneDriveAccessTokenProvider();
 
-export async function getMicrosoftOneDriveAuthState() {
+async function getBrowserAuthState() {
   if (!clientId) {
     return { configured: false, connected: false, needsConsent: false, accountName: null, username: null };
   }
@@ -186,6 +262,7 @@ export async function getMicrosoftOneDriveAuthState() {
       needsConsent: Boolean(hint),
       accountName: null,
       username: hint || null,
+      backend: false,
     };
   }
 
@@ -198,6 +275,7 @@ export async function getMicrosoftOneDriveAuthState() {
       needsConsent: false,
       accountName: account?.name || null,
       username: account?.username || readLoginHint() || null,
+      backend: false,
     };
   } catch (error) {
     if (!interactionRequired(error)) throw error;
@@ -207,11 +285,18 @@ export async function getMicrosoftOneDriveAuthState() {
       needsConsent: true,
       accountName: account.name || null,
       username: account.username || readLoginHint() || null,
+      backend: false,
     };
   }
 }
 
-export async function connectMicrosoftOneDrive() {
+export async function getMicrosoftOneDriveAuthState() {
+  const backend = await getBackendStatus();
+  if (backend?.configured) return normalizeBackendState(backend);
+  return getBrowserAuthState();
+}
+
+async function connectBrowserOneDrive() {
   if (
     typeof window !== "undefined" &&
     !isLocalDevelopment() &&
@@ -239,6 +324,7 @@ export async function connectMicrosoftOneDrive() {
         needsConsent: false,
         accountName: account?.name || null,
         username: account?.username || readLoginHint() || null,
+        backend: false,
       };
     } catch (error) {
       if (!interactionRequired(error)) throw error;
@@ -261,4 +347,36 @@ export async function connectMicrosoftOneDrive() {
   });
 
   return { redirecting: true };
+}
+
+export async function connectMicrosoftOneDrive() {
+  if (
+    typeof window !== "undefined" &&
+    !isLocalDevelopment() &&
+    window.location.origin !== CANONICAL_APP_ORIGIN
+  ) {
+    window.location.replace(`${CANONICAL_APP_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return { redirecting: true };
+  }
+
+  const backend = await getBackendStatus();
+  if (backend?.configured) {
+    if (backend.connected) return normalizeBackendState(backend);
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("cg:return-workspace", "expenses");
+    }
+
+    const authorization = await invokeBackend("authorize", { returnUrl: returnPage() });
+    if (!authorization?.authorizeUrl) {
+      throw new Error("OneDrive backend did not return an authorization URL.");
+    }
+
+    if (typeof window !== "undefined") {
+      window.location.assign(authorization.authorizeUrl);
+    }
+    return { redirecting: true };
+  }
+
+  return connectBrowserOneDrive();
 }
