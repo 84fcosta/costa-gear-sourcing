@@ -9,6 +9,7 @@ import SourcingCostIntegrityGuard from "./SourcingCostIntegrityGuard";
 import MobileProductCostSnapshot from "./MobileProductCostSnapshot";
 import MobileProductMaster from "./MobileProductMaster";
 import MobileSuppliersWorkspace from "./MobileSuppliersWorkspace";
+import DesktopProductSnapshotControls from "./DesktopProductSnapshotControls";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
@@ -138,6 +139,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     {view === "master" && <>
       {showLegacyMaster && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /></>}
       <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
+      <DesktopProductSnapshotControls active={showLegacyMaster} />
       <MobileProductMaster active={mobileLegacyTab === "products"} />
       <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />
       {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>}
