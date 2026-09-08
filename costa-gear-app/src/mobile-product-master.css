@@ -156,9 +156,10 @@
     margin-bottom:7px;
   }
 
-  .cg-mobile-product-card-top svg { color:#98a08f; }
+  .cg-mobile-product-card-top svg { color:#98a08f; flex:0 0 auto; }
 
   .cg-mobile-product-sku {
+    flex:0 0 auto;
     display:inline-flex;
     align-items:center;
     min-height:26px;
@@ -170,6 +171,9 @@
     font-size:13px;
     font-weight:900;
     letter-spacing:.01em;
+    white-space:nowrap;
+    word-break:keep-all;
+    overflow-wrap:normal;
   }
 
   .cg-mobile-product-card-main > strong {
