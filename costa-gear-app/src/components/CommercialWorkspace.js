@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import SalesWorkspace from "./ResponsiveSalesWorkspace";
 import CommercialInsightsWorkspace from "./CommercialInsightsWorkspace";
 import "../mobile-secondary-workspaces.css";
+import "../mobile-secondary-fixes.css";
 
 function resolveInitial(initialView){
   if(initialView==="orders") return { view:"orders", insight:"overview" };
