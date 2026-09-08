@@ -59,22 +59,61 @@ function SalesProfitChart({series}){
   const step=plotW/Math.max(1,series.length);
   const barW=Math.min(56,step*.48);
   const points=series.map((x,i)=>`${left+step*(i+.5)},${y(x.profit)}`).join(" ");
+
+  const mobileCount=3;
+  const [mobileEnd,setMobileEnd]=useState(series.length);
+  useEffect(()=>setMobileEnd(series.length),[series.length]);
+  const safeEnd=Math.min(series.length,Math.max(Math.min(mobileCount,series.length),mobileEnd));
+  const mobileStart=Math.max(0,safeEnd-mobileCount);
+  const mobileSeries=series.slice(mobileStart,safeEnd);
+  const mobileMax=Math.max(1,...mobileSeries.flatMap(x=>[Math.abs(Number(x.revenue||0)),Math.abs(Number(x.profit||0))]));
+  const mobileBarHeight=value=>Math.max(Number(value||0)===0?2:14,Math.abs(Number(value||0))/mobileMax*136);
+  const canPrev=mobileStart>0;
+  const canNext=safeEnd<series.length;
+  const mobileRangeLabel=mobileSeries.length?`${mobileSeries[0].label} - ${mobileSeries[mobileSeries.length-1].label}`:"";
+
   return <div className="cg-chart-wrap">
-    <div className="cg-chart-legend"><span><i className="revenue"/>Revenue</span><span><i className="profit"/>Gross Profit</span></div>
-    <svg className="cg-sales-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue and gross profit for the last six months">
-      <line x1={left} x2={width-right} y1={zeroY} y2={zeroY} stroke="#D8DDD2" strokeWidth="1"/>
-      <line x1={left} x2={width-right} y1={top} y2={top} stroke="#EEF0EA" strokeWidth="1"/>
-      <text x={left} y={12} fontSize="10" fill={C.muted}>{money(max)}</text>
-      {series.map((x,i)=>{
-        const cx=left+step*(i+.5),barTop=y(x.revenue),barHeight=Math.max(1,zeroY-barTop);
-        return <g key={x.key}>
-          <rect x={cx-barW/2} y={barTop} width={barW} height={barHeight} rx="5" fill={C.olive} opacity=".82"/>
-          <text x={cx} y={height-17} textAnchor="middle" fontSize="10" fontWeight="700" fill={C.muted}>{x.label}</text>
-        </g>;
-      })}
-      {series.length>1&&<polyline points={points} fill="none" stroke={C.ink} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
-      {series.map((x,i)=><circle key={`p-${x.key}`} cx={left+step*(i+.5)} cy={y(x.profit)} r="4" fill="#fff" stroke={C.ink} strokeWidth="2"/>)}
-    </svg>
+    <div className="cg-sales-chart-desktop">
+      <div className="cg-chart-legend"><span><i className="revenue"/>Revenue</span><span><i className="profit"/>Gross Profit</span></div>
+      <svg className="cg-sales-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue and gross profit for the last six months">
+        <line x1={left} x2={width-right} y1={zeroY} y2={zeroY} stroke="#D8DDD2" strokeWidth="1"/>
+        <line x1={left} x2={width-right} y1={top} y2={top} stroke="#EEF0EA" strokeWidth="1"/>
+        <text x={left} y={12} fontSize="10" fill={C.muted}>{money(max)}</text>
+        {series.map((x,i)=>{
+          const cx=left+step*(i+.5),barTop=y(x.revenue),barHeight=Math.max(1,zeroY-barTop);
+          return <g key={x.key}>
+            <rect x={cx-barW/2} y={barTop} width={barW} height={barHeight} rx="5" fill={C.olive} opacity=".82"/>
+            <text x={cx} y={height-17} textAnchor="middle" fontSize="10" fontWeight="700" fill={C.muted}>{x.label}</text>
+          </g>;
+        })}
+        {series.length>1&&<polyline points={points} fill="none" stroke={C.ink} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
+        {series.map((x,i)=><circle key={`p-${x.key}`} cx={left+step*(i+.5)} cy={y(x.profit)} r="4" fill="#fff" stroke={C.ink} strokeWidth="2"/>)}
+      </svg>
+    </div>
+
+    <div className="cg-sales-chart-mobile" aria-label="Monthly sales and gross profit comparison">
+      <div className="cg-mobile-sales-window">
+        <button type="button" onClick={()=>canPrev&&setMobileEnd(end=>Math.max(mobileCount,end-1))} disabled={!canPrev} aria-label="Show previous three-month window">‹</button>
+        <strong>{mobileRangeLabel}</strong>
+        <button type="button" onClick={()=>canNext&&setMobileEnd(end=>Math.min(series.length,end+1))} disabled={!canNext} aria-label="Show next three-month window">›</button>
+      </div>
+      <div className="cg-mobile-sales-legend"><span><i className="sales"/>Sales</span><span><i className="profit"/>Gross Profit</span></div>
+      <div className="cg-mobile-sales-bars">
+        {mobileSeries.map(x=><div className="cg-mobile-sales-month" key={`mobile-${x.key}`}>
+          <div className="cg-mobile-sales-pair">
+            <div className="cg-mobile-sales-bar-cell sales">
+              <span>{money(x.revenue)}</span>
+              <i style={{height:`${mobileBarHeight(x.revenue)}px`}}/>
+            </div>
+            <div className={`cg-mobile-sales-bar-cell profit ${Number(x.profit||0)<0?"negative":""}`}>
+              <span>{money(x.profit)}</span>
+              <i style={{height:`${mobileBarHeight(x.profit)}px`}}/>
+            </div>
+          </div>
+          <strong className="cg-mobile-sales-month-label">{x.label}</strong>
+        </div>)}
+      </div>
+    </div>
   </div>;
 }
 
@@ -282,7 +321,7 @@ export default function OperationalDashboard({onNavigate}){
       </div>
 
       <div className="cg-dashboard-grid cg-dashboard-grid-primary">
-        <Panel title="Sales & Gross Profit" eyebrow="Last 6 months" className="cg-sales-panel"><SalesProfitChart series={dashboard.trend}/></Panel>
+        <Panel title="Sales & Gross Profit" eyebrow="Monthly sales" className="cg-sales-panel"><SalesProfitChart series={dashboard.trend}/></Panel>
         <Panel title="Top Products" eyebrow="Completed sales"><TopProductsChart rows={performance.productMetrics} mode={topMode} setMode={setTopMode}/></Panel>
       </div>
 
