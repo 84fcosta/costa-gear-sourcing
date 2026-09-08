@@ -186,6 +186,19 @@
     color: var(--cg-muted);
   }
 
+  /* Overview is fully replaced by the mobile Product Cost Snapshot. */
+  .cg-sourcing-mobile-dashboard .cg-legacy-embedded {
+    display: none !important;
+  }
+
+  /* Keep the mobile snapshot exclusive to Overview. */
+  .cg-sourcing-mobile-products .cg-mobile-product-snapshot,
+  .cg-sourcing-mobile-suppliers .cg-mobile-product-snapshot,
+  .cg-sourcing-mobile-quotes .cg-mobile-product-snapshot,
+  .cg-sourcing-mobile-export .cg-mobile-product-snapshot {
+    display: none !important;
+  }
+
   /* Hide the legacy 5-tab sourcing navigator on phones. The mobile navigator above controls it. */
   .cg-legacy-embedded > div > div:nth-child(2) {
     display: none !important;
