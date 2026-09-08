@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, ChevronRight, Pencil, Plus } from "lucide-react";
+import { Search, SlidersHorizontal, ChevronRight, Pencil, Plus, Images } from "lucide-react";
 import { supabase } from "../supabase";
 import "../mobile-product-master.css";
 
@@ -28,6 +28,7 @@ const findLegacyProductCard = sku => {
 export default function MobileProductMaster({ active }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("cg-mobile-product-sort") || "sku-asc");
@@ -39,13 +40,15 @@ export default function MobileProductMaster({ active }) {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [{ data: productRows }, { data: quoteRows }] = await Promise.all([
+      const [{ data: productRows }, { data: quoteRows }, { data: imageRows }] = await Promise.all([
         supabase.from("products").select("id,sku_id,name,product_type,material,fitment,category,updated_at").order("sku_id"),
         supabase.from("quotes").select("id,product_id,unit_price"),
+        supabase.from("product_images").select("id,product_id"),
       ]);
       if (!cancelled) {
         setProducts(productRows || []);
         setQuotes(quoteRows || []);
+        setImages(imageRows || []);
         setLoading(false);
       }
     };
@@ -80,13 +83,15 @@ export default function MobileProductMaster({ active }) {
   const enriched = useMemo(() => products.map(product => {
     const productQuotes = quotes.filter(q => q.product_id === product.id);
     const prices = productQuotes.map(q => Number(q.unit_price)).filter(Number.isFinite);
+    const imageCount = images.filter(image => image.product_id === product.id).length;
     return {
       ...product,
       quoteCount: productQuotes.length,
+      imageCount,
       minPrice: prices.length ? Math.min(...prices) : null,
       maxPrice: prices.length ? Math.max(...prices) : null,
     };
-  }), [products, quotes]);
+  }), [products, quotes, images]);
 
   const categories = useMemo(() => [...new Set(products.map(p => p.category).filter(Boolean))].sort(), [products]);
 
@@ -122,6 +127,13 @@ export default function MobileProductMaster({ active }) {
     const card = findLegacyProductCard(sku);
     const button = Array.from(card?.querySelectorAll("button") || []).find(b => String(b.textContent || "").trim() === "Edit");
     button?.click();
+  };
+
+  const triggerImages = sku => {
+    const card = findLegacyProductCard(sku);
+    const button = Array.from(card?.querySelectorAll("button") || []).find(b => /images?/i.test(String(b.textContent || "")));
+    if (button) button.click();
+    else triggerDetail(sku);
   };
 
   const triggerDetail = sku => {
@@ -180,18 +192,30 @@ export default function MobileProductMaster({ active }) {
                 <span className="cg-mobile-product-sku">{product.sku_id}</span>
                 <ChevronRight size={20}/>
               </div>
-              <strong>{product.name || "Unnamed product"}</strong>
-              <span className="cg-mobile-product-fitment">{product.fitment || "Fitment TBD"}</span>
-              <div className="cg-mobile-product-meta">
-                <span>{product.material || "Material TBD"}</span>
-                <span>{product.category || "No category"}</span>
+              <strong className="cg-mobile-product-name">{product.name || "Unnamed product"}</strong>
+              <div className="cg-mobile-product-detail-row">
+                <span>Fitment</span>
+                <strong>{product.fitment || "TBD"}</strong>
+              </div>
+              <div className="cg-mobile-product-detail-grid">
+                <div><span>Material</span><strong>{product.material || "TBD"}</strong></div>
+                <div><span>Category</span><strong>{product.category || "Not set"}</strong></div>
               </div>
             </button>
-            <div className="cg-mobile-product-card-foot">
+
+            <div className="cg-mobile-product-commercial">
               <div>
-                <span className="cg-mobile-product-price">{range}</span>
+                <span>Cost / Quotes</span>
+                <strong>{range}</strong>
                 <small>{product.quoteCount} {product.quoteCount === 1 ? "quote" : "quotes"}</small>
               </div>
+              <button type="button" className="cg-mobile-product-images" onClick={() => triggerImages(product.sku_id)}>
+                <Images size={17}/><strong>{product.imageCount}</strong><span>{product.imageCount === 1 ? "Image" : "Images"}</span>
+              </button>
+            </div>
+
+            <div className="cg-mobile-product-card-foot">
+              <button type="button" className="cg-mobile-product-view" onClick={() => triggerDetail(product.sku_id)}>View details</button>
               <button type="button" className="cg-mobile-product-edit" onClick={() => triggerEdit(product.sku_id)}><Pencil size={16}/>Edit</button>
             </div>
           </article>;
