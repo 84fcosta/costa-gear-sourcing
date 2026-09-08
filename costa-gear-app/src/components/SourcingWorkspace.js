@@ -12,6 +12,7 @@ import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
 import "../mobile-refinements.css";
+import "../mobile-secondary-fixes.css";
 
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
 
@@ -113,65 +114,27 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
 
     <div className="cg-sourcing-mobile-nav" aria-label="Sourcing mobile navigation">
-      <button
-        type="button"
-        className={view === "master" && mobileLegacyTab === "dashboard" ? "active" : ""}
-        onClick={() => selectLegacyTab("dashboard")}
-      >Overview</button>
-      <button
-        type="button"
-        className={view === "master" && mobileLegacyTab === "products" ? "active" : ""}
-        onClick={() => selectLegacyTab("products")}
-      >Products</button>
+      <button type="button" className={view === "master" && mobileLegacyTab === "dashboard" ? "active" : ""} onClick={() => selectLegacyTab("dashboard")}>Overview</button>
+      <button type="button" className={view === "master" && mobileLegacyTab === "products" ? "active" : ""} onClick={() => selectLegacyTab("products")}>Products</button>
       <div className="cg-sourcing-mobile-more-wrap">
-        <button
-          type="button"
-          className={mobileMoreActive || mobileMoreOpen ? "active" : ""}
-          aria-expanded={mobileMoreOpen}
-          onClick={() => setMobileMoreOpen(open => !open)}
-        >More</button>
+        <button type="button" className={mobileMoreActive || mobileMoreOpen ? "active" : ""} aria-expanded={mobileMoreOpen} onClick={() => setMobileMoreOpen(open => !open)}>More</button>
         {mobileMoreOpen && <div className="cg-sourcing-mobile-more-menu">
-          <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}>
-            <strong>Supplier Quotations</strong><span>Import and manage formal supplier quotations</span>
-          </button>
-          <button type="button" className={view === "analysis" ? "active" : ""} onClick={() => selectSourcingView("analysis")}>
-            <strong>Decision Lab</strong><span>Compare quotes and sourcing decisions</span>
-          </button>
-          <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}>
-            <strong>Suppliers</strong><span>Supplier directory and sourcing history</span>
-          </button>
-          <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}>
-            <strong>Quotes</strong><span>Full quote register and filters</span>
-          </button>
-          <button type="button" className={view === "master" && mobileLegacyTab === "export" ? "active" : ""} onClick={() => selectLegacyTab("export")}>
-            <strong>Export / RFQ</strong><span>Exports and RFQ builder</span>
-          </button>
+          <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}><strong>Supplier Quotations</strong><span>Import and manage formal supplier quotations</span></button>
+          <button type="button" className={view === "analysis" ? "active" : ""} onClick={() => selectSourcingView("analysis")}><strong>Decision Lab</strong><span>Compare quotes and sourcing decisions</span></button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}><strong>Suppliers</strong><span>Supplier directory and sourcing history</span></button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}><strong>Quotes</strong><span>Full quote register and filters</span></button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "export" ? "active" : ""} onClick={() => selectLegacyTab("export")}><strong>Export / RFQ</strong><span>Exports and RFQ builder</span></button>
         </div>}
       </div>
     </div>
 
     <div className="cg-subworkspace-header">
       <div className="cg-subworkspace-inner">
-        <div>
-          <div className="cg-subworkspace-title">Sourcing</div>
-          <div className="cg-subworkspace-copy">Maintain products and suppliers, import complete supplier quotations, then compare and buy.</div>
-        </div>
-        <div className="cg-segmented">
-          <button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button>
-          <button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button>
-          <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button>
-        </div>
+        <div><div className="cg-subworkspace-title">Sourcing</div><div className="cg-subworkspace-copy">Maintain products and suppliers, import complete supplier quotations, then compare and buy.</div></div>
+        <div className="cg-segmented"><button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button><button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button><button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button></div>
       </div>
     </div>
-    {view === "master" && <>
-      <SourcingDensityPolish />
-      <SourcingSortControls />
-      <SourcingCostIntegrityGuard />
-      <ProductMediaStrip />
-      <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
-      <MobileProductMaster active={mobileLegacyTab === "products"} />
-      <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>
-    </>}
+    {view === "master" && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /><MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} /><MobileProductMaster active={mobileLegacyTab === "products"} /><div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div></>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
