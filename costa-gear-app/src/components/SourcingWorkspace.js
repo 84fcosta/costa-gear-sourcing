@@ -20,7 +20,6 @@ const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m
 const legacyTabLabels = {
   dashboard: "Dashboard",
   products: "Products (",
-  suppliers: "Suppliers (",
   quotes: "Quotes (",
   export: "Export / RFQ",
 };
@@ -32,18 +31,8 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileLegacyTab, setMobileLegacyTab] = useState("dashboard");
   const [pendingLegacyTab, setPendingLegacyTab] = useState(null);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 680px)").matches);
 
   useEffect(() => setView(initialView === "images" ? "master" : initialView), [initialView]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const media = window.matchMedia("(max-width: 680px)");
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener?.("change", sync);
-    return () => media.removeEventListener?.("change", sync);
-  }, []);
 
   useEffect(() => {
     if (view !== "master" || !pendingLegacyTab) return undefined;
@@ -77,7 +66,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
   const selectLegacyTab = tab => {
     setMobileMoreOpen(false);
     setMobileLegacyTab(tab);
-    setPendingLegacyTab(tab === "suppliers" && isMobile ? null : tab);
+    setPendingLegacyTab(tab === "suppliers" ? null : tab);
     if (view !== "master") setView("master");
   };
 
@@ -120,7 +109,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
   };
 
   const mobileMoreActive = view !== "master" || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
-  const showLegacyMaster = !(isMobile && mobileLegacyTab === "suppliers");
+  const showLegacyMaster = mobileLegacyTab !== "suppliers";
 
   return <div className={`cg-sourcing-workspace cg-sourcing-mobile-${mobileLegacyTab}`}>
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
@@ -146,7 +135,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
         <div className="cg-segmented"><button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button><button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button><button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button></div>
       </div>
     </div>
-    {view === "master" && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /><MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} /><MobileProductMaster active={mobileLegacyTab === "products"} /><MobileSuppliersWorkspace active={isMobile && mobileLegacyTab === "suppliers"} />{showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>}</>}
+    {view === "master" && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /><MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} /><MobileProductMaster active={mobileLegacyTab === "products"} /><MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />{showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>}</>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
