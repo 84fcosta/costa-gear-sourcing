@@ -7,7 +7,7 @@
     display: grid !important;
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
     gap: 3px !important;
-    margin: 2px 0 8px !important;
+    margin: 2px 0 10px !important;
     padding: 0 !important;
     overflow: visible !important;
   }
@@ -20,22 +20,22 @@
     flex: none !important;
     font-size: 9.5px !important;
     line-height: 1 !important;
-    border-radius: 8px !important;
+    border-radius: 9px !important;
     white-space: nowrap !important;
   }
 
-  /* KPI cards: large, readable cards in a horizontal swipe carousel. */
+  /* KPI cards: executive-style swipe carousel. */
   .cg-kpi-grid {
     width: 100% !important;
     display: flex !important;
     grid-template-columns: none !important;
-    gap: 10px !important;
+    gap: 11px !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding: 0 18px 7px 0 !important;
+    padding: 2px 22px 10px 1px !important;
     margin: 0 !important;
     scroll-snap-type: x mandatory !important;
-    scroll-padding-inline: 0 !important;
+    scroll-padding-inline: 1px !important;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -46,31 +46,64 @@
   }
 
   .cg-kpi-card {
-    flex: 0 0 calc(100% - 22px) !important;
-    width: calc(100% - 22px) !important;
-    min-width: calc(100% - 22px) !important;
-    min-height: 96px !important;
-    padding: 13px 15px !important;
+    --cg-kpi-accent: var(--cg-olive-dark);
+    --cg-kpi-soft: #f3f5e9;
+    position: relative !important;
+    overflow: hidden !important;
+    flex: 0 0 calc(100% - 24px) !important;
+    width: calc(100% - 24px) !important;
+    min-width: calc(100% - 24px) !important;
+    min-height: 112px !important;
+    padding: 18px 18px 16px !important;
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto !important;
     grid-template-areas:
       "label value"
       "sub value" !important;
-    column-gap: 14px !important;
-    row-gap: 4px !important;
+    column-gap: 18px !important;
+    row-gap: 8px !important;
     align-items: center !important;
     text-align: left !important;
     scroll-snap-align: start !important;
     scroll-snap-stop: always;
-    border-radius: 13px !important;
+    border: 1px solid color-mix(in srgb, var(--cg-kpi-accent) 22%, var(--cg-line)) !important;
+    border-radius: 17px !important;
+    background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, var(--cg-kpi-soft) 100%) !important;
+    box-shadow: 0 10px 26px rgba(24, 30, 22, .08) !important;
   }
+
+  .cg-kpi-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 5px;
+    background: var(--cg-kpi-accent);
+  }
+
+  .cg-kpi-card:nth-child(1) { --cg-kpi-accent: #4d7d57; --cg-kpi-soft: #eef6f0; }
+  .cg-kpi-card:nth-child(2) { --cg-kpi-accent: #3e6848; --cg-kpi-soft: #edf4ef; }
+  .cg-kpi-card:nth-child(3) { --cg-kpi-accent: #a87818; --cg-kpi-soft: #fbf4e6; }
+  .cg-kpi-card:nth-child(4) { --cg-kpi-accent: #353b35; --cg-kpi-soft: #f0f2ef; }
+  .cg-kpi-card:nth-child(5) { --cg-kpi-accent: #4e6a8e; --cg-kpi-soft: #eef3f8; }
+  .cg-kpi-card:nth-child(6) { --cg-kpi-accent: #b06b2b; --cg-kpi-soft: #fbf0e7; }
 
   .cg-kpi-card .cg-kpi-label {
     grid-area: label !important;
+    justify-self: start !important;
     align-self: end !important;
-    font-size: 13px !important;
-    line-height: 1.2 !important;
-    letter-spacing: .025em !important;
+    display: inline-flex !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    padding: 5px 8px !important;
+    border-radius: 999px !important;
+    background: var(--cg-kpi-soft) !important;
+    color: var(--cg-kpi-accent) !important;
+    font-size: 12.5px !important;
+    line-height: 1.15 !important;
+    letter-spacing: .035em !important;
+    font-weight: 900 !important;
   }
 
   .cg-kpi-card > strong {
@@ -78,16 +111,112 @@
     align-self: center !important;
     justify-self: end !important;
     margin: 0 !important;
-    font-size: 30px !important;
-    line-height: 1 !important;
+    font-size: 35px !important;
+    line-height: .95 !important;
+    letter-spacing: -.04em !important;
     white-space: nowrap !important;
+    color: var(--cg-kpi-accent) !important;
   }
 
   .cg-kpi-card .cg-kpi-sub {
     grid-area: sub !important;
     align-self: start !important;
     max-width: 100% !important;
-    font-size: 13.5px !important;
-    line-height: 1.3 !important;
+    font-size: 14px !important;
+    line-height: 1.35 !important;
+    color: #5f685e !important;
+  }
+
+  /* Mobile Sales & Gross Profit: compact card with a much larger usable plot. */
+  .cg-sales-panel {
+    min-height: 0 !important;
+    padding: 16px 16px 13px !important;
+    overflow: hidden !important;
+    border-radius: 17px !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcf8 100%) !important;
+    box-shadow: 0 9px 24px rgba(24, 30, 22, .07) !important;
+  }
+
+  .cg-sales-panel .cg-panel-head {
+    margin-bottom: 9px !important;
+  }
+
+  .cg-sales-panel .cg-panel-eyebrow {
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+    letter-spacing: .08em !important;
+  }
+
+  .cg-sales-panel .cg-panel-head h3 {
+    margin-top: 3px !important;
+    font-size: 20px !important;
+    line-height: 1.12 !important;
+  }
+
+  .cg-sales-panel .cg-chart-wrap {
+    min-height: 0 !important;
+    height: auto !important;
+    display: grid !important;
+    gap: 6px !important;
+    padding: 0 !important;
+  }
+
+  .cg-sales-panel .cg-chart-legend {
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 7px !important;
+    margin: 0 0 2px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #586257 !important;
+  }
+
+  .cg-sales-panel .cg-chart-legend span {
+    min-height: 29px !important;
+    padding: 5px 9px !important;
+    border: 1px solid #e4e8df !important;
+    border-radius: 999px !important;
+    background: #f7f8f4 !important;
+  }
+
+  .cg-sales-panel .cg-chart-legend i.revenue {
+    width: 11px !important;
+    height: 11px !important;
+    border-radius: 3px !important;
+  }
+
+  .cg-sales-panel .cg-chart-legend i.profit {
+    width: 17px !important;
+    height: 3px !important;
+  }
+
+  .cg-sales-panel .cg-sales-chart {
+    display: block !important;
+    width: 100% !important;
+    height: 168px !important;
+    min-height: 168px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .cg-sales-panel .cg-sales-chart text {
+    font-size: 12px !important;
+    font-weight: 750 !important;
+    fill: #596358 !important;
+  }
+
+  .cg-sales-panel .cg-sales-chart rect {
+    opacity: .96 !important;
+    filter: drop-shadow(0 3px 4px rgba(80, 88, 45, .15));
+  }
+
+  .cg-sales-panel .cg-sales-chart polyline {
+    stroke-width: 4 !important;
+    filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .18));
+  }
+
+  .cg-sales-panel .cg-sales-chart circle {
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .12));
   }
 }
