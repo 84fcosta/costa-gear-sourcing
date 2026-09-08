@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import PerformanceWorkspace from "./PerformanceWorkspace";
-import DemandPlanningWorkspace from "./DemandPlanningWorkspace";
+import PerformanceWorkspace from "./ResponsivePerformanceWorkspace";
+import DemandPlanningWorkspace from "./ResponsiveDemandPlanningWorkspace";
 import PricingIntelligenceWorkspace from "./PricingIntelligenceWorkspace";
 import PricingMatrixSortControls from "./PricingMatrixSortControls";
 import PricingMatrixBulkSaveControls from "./PricingMatrixBulkSaveControls";
