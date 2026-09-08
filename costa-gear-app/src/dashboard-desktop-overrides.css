@@ -45,32 +45,32 @@
 
   .cg-panel-head h3 {
     margin-top: 2px !important;
-    font-size: 18px !important;
+    font-size: 19px !important;
     line-height: 1.18 !important;
   }
 
   .cg-panel-eyebrow {
-    font-size: 10.5px;
+    font-size: 12px;
     line-height: 1.2;
     letter-spacing: .08em;
   }
 
-  /* Dashboard summary cards remain dense, but no longer spreadsheet-small. */
-  .cg-dashboard-toolbar strong { font-size: 15px; }
-  .cg-dashboard-toolbar span { font-size: 11.5px; }
+  /* Dashboard summary cards remain dense, but are comfortably readable on desktop. */
+  .cg-dashboard-toolbar strong { font-size: 16px; }
+  .cg-dashboard-toolbar span { font-size: 13px; }
   .cg-dashboard-toolbar button,
-  .cg-text-button { font-size: 11.5px; }
+  .cg-text-button { font-size: 12.5px; }
 
   .cg-kpi-card {
     min-height: 118px;
     padding: 16px 17px;
-    gap: 5px;
+    gap: 6px;
   }
 
-  .cg-kpi-card .cg-kpi-label { font-size: 10.5px; }
-  .cg-kpi-card > strong { font-size: 25px; }
+  .cg-kpi-card .cg-kpi-label { font-size: 11.5px; }
+  .cg-kpi-card > strong { font-size: 26px; }
   .cg-kpi-card .cg-kpi-sub {
-    font-size: 11.5px;
+    font-size: 13.5px;
     line-height: 1.4;
   }
 
@@ -100,8 +100,8 @@
   .cg-mobile-sales-window strong {
     text-align: center;
     color: #343b34;
-    font-size: 14px;
-    font-weight: 850;
+    font-size: 15px;
+    font-weight: 800;
   }
 
   .cg-mobile-sales-window button {
@@ -124,8 +124,8 @@
     gap: 18px;
     margin-bottom: 9px;
     color: #535d52;
-    font-size: 12px;
-    font-weight: 800;
+    font-size: 13px;
+    font-weight: 700;
   }
 
   .cg-mobile-sales-legend span {
@@ -182,9 +182,9 @@
   }
 
   .cg-mobile-sales-bar-cell span {
-    font-size: 11px;
+    font-size: 12.5px;
     line-height: 1;
-    font-weight: 850;
+    font-weight: 500;
     color: #343b34;
     white-space: nowrap;
   }
@@ -205,16 +205,16 @@
     display: block;
     text-align: center;
     color: #414941;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.1;
-    font-weight: 900;
+    font-weight: 800;
   }
 
   /* Improve readability across the remaining cards. */
   .cg-mini-tabs { margin-bottom: 14px; }
   .cg-mini-tabs button {
-    padding: 7px 10px;
-    font-size: 11px;
+    padding: 7px 11px;
+    font-size: 12.5px;
   }
 
   .cg-hbars { gap: 13px; }
@@ -222,9 +222,12 @@
     grid-template-columns: minmax(120px, 1.15fr) minmax(75px, .9fr) 62px;
     gap: 8px;
   }
-  .cg-hbar-label strong { font-size: 11.5px; }
-  .cg-hbar-label span { font-size: 10.5px; }
-  .cg-hbar-value { font-size: 11.5px; }
+  .cg-hbar-label strong { font-size: 13.5px; }
+  .cg-hbar-label span {
+    font-size: 12.5px;
+    line-height: 1.28;
+  }
+  .cg-hbar-value { font-size: 13.5px; }
   .cg-hbar-track { height: 9px; }
 
   .cg-inventory-health {
@@ -240,20 +243,23 @@
     width: 76px;
     height: 76px;
   }
-  .cg-donut strong { font-size: 27px; }
-  .cg-donut span { font-size: 10px; }
-  .cg-donut-legend span { font-size: 11px; }
-  .cg-donut-legend strong { font-size: 12px; }
+  .cg-donut strong { font-size: 28px; }
+  .cg-donut span { font-size: 11.5px; }
+  .cg-donut-legend span { font-size: 13px; }
+  .cg-donut-legend strong { font-size: 13.5px; }
 
   .cg-margin-chart { gap: 13px; }
-  .cg-margin-target { font-size: 10px; }
+  .cg-margin-target { font-size: 12px; }
   .cg-margin-row {
     grid-template-columns: minmax(115px, 1.15fr) minmax(105px, 1fr) 54px;
     gap: 8px;
   }
-  .cg-margin-name strong { font-size: 11.5px; }
-  .cg-margin-name span { font-size: 10.5px; }
-  .cg-margin-value { font-size: 11.5px; }
+  .cg-margin-name strong { font-size: 13.5px; }
+  .cg-margin-name span {
+    font-size: 12.5px;
+    line-height: 1.28;
+  }
+  .cg-margin-value { font-size: 14px; }
   .cg-margin-track,
   .cg-margin-track i { height: 10px; }
 
@@ -263,15 +269,15 @@
     padding-bottom: 12px;
   }
   .cg-action-row strong,
-  .cg-activity-list button strong { font-size: 11.5px; }
+  .cg-activity-list button strong { font-size: 13.5px; }
   .cg-action-row small,
   .cg-activity-list button small {
-    font-size: 10.5px;
-    line-height: 1.35;
+    font-size: 12.5px;
+    line-height: 1.4;
   }
-  .cg-activity-list time { font-size: 10.5px; }
+  .cg-activity-list time { font-size: 12.5px; }
   .cg-empty-chart,
-  .cg-empty-state { font-size: 11.5px; }
+  .cg-empty-state { font-size: 13px; }
 }
 
 @media (min-width: 1181px) {
