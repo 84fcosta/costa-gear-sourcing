@@ -1,13 +1,17 @@
 /* Final mobile dashboard overrides. Loaded after the shared app styles. */
 
+.cg-sales-chart-mobile {
+  display: none;
+}
+
 @media (max-width: 680px) {
   /* Period selector: all seven options stay visible at once. */
   .cg-dashboard-shell > [role="group"][aria-label="Sales dashboard period"] {
     width: 100% !important;
     display: grid !important;
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    gap: 3px !important;
-    margin: 2px 0 10px !important;
+    gap: 4px !important;
+    margin: 4px 0 13px !important;
     padding: 0 !important;
     overflow: visible !important;
   }
@@ -15,27 +19,27 @@
   .cg-dashboard-shell > [role="group"][aria-label="Sales dashboard period"] button {
     width: 100% !important;
     min-width: 0 !important;
-    min-height: 34px !important;
+    min-height: 35px !important;
     padding: 0 1px !important;
     flex: none !important;
-    font-size: 9.5px !important;
+    font-size: 10px !important;
     line-height: 1 !important;
     border-radius: 9px !important;
     white-space: nowrap !important;
   }
 
-  /* KPI cards: executive-style swipe carousel. */
+  /* KPI carousel: the active card centers and intentionally reveals its neighbors. */
   .cg-kpi-grid {
     width: 100% !important;
     display: flex !important;
     grid-template-columns: none !important;
-    gap: 11px !important;
+    gap: 12px !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding: 2px 22px 10px 1px !important;
-    margin: 0 !important;
+    padding: 3px 6% 12px !important;
+    margin: 0 -0% 2px !important;
     scroll-snap-type: x mandatory !important;
-    scroll-padding-inline: 1px !important;
+    scroll-padding-inline: 6% !important;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -47,42 +51,55 @@
 
   .cg-kpi-card {
     --cg-kpi-accent: var(--cg-olive-dark);
-    --cg-kpi-soft: #f3f5e9;
+    --cg-kpi-soft: #f5f7ee;
     position: relative !important;
     overflow: hidden !important;
-    flex: 0 0 calc(100% - 24px) !important;
-    width: calc(100% - 24px) !important;
-    min-width: calc(100% - 24px) !important;
-    min-height: 112px !important;
-    padding: 18px 18px 16px !important;
+    flex: 0 0 88% !important;
+    width: 88% !important;
+    min-width: 88% !important;
+    min-height: 118px !important;
+    padding: 18px 18px 17px !important;
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto !important;
     grid-template-areas:
       "label value"
       "sub value" !important;
-    column-gap: 18px !important;
+    column-gap: 16px !important;
     row-gap: 8px !important;
     align-items: center !important;
     text-align: left !important;
-    scroll-snap-align: start !important;
+    scroll-snap-align: center !important;
     scroll-snap-stop: always;
-    border: 1px solid color-mix(in srgb, var(--cg-kpi-accent) 22%, var(--cg-line)) !important;
-    border-radius: 17px !important;
-    background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, var(--cg-kpi-soft) 100%) !important;
-    box-shadow: 0 10px 26px rgba(24, 30, 22, .08) !important;
+    border: 1px solid color-mix(in srgb, var(--cg-kpi-accent) 20%, #dfe3da) !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: 0 9px 22px rgba(24, 30, 22, .07) !important;
   }
 
   .cg-kpi-card::before {
     content: "";
     position: absolute;
     left: 0;
-    right: 0;
     top: 0;
-    height: 5px;
+    bottom: 0;
+    width: 5px;
     background: var(--cg-kpi-accent);
   }
 
-  .cg-kpi-card:nth-child(1) { --cg-kpi-accent: #4d7d57; --cg-kpi-soft: #eef6f0; }
+  .cg-kpi-card::after {
+    content: "";
+    position: absolute;
+    right: -28px;
+    bottom: -40px;
+    width: 125px;
+    height: 125px;
+    border-radius: 50%;
+    background: var(--cg-kpi-soft);
+    opacity: .68;
+    pointer-events: none;
+  }
+
+  .cg-kpi-card:nth-child(1) { --cg-kpi-accent: #4d7d57; --cg-kpi-soft: #edf6ef; }
   .cg-kpi-card:nth-child(2) { --cg-kpi-accent: #3e6848; --cg-kpi-soft: #edf4ef; }
   .cg-kpi-card:nth-child(3) { --cg-kpi-accent: #a87818; --cg-kpi-soft: #fbf4e6; }
   .cg-kpi-card:nth-child(4) { --cg-kpi-accent: #353b35; --cg-kpi-soft: #f0f2ef; }
@@ -90,28 +107,32 @@
   .cg-kpi-card:nth-child(6) { --cg-kpi-accent: #b06b2b; --cg-kpi-soft: #fbf0e7; }
 
   .cg-kpi-card .cg-kpi-label {
+    position: relative;
+    z-index: 1;
     grid-area: label !important;
     justify-self: start !important;
     align-self: end !important;
-    display: inline-flex !important;
-    width: fit-content !important;
+    display: block !important;
+    width: auto !important;
     max-width: 100% !important;
-    padding: 5px 8px !important;
-    border-radius: 999px !important;
-    background: var(--cg-kpi-soft) !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
     color: var(--cg-kpi-accent) !important;
-    font-size: 12.5px !important;
-    line-height: 1.15 !important;
-    letter-spacing: .035em !important;
+    font-size: 13px !important;
+    line-height: 1.18 !important;
+    letter-spacing: .04em !important;
     font-weight: 900 !important;
   }
 
   .cg-kpi-card > strong {
+    position: relative;
+    z-index: 1;
     grid-area: value !important;
     align-self: center !important;
     justify-self: end !important;
     margin: 0 !important;
-    font-size: 35px !important;
+    font-size: 37px !important;
     line-height: .95 !important;
     letter-spacing: -.04em !important;
     white-space: nowrap !important;
@@ -119,21 +140,23 @@
   }
 
   .cg-kpi-card .cg-kpi-sub {
+    position: relative;
+    z-index: 1;
     grid-area: sub !important;
     align-self: start !important;
     max-width: 100% !important;
-    font-size: 14px !important;
+    font-size: 14.5px !important;
     line-height: 1.35 !important;
-    color: #5f685e !important;
+    color: #596258 !important;
   }
 
-  /* Mobile Sales & Gross Profit. Do not squeeze a 720px SVG into the phone. */
+  /* Sales and Gross Profit: mobile gets a true three-month grouped-bar view. */
   .cg-sales-panel {
     min-height: 0 !important;
-    padding: 16px 14px 12px !important;
+    padding: 17px 15px 15px !important;
     overflow: hidden !important;
-    border-radius: 17px !important;
-    background: linear-gradient(180deg, #ffffff 0%, #fbfcf8 100%) !important;
+    border-radius: 18px !important;
+    background: #fff !important;
     box-shadow: 0 9px 24px rgba(24, 30, 22, .07) !important;
   }
 
@@ -149,91 +172,320 @@
 
   .cg-sales-panel .cg-panel-head h3 {
     margin-top: 3px !important;
-    font-size: 21px !important;
+    font-size: 22px !important;
     line-height: 1.12 !important;
   }
 
   .cg-sales-panel .cg-chart-wrap {
-    min-height: 0 !important;
-    height: auto !important;
-    display: block !important;
     width: 100% !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    padding: 0 0 7px !important;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-
-  .cg-sales-panel .cg-chart-wrap::-webkit-scrollbar {
-    display: none;
-  }
-
-  .cg-sales-panel .cg-chart-legend {
-    position: sticky !important;
-    left: 0 !important;
-    z-index: 2 !important;
-    width: max-content !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    gap: 7px !important;
-    margin: 0 0 7px !important;
-    font-size: 13px !important;
-    font-weight: 800 !important;
-    color: #4f594e !important;
-  }
-
-  .cg-sales-panel .cg-chart-legend span {
-    min-height: 31px !important;
-    padding: 6px 10px !important;
-    border: 1px solid #e1e5dd !important;
-    border-radius: 999px !important;
-    background: rgba(247, 248, 244, .96) !important;
-  }
-
-  .cg-sales-panel .cg-chart-legend i.revenue {
-    width: 12px !important;
-    height: 12px !important;
-    border-radius: 3px !important;
-  }
-
-  .cg-sales-panel .cg-chart-legend i.profit {
-    width: 19px !important;
-    height: 3px !important;
-  }
-
-  /* 520px is deliberate: the chart stays readable and the user swipes inside it. */
-  .cg-sales-panel .cg-sales-chart {
-    display: block !important;
-    width: 520px !important;
-    max-width: none !important;
-    height: auto !important;
     min-height: 0 !important;
-    margin: 0 !important;
+    height: auto !important;
+    display: block !important;
     overflow: visible !important;
+    padding: 0 !important;
   }
 
-  .cg-sales-panel .cg-sales-chart text {
-    font-size: 18px !important;
+  .cg-sales-chart-desktop {
+    display: none !important;
+  }
+
+  .cg-sales-chart-mobile {
+    display: block !important;
+    width: 100%;
+  }
+
+  .cg-mobile-sales-window {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    align-items: center;
+    gap: 8px;
+    margin: 3px 0 11px;
+  }
+
+  .cg-mobile-sales-window strong {
+    text-align: center;
+    color: #343b34;
+    font-size: 14.5px;
+    font-weight: 850;
+    letter-spacing: .01em;
+  }
+
+  .cg-mobile-sales-window button {
+    width: 38px;
+    height: 36px;
+    border: 1px solid #dfe3da;
+    border-radius: 10px;
+    background: #f7f8f4;
+    color: #343b34;
+    font-size: 25px;
+    line-height: 1;
+    font-weight: 600;
+  }
+
+  .cg-mobile-sales-window button:disabled {
+    opacity: .28;
+  }
+
+  .cg-mobile-sales-legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 9px;
+    color: #535d52;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .cg-mobile-sales-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .cg-mobile-sales-legend i {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+  }
+
+  .cg-mobile-sales-legend i.sales {
+    background: #858c38;
+  }
+
+  .cg-mobile-sales-legend i.profit {
+    background: #4d7d57;
+  }
+
+  .cg-mobile-sales-bars {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+    align-items: end;
+    min-height: 215px;
+    padding: 0 2px;
+  }
+
+  .cg-mobile-sales-month {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: 8px;
+  }
+
+  .cg-mobile-sales-pair {
+    height: 184px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 7px;
+    padding: 28px 2px 0;
+    border-bottom: 1px solid #dde2d8;
+  }
+
+  .cg-mobile-sales-bar-cell {
+    width: min(42%, 42px);
+    min-width: 27px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .cg-mobile-sales-bar-cell span {
+    font-size: 11.5px;
+    line-height: 1;
+    font-weight: 850;
+    color: #343b34;
+    white-space: nowrap;
+  }
+
+  .cg-mobile-sales-bar-cell i {
+    display: block;
+    width: 100%;
+    min-height: 2px;
+    border-radius: 6px 6px 2px 2px;
+    box-shadow: 0 2px 5px rgba(30, 36, 28, .08);
+  }
+
+  .cg-mobile-sales-bar-cell.sales i {
+    background: #858c38;
+  }
+
+  .cg-mobile-sales-bar-cell.profit i {
+    background: #4d7d57;
+  }
+
+  .cg-mobile-sales-bar-cell.profit.negative i {
+    background: #b65145;
+  }
+
+  .cg-mobile-sales-month-label {
+    display: block;
+    text-align: center;
+    color: #414941;
+    font-size: 14.5px;
+    line-height: 1.1;
+    font-weight: 900;
+  }
+
+  /* Remaining dashboard cards: increase mobile reading size without changing desktop. */
+  .cg-dashboard-panel:not(.cg-sales-panel) {
+    padding: 16px 15px !important;
+    border-radius: 18px !important;
+  }
+
+  .cg-dashboard-panel:not(.cg-sales-panel) .cg-panel-eyebrow {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    letter-spacing: .075em !important;
+  }
+
+  .cg-dashboard-panel:not(.cg-sales-panel) .cg-panel-head h3 {
+    font-size: 21px !important;
+    line-height: 1.15 !important;
+  }
+
+  .cg-mini-tabs button {
+    min-height: 39px !important;
+    padding: 8px 13px !important;
+    font-size: 13.5px !important;
     font-weight: 800 !important;
-    fill: #505a50 !important;
   }
 
-  .cg-sales-panel .cg-sales-chart rect {
-    opacity: .98 !important;
-    filter: drop-shadow(0 3px 4px rgba(80, 88, 45, .18));
+  .cg-hbars {
+    gap: 13px !important;
   }
 
-  .cg-sales-panel .cg-sales-chart polyline {
-    stroke-width: 5 !important;
-    filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .18));
+  .cg-hbar-row {
+    row-gap: 6px !important;
   }
 
-  .cg-sales-panel .cg-sales-chart circle {
-    r: 5px;
-    stroke-width: 3.5 !important;
-    filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .12));
+  .cg-hbar-label strong {
+    font-size: 14.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  .cg-hbar-label span {
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .cg-hbar-value {
+    font-size: 15.5px !important;
+    font-weight: 900 !important;
+  }
+
+  .cg-hbar-track {
+    min-height: 9px !important;
+  }
+
+  .cg-inventory-health {
+    gap: 17px !important;
+  }
+
+  .cg-donut {
+    width: 112px !important;
+    height: 112px !important;
+    min-width: 112px !important;
+  }
+
+  .cg-donut strong {
+    font-size: 25px !important;
+  }
+
+  .cg-donut span {
+    font-size: 11px !important;
+  }
+
+  .cg-donut-legend {
+    gap: 9px !important;
+  }
+
+  .cg-donut-legend > div {
+    min-height: 27px !important;
+    font-size: 14px !important;
+  }
+
+  .cg-donut-legend > div > span,
+  .cg-donut-legend > div > strong {
+    font-size: 14px !important;
+  }
+
+  .cg-margin-target {
+    font-size: 12px !important;
+    margin-bottom: 9px !important;
+  }
+
+  .cg-margin-row {
+    min-height: 48px !important;
+    row-gap: 6px !important;
+  }
+
+  .cg-margin-name strong {
+    font-size: 14px !important;
+  }
+
+  .cg-margin-name span {
+    font-size: 12.5px !important;
+    line-height: 1.25 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .cg-margin-value {
+    font-size: 15px !important;
+  }
+
+  .cg-margin-track {
+    min-height: 8px !important;
+  }
+
+  .cg-action-list,
+  .cg-activity-list {
+    gap: 8px !important;
+  }
+
+  .cg-action-row,
+  .cg-activity-list > button {
+    min-height: 62px !important;
+    padding: 11px 10px !important;
+  }
+
+  .cg-action-row strong,
+  .cg-activity-list > button strong {
+    font-size: 14.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  .cg-action-row small,
+  .cg-activity-list > button small {
+    margin-top: 3px !important;
+    font-size: 13px !important;
+    line-height: 1.3 !important;
+  }
+
+  .cg-activity-list time {
+    font-size: 12.5px !important;
+    font-weight: 800 !important;
+  }
+
+  .cg-empty-state,
+  .cg-empty-chart {
+    font-size: 13.5px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Inventory controls remain available on desktop but are intentionally removed from mobile. */
+  .cg-dashboard-details {
+    display: none !important;
   }
 }
