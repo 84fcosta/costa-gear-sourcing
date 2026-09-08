@@ -1,0 +1,447 @@
+@media (max-width: 680px) {
+  /* Dedicated Inventory & Profit mobile layout */
+  .cg-mi-wrap,
+  .cg-mr-wrap {
+    display: grid;
+    gap: 14px;
+    padding-bottom: 96px;
+    color: #20251f;
+  }
+
+  .cg-mi-head,
+  .cg-mr-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cg-mi-kicker,
+  .cg-mr-kicker {
+    color: #747b31;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .cg-mi-head h2,
+  .cg-mr-head h2 {
+    margin: 3px 0 0;
+    font-size: 25px;
+    line-height: 1.05;
+  }
+
+  .cg-mi-head p,
+  .cg-mr-head p,
+  .cg-mi-panel p {
+    margin: 5px 0 0;
+    color: #667066;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .cg-mi-head button,
+  .cg-mr-head button {
+    min-height: 42px;
+    border: 1px solid #dde1d8;
+    border-radius: 12px;
+    background: #fff;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .cg-mi-summary,
+  .cg-mr-summary {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 9px;
+  }
+
+  .cg-mi-summary > div,
+  .cg-mr-summary > div {
+    border: 1px solid #dfe3db;
+    border-radius: 15px;
+    background: #fff;
+    padding: 13px;
+  }
+
+  .cg-mi-summary span,
+  .cg-mr-summary span,
+  .cg-mi-metrics span,
+  .cg-mr-metrics span,
+  .cg-mr-fields label > span,
+  .cg-mr-supplier > span {
+    display: block;
+    color: #6a7368;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .cg-mi-summary strong,
+  .cg-mr-summary strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .cg-mi-panel,
+  .cg-mr-method,
+  .cg-mr-card {
+    border: 1px solid #dfe3db;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 7px 20px rgba(25,31,23,.05);
+  }
+
+  .cg-mi-panel {
+    padding: 16px;
+  }
+
+  .cg-mi-panel h3,
+  .cg-mr-card h3 {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.2;
+  }
+
+  .cg-mi-aging-list {
+    display: grid;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .cg-mi-aging-row {
+    display: grid;
+    gap: 7px;
+  }
+
+  .cg-mi-aging-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .cg-mi-aging-top strong {
+    font-size: 15.5px;
+  }
+
+  .cg-mi-aging-top span {
+    color: #687166;
+    font-size: 13.5px;
+    text-align: right;
+  }
+
+  .cg-mi-bar {
+    height: 13px;
+    border-radius: 999px;
+    background: #eef0ea;
+    overflow: hidden;
+  }
+
+  .cg-mi-bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #4e6a8e;
+  }
+
+  .cg-mi-bar i.tone-watch { background: #a87818; }
+  .cg-mi-bar i.tone-slow,
+  .cg-mi-bar i.tone-critical { background: #b65145; }
+  .cg-mi-bar i.tone-early { background: #858c38; }
+
+  .cg-mi-note,
+  .cg-mi-empty {
+    margin-top: 12px;
+    color: #687166;
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .cg-mi-attention,
+  .cg-mi-sku-list,
+  .cg-mr-list {
+    display: grid;
+    gap: 11px;
+    margin-top: 12px;
+  }
+
+  .cg-mi-attention-card,
+  .cg-mi-sku-card {
+    border: 1px solid #e2e5de;
+    border-radius: 14px;
+    padding: 13px;
+    background: #fbfcf9;
+  }
+
+  .cg-mi-attention-card > div,
+  .cg-mi-sku-top,
+  .cg-mr-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cg-mi-attention-card b,
+  .cg-mi-sku-card h4 {
+    display: block;
+    margin: 7px 0 0;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .cg-mi-attention-card small {
+    display: block;
+    margin-top: 6px;
+    color: #687166;
+    font-size: 13px;
+  }
+
+  .cg-mi-badge,
+  .cg-mr-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-style: normal;
+    font-weight: 850;
+    white-space: nowrap;
+    background: #f1f3ef;
+    color: #647062;
+  }
+
+  .cg-mi-badge.good,.cg-mr-badge.good { background:#edf7ee;color:#4d7d57; }
+  .cg-mi-badge.warn,.cg-mr-badge.warn { background:#fff7e6;color:#9a6a10; }
+  .cg-mi-badge.bad,.cg-mr-badge.bad { background:#fff0ee;color:#b65145; }
+  .cg-mi-badge.info,.cg-mr-badge.info { background:#eef4fa;color:#4e6a8e; }
+
+  .cg-mi-filters,
+  .cg-mr-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .cg-mi-filters input,
+  .cg-mi-filters select,
+  .cg-mr-filters input,
+  .cg-mr-filters select,
+  .cg-mr-fields input,
+  .cg-mr-fields select {
+    width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
+    border: 1px solid #dde1d8;
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: #20251f;
+  }
+
+  .cg-mi-sku-top > span,
+  .cg-mr-card-top > span {
+    color: #747b31;
+    font-size: 13px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .cg-mi-metrics,
+  .cg-mr-metrics {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+    margin-top: 13px;
+    padding-top: 12px;
+    border-top: 1px solid #edf0ea;
+  }
+
+  .cg-mi-metrics strong,
+  .cg-mr-metrics strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 16px;
+  }
+
+  .cg-mi-error,.cg-mr-error,.cg-mr-success {
+    border-radius: 12px;
+    padding: 11px 12px;
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  .cg-mi-error,.cg-mr-error { background:#fff0ee;color:#a94439; }
+  .cg-mr-success { background:#edf7ee;color:#3f7049; }
+  .cg-mi-loading,.cg-mr-loading { padding:32px 16px;text-align:center;color:#687166;font-size:14px; }
+
+  /* Reorder */
+  .cg-mr-method {
+    overflow: hidden;
+  }
+
+  .cg-mr-method summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 15px 16px;
+    font-size: 16px;
+    font-weight: 900;
+  }
+
+  .cg-mr-method summary::-webkit-details-marker { display:none; }
+  .cg-mr-method summary::after { content:"+"; float:right; color:#747b31; font-size:20px; }
+  .cg-mr-method[open] summary::after { content:"−"; }
+  .cg-mr-method > div { padding:0 16px 15px; color:#687166; font-size:14px; line-height:1.5; }
+  .cg-mr-method p { margin:8px 0 0; }
+
+  .cg-mr-card {
+    padding: 15px;
+  }
+
+  .cg-mr-card h3 {
+    margin-top: 9px;
+  }
+
+  .cg-mr-supplier {
+    margin-top: 13px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #f7f8f3;
+  }
+
+  .cg-mr-supplier strong,
+  .cg-mr-supplier small {
+    display:block;
+  }
+  .cg-mr-supplier strong { margin-top:4px;font-size:14.5px; }
+  .cg-mr-supplier small { margin-top:4px;color:#687166;font-size:12.5px;line-height:1.35; }
+
+  .cg-mr-fields {
+    display:grid;
+    gap:9px;
+    margin-top:13px;
+  }
+
+  .cg-mr-fields label {
+    display:grid;
+    gap:5px;
+  }
+
+  .cg-mr-actions {
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+    margin-top:13px;
+  }
+
+  .cg-mr-actions button {
+    min-height:44px;
+    border:1px solid #dfe3db;
+    border-radius:12px;
+    background:#fff;
+    color:#20251f;
+    font-size:14px;
+    font-weight:850;
+  }
+
+  .cg-mr-actions button.primary {
+    border:0;
+    background:linear-gradient(180deg,#929a44,#747b31);
+    color:#fff;
+  }
+
+  /* Suppliers: force real card layout over legacy table styles */
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded {
+    overflow: visible !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded table {
+    display:block !important;
+    width:100% !important;
+    min-width:0 !important;
+    overflow:visible !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded thead {
+    display:none !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded tbody {
+    display:grid !important;
+    gap:12px !important;
+    width:100% !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded tbody > tr {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:12px !important;
+    width:100% !important;
+    padding:15px !important;
+    box-sizing:border-box !important;
+    border:1px solid #dfe3db !important;
+    border-radius:16px !important;
+    background:#fff !important;
+    box-shadow:0 7px 20px rgba(25,31,23,.05) !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td {
+    display:block !important;
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    padding:0 !important;
+    border:0 !important;
+    white-space:normal !important;
+    overflow:visible !important;
+    overflow-wrap:break-word !important;
+    font-size:14px !important;
+    line-height:1.35 !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(1),
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(2),
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(5) {
+    grid-column:1 / -1 !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td::before {
+    display:block !important;
+    margin-bottom:4px !important;
+    color:#697166 !important;
+    font-size:10.5px !important;
+    font-weight:900 !important;
+    letter-spacing:.05em !important;
+    text-transform:uppercase !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(1)::before { content:"Supplier ID" !important; }
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(2)::before { content:"Supplier / Details" !important; }
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(3)::before { content:"Quotes / Rating" !important; }
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(4)::before { content:"Status" !important; }
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(5)::before { content:"Actions" !important; }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(5) {
+    display:flex !important;
+    flex-wrap:wrap !important;
+    gap:8px !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(5)::before {
+    flex-basis:100% !important;
+  }
+
+  .cg-sourcing-mobile-suppliers .cg-legacy-embedded td:nth-child(5) button {
+    flex:1 1 120px !important;
+    min-height:42px !important;
+  }
+}
