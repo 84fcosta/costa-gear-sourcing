@@ -127,10 +127,10 @@
     color: #5f685e !important;
   }
 
-  /* Mobile Sales & Gross Profit: compact card with a much larger usable plot. */
+  /* Mobile Sales & Gross Profit. Do not squeeze a 720px SVG into the phone. */
   .cg-sales-panel {
     min-height: 0 !important;
-    padding: 16px 16px 13px !important;
+    padding: 16px 14px 12px !important;
     overflow: hidden !important;
     border-radius: 17px !important;
     background: linear-gradient(180deg, #ffffff 0%, #fbfcf8 100%) !important;
@@ -142,81 +142,98 @@
   }
 
   .cg-sales-panel .cg-panel-eyebrow {
-    font-size: 10.5px !important;
+    font-size: 11px !important;
     line-height: 1.2 !important;
     letter-spacing: .08em !important;
   }
 
   .cg-sales-panel .cg-panel-head h3 {
     margin-top: 3px !important;
-    font-size: 20px !important;
+    font-size: 21px !important;
     line-height: 1.12 !important;
   }
 
   .cg-sales-panel .cg-chart-wrap {
     min-height: 0 !important;
     height: auto !important;
-    display: grid !important;
-    gap: 6px !important;
-    padding: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0 0 7px !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+
+  .cg-sales-panel .cg-chart-wrap::-webkit-scrollbar {
+    display: none;
   }
 
   .cg-sales-panel .cg-chart-legend {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 2 !important;
+    width: max-content !important;
     justify-content: flex-start !important;
     align-items: center !important;
     gap: 7px !important;
-    margin: 0 0 2px !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #586257 !important;
+    margin: 0 0 7px !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #4f594e !important;
   }
 
   .cg-sales-panel .cg-chart-legend span {
-    min-height: 29px !important;
-    padding: 5px 9px !important;
-    border: 1px solid #e4e8df !important;
+    min-height: 31px !important;
+    padding: 6px 10px !important;
+    border: 1px solid #e1e5dd !important;
     border-radius: 999px !important;
-    background: #f7f8f4 !important;
+    background: rgba(247, 248, 244, .96) !important;
   }
 
   .cg-sales-panel .cg-chart-legend i.revenue {
-    width: 11px !important;
-    height: 11px !important;
+    width: 12px !important;
+    height: 12px !important;
     border-radius: 3px !important;
   }
 
   .cg-sales-panel .cg-chart-legend i.profit {
-    width: 17px !important;
+    width: 19px !important;
     height: 3px !important;
   }
 
+  /* 520px is deliberate: the chart stays readable and the user swipes inside it. */
   .cg-sales-panel .cg-sales-chart {
     display: block !important;
-    width: 100% !important;
-    height: 168px !important;
-    min-height: 168px !important;
+    width: 520px !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
   }
 
   .cg-sales-panel .cg-sales-chart text {
-    font-size: 12px !important;
-    font-weight: 750 !important;
-    fill: #596358 !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    fill: #505a50 !important;
   }
 
   .cg-sales-panel .cg-sales-chart rect {
-    opacity: .96 !important;
-    filter: drop-shadow(0 3px 4px rgba(80, 88, 45, .15));
+    opacity: .98 !important;
+    filter: drop-shadow(0 3px 4px rgba(80, 88, 45, .18));
   }
 
   .cg-sales-panel .cg-sales-chart polyline {
-    stroke-width: 4 !important;
+    stroke-width: 5 !important;
     filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .18));
   }
 
   .cg-sales-panel .cg-sales-chart circle {
-    stroke-width: 3 !important;
+    r: 5px;
+    stroke-width: 3.5 !important;
     filter: drop-shadow(0 1px 1px rgba(20, 24, 19, .12));
   }
 }
