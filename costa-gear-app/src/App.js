@@ -5,6 +5,7 @@ import {
   Cloud,
   DollarSign,
   LayoutDashboard,
+  Menu,
   PackageSearch,
   ReceiptText,
   ShoppingCart,
@@ -81,6 +82,7 @@ export default function App() {
   const [logisticsView, setLogisticsView] = useState(() => readSessionValue("cg:logistics-view", "shipments", ["shipments", "costs"]));
   const [salesView, setSalesView] = useState(() => readSessionValue("cg:sales-view", "orders", ["orders", "performance", "planning", "pricing"]));
   const [handoff, setHandoff] = useState(null);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [oneDriveVersion, setOneDriveVersion] = useState(0);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [oneDriveMessage, setOneDriveMessage] = useState("");
@@ -161,6 +163,7 @@ export default function App() {
   }, []);
 
   const navigate = (destination, context = null) => {
+    setMobileMoreOpen(false);
     if (context) setHandoff(context);
 
     if (destination === "operations") {
@@ -212,6 +215,7 @@ export default function App() {
 
   const [title, subtitle] = pageMeta[workspace];
   const showOneDriveControl = workspace === "expenses" || workspace === "migration";
+  const mobileMoreActive = ["buying", "logistics", "expenses", "migration"].includes(workspace);
 
   return <div className="cg-app-shell">
     <header className="cg-topbar" style={{ height: 96 }}>
@@ -236,20 +240,20 @@ export default function App() {
 
     <main className="cg-main-area" style={{ minHeight: "calc(100vh - 96px)" }}>
       <div className="cg-page-header">
-        <div style={showOneDriveControl ? { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 } : undefined}>
+        <div className={showOneDriveControl ? "cg-page-header-with-actions" : ""} style={showOneDriveControl ? { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 } : undefined}>
           <div>
             <div className="cg-page-eyebrow">Costa Gear Operations</div>
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
           {showOneDriveControl ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+            <div className="cg-page-header-actions" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
               <button
                 type="button"
                 className="cg-text-button"
                 onClick={connectOneDrive}
                 disabled={!oneDriveAuth.configured || oneDriveBusy || oneDriveAuth.connected}
-                title="Microsoft Graph permission: Files.ReadWrite"
+                title="Microsoft Graph permission: Files.ReadWrite.AppFolder"
                 style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
               >
                 <Cloud size={15} />
@@ -268,8 +272,8 @@ export default function App() {
                   <ArchiveRestore size={14} />Legacy migration
                 </button>
               ) : null}
-              {oneDriveMessage ? <span style={{ fontSize: 10.5, color: "#687166", maxWidth: 360, textAlign: "right" }}>{oneDriveMessage}</span> : null}
-              {oneDriveAuth.username ? <span style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
+              {oneDriveMessage ? <span className="cg-page-header-action-message" style={{ fontSize: 10.5, color: "#687166", maxWidth: 360, textAlign: "right" }}>{oneDriveMessage}</span> : null}
+              {oneDriveAuth.username ? <span className="cg-page-header-action-account" style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
             </div>
           ) : null}
         </div>
@@ -287,5 +291,25 @@ export default function App() {
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
+
+    <nav className="cg-mobile-bottom-nav" aria-label="Mobile navigation">
+      <button className={workspace === "dashboard" ? "active" : ""} onClick={() => navigate("dashboard")}><LayoutDashboard size={21}/><span>Dashboard</span></button>
+      <button className={workspace === "sourcing" ? "active" : ""} onClick={() => navigate("sourcing")}><PackageSearch size={21}/><span>Sourcing</span></button>
+      <button className={workspace === "receiving" ? "active" : ""} onClick={() => navigate("receiving")}><Boxes size={21}/><span>Inventory</span></button>
+      <button className={workspace === "sales" ? "active" : ""} onClick={() => navigate("sales")}><DollarSign size={21}/><span>Sales</span></button>
+      <button className={mobileMoreActive || mobileMoreOpen ? "active" : ""} onClick={() => setMobileMoreOpen(true)} aria-expanded={mobileMoreOpen}><Menu size={21}/><span>More</span></button>
+    </nav>
+
+    {mobileMoreOpen ? <div className="cg-mobile-more-backdrop" onClick={() => setMobileMoreOpen(false)}>
+      <section className="cg-mobile-more-sheet" role="dialog" aria-modal="true" aria-label="More Costa Gear modules" onClick={event => event.stopPropagation()}>
+        <div className="cg-mobile-sheet-handle" aria-hidden="true"/>
+        <div className="cg-mobile-sheet-head"><div><strong>More</strong><span>Operations and administration</span></div><button onClick={() => setMobileMoreOpen(false)}>Close</button></div>
+        <div className="cg-mobile-sheet-links">
+          <button className={workspace === "buying" ? "active" : ""} onClick={() => navigate("buying")}><ShoppingCart size={22}/><span><strong>Buying</strong><small>Purchase decisions and POs</small></span></button>
+          <button className={workspace === "logistics" ? "active" : ""} onClick={() => navigate("logistics")}><Truck size={22}/><span><strong>Logistics</strong><small>Shipments and landed cost</small></span></button>
+          <button className={workspace === "expenses" || workspace === "migration" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
+        </div>
+      </section>
+    </div> : null}
   </div>;
 }
