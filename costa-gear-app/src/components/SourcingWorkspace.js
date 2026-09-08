@@ -170,7 +170,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
       <ProductMediaStrip />
       <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
       <MobileProductMaster active={mobileLegacyTab === "products"} />
-      <div className="cg-legacy-embedded"><LegacyApp /></div>
+      <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>
     </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
