@@ -6,6 +6,7 @@ import ProductMediaStrip from "./ProductMediaStrip";
 import SourcingDensityPolish from "./SourcingDensityPolish";
 import SourcingSortControls from "./SourcingSortControls";
 import SourcingCostIntegrityGuard from "./SourcingCostIntegrityGuard";
+import MobileProductCostSnapshot from "./MobileProductCostSnapshot";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
@@ -166,7 +167,8 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
       <SourcingSortControls />
       <SourcingCostIntegrityGuard />
       <ProductMediaStrip />
-      <div className="cg-legacy-embedded"><LegacyApp /></div>
+      {mobileLegacyTab === "dashboard" && <MobileProductCostSnapshot />}
+      <div className={`cg-legacy-embedded ${mobileLegacyTab === "dashboard" ? "cg-legacy-view-dashboard" : ""}`}><LegacyApp /></div>
     </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
