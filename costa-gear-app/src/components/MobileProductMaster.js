@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, ChevronRight, Pencil, Plus, Images } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, Images } from "lucide-react";
 import { supabase } from "../supabase";
 import "../mobile-product-master.css";
 
@@ -123,23 +123,10 @@ export default function MobileProductMaster({ active }) {
     button?.click();
   };
 
-  const triggerEdit = sku => {
-    const card = findLegacyProductCard(sku);
-    const button = Array.from(card?.querySelectorAll("button") || []).find(b => String(b.textContent || "").trim() === "Edit");
-    button?.click();
-  };
-
   const triggerImages = sku => {
     const card = findLegacyProductCard(sku);
     const button = Array.from(card?.querySelectorAll("button") || []).find(b => /images?/i.test(String(b.textContent || "")));
-    if (button) button.click();
-    else triggerDetail(sku);
-  };
-
-  const triggerDetail = sku => {
-    const card = findLegacyProductCard(sku);
-    const clickable = Array.from(card?.querySelectorAll("div") || []).find(node => node.style?.cursor === "pointer");
-    clickable?.click();
+    button?.click();
   };
 
   if (!active) return null;
@@ -186,37 +173,45 @@ export default function MobileProductMaster({ active }) {
       <div className="cg-mobile-product-list">
         {visible.map(product => {
           const range = product.minPrice === null ? "No quotes" : product.minPrice === product.maxPrice ? money(product.minPrice) : `${money(product.minPrice)} - ${money(product.maxPrice)}`;
-          return <article key={product.id} className="cg-mobile-product-card">
-            <button type="button" className="cg-mobile-product-card-main" onClick={() => triggerDetail(product.sku_id)}>
-              <div className="cg-mobile-product-card-top">
-                <span className="cg-mobile-product-sku">{product.sku_id}</span>
-                <ChevronRight size={20}/>
-              </div>
-              <strong className="cg-mobile-product-name">{product.name || "Unnamed product"}</strong>
-              <div className="cg-mobile-product-detail-row">
-                <span>Fitment</span>
-                <strong>{product.fitment || "TBD"}</strong>
-              </div>
-              <div className="cg-mobile-product-detail-grid">
-                <div><span>Material</span><strong>{product.material || "TBD"}</strong></div>
-                <div><span>Category</span><strong>{product.category || "Not set"}</strong></div>
-              </div>
-            </button>
-
-            <div className="cg-mobile-product-commercial">
-              <div>
-                <span>Cost / Quotes</span>
-                <strong>{range}</strong>
-                <small>{product.quoteCount} {product.quoteCount === 1 ? "quote" : "quotes"}</small>
-              </div>
-              <button type="button" className="cg-mobile-product-images" onClick={() => triggerImages(product.sku_id)}>
-                <Images size={17}/><strong>{product.imageCount}</strong><span>{product.imageCount === 1 ? "Image" : "Images"}</span>
+          return <article key={product.id} className="cg-mobile-master-card">
+            <div className="cg-mobile-master-card-head">
+              <span className="cg-mobile-master-sku">{product.sku_id}</span>
+              <button
+                type="button"
+                className="cg-mobile-master-images-link"
+                onClick={() => triggerImages(product.sku_id)}
+                disabled={!product.imageCount}
+                aria-label={`${product.imageCount} product images`}
+              >
+                <Images size={16}/><span>{product.imageCount} {product.imageCount === 1 ? "image" : "images"}</span>
               </button>
             </div>
 
-            <div className="cg-mobile-product-card-foot">
-              <button type="button" className="cg-mobile-product-view" onClick={() => triggerDetail(product.sku_id)}>View details</button>
-              <button type="button" className="cg-mobile-product-edit" onClick={() => triggerEdit(product.sku_id)}><Pencil size={16}/>Edit</button>
+            <h3>{product.name || "Unnamed product"}</h3>
+
+            <div className="cg-mobile-master-fitment">
+              <span>Fitment</span>
+              <strong>{product.fitment || "TBD"}</strong>
+            </div>
+
+            <div className="cg-mobile-master-tags">
+              <span>{product.material || "Material TBD"}</span>
+              <span>{product.category || "Category not set"}</span>
+            </div>
+
+            <div className="cg-mobile-master-metrics">
+              <div>
+                <span>Cost range USD</span>
+                <strong>{range}</strong>
+              </div>
+              <div>
+                <span>Quotes</span>
+                <strong>{product.quoteCount}</strong>
+              </div>
+              <div>
+                <span>Images</span>
+                <strong>{product.imageCount}</strong>
+              </div>
             </div>
           </article>;
         })}
