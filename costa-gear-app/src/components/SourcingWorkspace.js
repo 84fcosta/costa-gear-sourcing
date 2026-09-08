@@ -9,6 +9,7 @@ import SourcingCostIntegrityGuard from "./SourcingCostIntegrityGuard";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
+import "../mobile-refinements.css";
 
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
 
