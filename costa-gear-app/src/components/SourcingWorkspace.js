@@ -109,7 +109,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
 
   const mobileMoreActive = view !== "master" || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
 
-  return <div className="cg-sourcing-workspace">
+  return <div className={`cg-sourcing-workspace cg-sourcing-mobile-${mobileLegacyTab}`}>
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
 
     <div className="cg-sourcing-mobile-nav" aria-label="Sourcing mobile navigation">
