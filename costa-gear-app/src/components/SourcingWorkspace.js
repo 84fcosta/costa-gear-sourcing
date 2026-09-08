@@ -135,7 +135,13 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
         <div className="cg-segmented"><button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Products & Quotes</button><button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button><button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button></div>
       </div>
     </div>
-    {view === "master" && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /><MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} /><MobileProductMaster active={mobileLegacyTab === "products"} /><MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />{showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>}</>}
+    {view === "master" && <>
+      {showLegacyMaster && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /></>}
+      <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
+      <MobileProductMaster active={mobileLegacyTab === "products"} />
+      <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />
+      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp /></div>}
+    </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
