@@ -185,18 +185,24 @@
   .cg-mobile-product-card-title {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 7px;
     min-width: 0;
   }
 
   .cg-mobile-product-card-title > strong {
+    flex: 0 0 auto;
     color: #7a8234;
     font-size: 14px;
     font-weight: 900;
     letter-spacing: .01em;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
   }
 
   .cg-mobile-cost-status {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     min-height: 20px;
@@ -205,6 +211,7 @@
     font-size: 9px;
     font-weight: 850;
     white-space: nowrap;
+    word-break: keep-all;
   }
 
   .cg-mobile-cost-status.warning {
