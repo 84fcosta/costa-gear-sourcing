@@ -41,9 +41,9 @@ export default function MobileProductMaster({ active }) {
     const load = async () => {
       setLoading(true);
       const [{ data: productRows }, { data: quoteRows }, { data: imageRows }] = await Promise.all([
-        supabase.from("products").select("id,sku_id,name,product_type,material,fitment,category,updated_at").order("sku_id"),
+        supabase.from("products").select("id,sku_id,name,product_type,material,fitment,category,updated_at,product_folder_web_url").order("sku_id"),
         supabase.from("quotes").select("id,product_id,unit_price"),
-        supabase.from("product_images").select("id,product_id"),
+        supabase.from("product_images").select("id,product_id,web_url,sort_order"),
       ]);
       if (!cancelled) {
         setProducts(productRows || []);
@@ -83,11 +83,14 @@ export default function MobileProductMaster({ active }) {
   const enriched = useMemo(() => products.map(product => {
     const productQuotes = quotes.filter(q => q.product_id === product.id);
     const prices = productQuotes.map(q => Number(q.unit_price)).filter(Number.isFinite);
-    const imageCount = images.filter(image => image.product_id === product.id).length;
+    const productImages = images
+      .filter(image => image.product_id === product.id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
     return {
       ...product,
       quoteCount: productQuotes.length,
-      imageCount,
+      imageCount: productImages.length,
+      firstImageUrl: productImages.find(image => image.web_url)?.web_url || null,
       minPrice: prices.length ? Math.min(...prices) : null,
       maxPrice: prices.length ? Math.max(...prices) : null,
     };
@@ -123,8 +126,14 @@ export default function MobileProductMaster({ active }) {
     button?.click();
   };
 
-  const triggerImages = sku => {
-    const card = findLegacyProductCard(sku);
+  const triggerImages = product => {
+    const directUrl = product.product_folder_web_url || product.firstImageUrl;
+    if (directUrl) {
+      window.open(directUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const card = findLegacyProductCard(product.sku_id);
     const button = Array.from(card?.querySelectorAll("button") || []).find(b => /images?/i.test(String(b.textContent || "")));
     button?.click();
   };
@@ -173,15 +182,16 @@ export default function MobileProductMaster({ active }) {
       <div className="cg-mobile-product-list">
         {visible.map(product => {
           const range = product.minPrice === null ? "No quotes" : product.minPrice === product.maxPrice ? money(product.minPrice) : `${money(product.minPrice)} - ${money(product.maxPrice)}`;
+          const hasImageLink = Boolean(product.product_folder_web_url || product.firstImageUrl || product.imageCount);
           return <article key={product.id} className="cg-mobile-master-card">
             <div className="cg-mobile-master-card-head">
               <span className="cg-mobile-master-sku">{product.sku_id}</span>
               <button
                 type="button"
                 className="cg-mobile-master-images-link"
-                onClick={() => triggerImages(product.sku_id)}
-                disabled={!product.imageCount}
-                aria-label={`${product.imageCount} product images`}
+                onClick={() => triggerImages(product)}
+                disabled={!hasImageLink}
+                aria-label={`Open ${product.imageCount} product images for ${product.sku_id}`}
               >
                 <Images size={16}/><span>{product.imageCount} {product.imageCount === 1 ? "image" : "images"}</span>
               </button>
