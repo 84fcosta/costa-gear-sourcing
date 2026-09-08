@@ -217,7 +217,6 @@ export default function OperationalDashboard({onNavigate}){
     const lowStock=performance.productMetrics.filter(row=>Number(row.product.reorder_point||0)>0&&row.availableUnits<=Number(row.product.reorder_point||0));
     const reorderUnset=data.products.filter(p=>Number(p.reorder_point||0)===0).length;
     const shipmentAlerts=data.shipments.filter(s=>Number(s.freight_amount||0)<=0||((s.status!=="Completed"&&s.status!=="Received")&&(Number(s.brokerage_amount||0)===0&&Number(s.other_import_costs_amount||0)===0)));
-
     const actions=[];
     if(damagedUnits>0)actions.push({tone:"bad",title:`${number(damagedUnits)} damaged unit${damagedUnits===1?"":"s"} awaiting disposition`,detail:"Review supplier resolution before treating damaged stock as sellable.",action:"receiving"});
     if(lowStock.length)actions.push({tone:"bad",title:`${lowStock.length} SKU${lowStock.length===1?"":"s"} at or below reorder point`,detail:"Review inventory and decide whether replenishment is needed.",action:"receiving"});
@@ -262,7 +261,7 @@ export default function OperationalDashboard({onNavigate}){
       {error&&<div className="cg-dashboard-error">{error}</div>}
 
       <div className="cg-dashboard-toolbar">
-        <div><strong>Today at a glance</strong><span>Only the metrics and exceptions that matter for daily operation.</span></div>
+        <div><strong>Performance Overview</strong><span>Sales, profit and operational metrics for the selected period.</span></div>
         <button onClick={load}>Refresh</button>
       </div>
 
