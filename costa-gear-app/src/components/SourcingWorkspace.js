@@ -12,12 +12,64 @@ import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository"
 
 const qtyFromMoq = text => { const m = String(text || "").match(/\d+/); return m ? Math.max(1, Number(m[0])) : 1; };
 
+const legacyTabLabels = {
+  dashboard: "Dashboard",
+  products: "Products (",
+  suppliers: "Suppliers (",
+  quotes: "Quotes (",
+  export: "Export / RFQ",
+};
+
 export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
   const [view, setView] = useState(initialView === "images" ? "master" : initialView);
   const [handoffError, setHandoffError] = useState("");
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileLegacyTab, setMobileLegacyTab] = useState("dashboard");
+  const [pendingLegacyTab, setPendingLegacyTab] = useState(null);
 
   useEffect(() => setView(initialView === "images" ? "master" : initialView), [initialView]);
+
+  useEffect(() => {
+    if (view !== "master" || !pendingLegacyTab) return undefined;
+    let cancelled = false;
+    let attempts = 0;
+
+    const activate = () => {
+      if (cancelled) return;
+      const expected = legacyTabLabels[pendingLegacyTab];
+      const buttons = Array.from(document.querySelectorAll(".cg-legacy-embedded button"));
+      const target = buttons.find(button => {
+        const text = String(button.textContent || "").trim();
+        return pendingLegacyTab === "export" ? text === expected : text.startsWith(expected);
+      });
+
+      if (target) {
+        target.click();
+        setMobileLegacyTab(pendingLegacyTab);
+        setPendingLegacyTab(null);
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 8) window.setTimeout(activate, 40);
+    };
+
+    const timer = window.setTimeout(activate, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [view, pendingLegacyTab]);
+
+  const selectLegacyTab = tab => {
+    setMobileMoreOpen(false);
+    setMobileLegacyTab(tab);
+    setPendingLegacyTab(tab);
+    if (view !== "master") setView("master");
+  };
+
+  const selectSourcingView = nextView => {
+    setMobileMoreOpen(false);
+    setView(nextView);
+  };
 
   const createBuyingDraft = async context => {
     if (!context?.quoteId || handoffBusy) return;
@@ -52,8 +104,49 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     finally { setHandoffBusy(false); }
   };
 
+  const mobileMoreActive = view !== "master" || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
+
   return <div className="cg-sourcing-workspace">
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
+
+    <div className="cg-sourcing-mobile-nav" aria-label="Sourcing mobile navigation">
+      <button
+        type="button"
+        className={view === "master" && mobileLegacyTab === "dashboard" ? "active" : ""}
+        onClick={() => selectLegacyTab("dashboard")}
+      >Overview</button>
+      <button
+        type="button"
+        className={view === "master" && mobileLegacyTab === "products" ? "active" : ""}
+        onClick={() => selectLegacyTab("products")}
+      >Products</button>
+      <div className="cg-sourcing-mobile-more-wrap">
+        <button
+          type="button"
+          className={mobileMoreActive || mobileMoreOpen ? "active" : ""}
+          aria-expanded={mobileMoreOpen}
+          onClick={() => setMobileMoreOpen(open => !open)}
+        >More</button>
+        {mobileMoreOpen && <div className="cg-sourcing-mobile-more-menu">
+          <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}>
+            <strong>Supplier Quotations</strong><span>Import and manage formal supplier quotations</span>
+          </button>
+          <button type="button" className={view === "analysis" ? "active" : ""} onClick={() => selectSourcingView("analysis")}>
+            <strong>Decision Lab</strong><span>Compare quotes and sourcing decisions</span>
+          </button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}>
+            <strong>Suppliers</strong><span>Supplier directory and sourcing history</span>
+          </button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}>
+            <strong>Quotes</strong><span>Full quote register and filters</span>
+          </button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "export" ? "active" : ""} onClick={() => selectLegacyTab("export")}>
+            <strong>Export / RFQ</strong><span>Exports and RFQ builder</span>
+          </button>
+        </div>}
+      </div>
+    </div>
+
     <div className="cg-subworkspace-header">
       <div className="cg-subworkspace-inner">
         <div>
