@@ -12,13 +12,11 @@ const quoteDateValue = (quote) => {
 
 export function calculateQuoteLandedCost(quote) {
   const stored = asNumber(quote?.landedCostCad ?? quote?.landed_cost_cad);
-  if (stored !== null) {
-    return { totalCad: stored, basis: "stored", complete: true };
-  }
-
   const unitUsd = asNumber(quote?.unitPrice ?? quote?.unit_price);
   const fx = asNumber(quote?.usdCadRate ?? quote?.usd_cad_rate);
-  if (unitUsd === null || fx === null) return null;
+  if (unitUsd === null || fx === null) {
+    return stored === null ? null : { totalCad: null, storedCad: stored, basis: "stored_reference_only", complete: false };
+  }
 
   const shipping = asNumber(
     quote?.shippingCostPerUnitCad ?? quote?.shipping_cost_per_unit_cad
@@ -29,7 +27,7 @@ export function calculateQuoteLandedCost(quote) {
     ? shipping
     : shippingRaw === null
       ? null
-      : shippingCurrency === "CAD"
+      : String(shippingCurrency).toUpperCase() === "CAD"
         ? shippingRaw
         : shippingRaw * fx;
 
@@ -46,6 +44,7 @@ export function calculateQuoteLandedCost(quote) {
   if (!complete) {
     return {
       totalCad: null,
+      storedCad: stored,
       productCad,
       shippingCad,
       dutyCad,
@@ -58,6 +57,7 @@ export function calculateQuoteLandedCost(quote) {
 
   return {
     totalCad: productCad + shippingCad + dutyCad + (brokerage || 0) + (otherFees || 0),
+    storedCad: stored,
     productCad,
     shippingCad,
     dutyCad,
