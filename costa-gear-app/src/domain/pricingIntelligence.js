@@ -156,12 +156,27 @@ export function buildPricingIntelligence(data, asOfInput = new Date()) {
   const performanceByProduct = new Map(performance.productMetrics.map(row => [row.product.id, row]));
   const latestMarkets = latestRowsByProduct(data.marketPrices || [], "observed_at");
   const latestQuotes = latestRowsByProduct(data.quotes || [], "quote_date");
+  const postedReceiptIds = new Set(
+    (data.receipts || [])
+      .filter(receipt => String(receipt.status || "").toLowerCase() === "posted")
+      .map(receipt => receipt.id)
+  );
+  const latestReceiptCosts = latestRowsByProduct(
+    (data.receiptItems || []).filter(item => postedReceiptIds.has(item.receipt_id) && finite(item.actual_landed_cost_per_unit_cad)),
+    "created_at"
+  );
+  const latestPoCosts = latestRowsByProduct(
+    (data.purchaseOrderItems || []).filter(item => finite(item.landed_cost_per_unit_cad)),
+    "created_at"
+  );
 
   const rows = (data.products || []).map(product => {
     const perf = performanceByProduct.get(product.id);
     const marketRow = latestMarkets.get(product.id);
     const quote = latestQuotes.get(product.id);
     const quoteLanded = quote ? calculateQuoteLandedCost(quote) : null;
+    const receiptCostRow = latestReceiptCosts.get(product.id);
+    const poCostRow = latestPoCosts.get(product.id);
 
     const currentPrice = number(product.target_sell_price_cad);
     const historicalMarket = number(marketRow?.price_cad);
@@ -179,9 +194,15 @@ export function buildPricingIntelligence(data, asOfInput = new Date()) {
     if (perf && Number(perf.availableUnits || 0) > 0 && Number(perf.uncostedUnits || 0) === 0 && Number(perf.inventoryValueCad || 0) > 0) {
       unitCost = Number(perf.inventoryValueCad) / Number(perf.availableUnits);
       costSource = "Current inventory weighted landed cost";
+    } else if (finite(receiptCostRow?.actual_landed_cost_per_unit_cad)) {
+      unitCost = Number(receiptCostRow.actual_landed_cost_per_unit_cad);
+      costSource = "Latest posted receipt actual landed cost";
+    } else if (finite(poCostRow?.landed_cost_per_unit_cad)) {
+      unitCost = Number(poCostRow.landed_cost_per_unit_cad);
+      costSource = "Latest PO landed cost";
     } else if (quoteLanded?.complete && finite(quoteLanded.totalCad)) {
       unitCost = Number(quoteLanded.totalCad);
-      costSource = "Latest quote landed cost";
+      costSource = "Latest complete quote landed cost";
     }
 
     const targetMarginPct = number(product.target_margin_pct);
