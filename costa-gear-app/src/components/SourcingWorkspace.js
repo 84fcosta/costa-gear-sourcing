@@ -5,6 +5,7 @@ import SupplierQuotationWorkspace from "./SupplierQuotationWorkspace";
 import ProductMediaStrip from "./ProductMediaStrip";
 import SourcingDensityPolish from "./SourcingDensityPolish";
 import SourcingSortControls from "./SourcingSortControls";
+import SourcingCostIntegrityGuard from "./SourcingCostIntegrityGuard";
 import { supabase } from "../supabase";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { createBuyingDraftFromQuote } from "../services/purchaseOrderRepository";
@@ -69,6 +70,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     {view === "master" && <>
       <SourcingDensityPolish />
       <SourcingSortControls />
+      <SourcingCostIntegrityGuard />
       <ProductMediaStrip />
       <div className="cg-legacy-embedded"><LegacyApp /></div>
     </>}
