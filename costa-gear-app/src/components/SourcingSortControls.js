@@ -9,6 +9,18 @@ function exactHeading(selector, text) {
   ) || null;
 }
 
+function tableForHeading(headingText) {
+  const heading = exactHeading("h2", headingText);
+  if (!heading) return null;
+
+  let current = heading.parentElement;
+  for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+    const table = current.querySelector?.("table");
+    if (table) return table;
+  }
+  return null;
+}
+
 function firstNumber(value) {
   const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
@@ -78,10 +90,7 @@ function nextSort(current, key) {
 }
 
 function enhanceHtmlTable({ headingText, state, columns }) {
-  const heading = exactHeading("h2", headingText);
-  if (!heading) return;
-  const container = heading.parentElement?.parentElement || heading.parentElement;
-  const table = container?.querySelector("table");
+  const table = tableForHeading(headingText);
   if (!table) return;
   const headers = Array.from(table.querySelectorAll("thead th"));
   const rows = () => Array.from(table.querySelectorAll("tbody tr"));
@@ -225,6 +234,7 @@ export default function SourcingSortControls() {
   useEffect(() => {
     const states = {
       snapshot: { value: null },
+      recentQuotes: { value: null },
       products: { value: null },
       suppliers: { value: null },
       quotes: { value: null },
@@ -247,6 +257,21 @@ export default function SourcingSortControls() {
           { key: "market", labels: ["Market Ref. CAD"] },
         ],
       });
+
+      enhanceHtmlTable({
+        headingText: "Recent Quotes",
+        state: states.recentQuotes,
+        columns: [
+          { key: "sku", labels: ["SKU"] },
+          { key: "product", labels: ["Product"] },
+          { key: "supplier", labels: ["Supplier"] },
+          { key: "price", labels: ["Price USD"] },
+          { key: "incoterm", labels: ["Incoterm"] },
+          { key: "status", labels: ["Status"] },
+          { key: "date", labels: ["Date"] },
+        ],
+      });
+
       enhanceProducts(states.products);
       enhanceSuppliers(states.suppliers);
       enhanceHtmlTable({
