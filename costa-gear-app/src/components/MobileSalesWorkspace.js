@@ -306,7 +306,6 @@ export default function MobileSalesWorkspace() {
           const summary = saleSummaries.get(order.id) || { units: 0, net: 0 };
           return <button className="cg-mobile-sale-card" key={order.id} onClick={() => openSale(order.id)}>
             <div className="cg-mobile-card-top"><span className="cg-mobile-ref">{order.sale_ref}</span><Status value={order.status} /></div>
-            <div className="cg-mobile-sale-title">{order.customer_name || "Customer not recorded"}</div>
             <div className="cg-mobile-sale-meta">{order.sold_date || "No date"} - {order.channel}</div>
             <div className="cg-mobile-metric-row two">
               <div className="cg-mobile-metric"><span>Revenue</span><strong>{money(summary.net)}</strong></div>
