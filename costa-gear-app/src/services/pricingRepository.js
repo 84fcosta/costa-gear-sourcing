@@ -5,6 +5,7 @@ export async function loadPricingData() {
     supabase.from("products").select("*").order("sku_id"),
     supabase.from("receipts").select("*").order("received_date", { ascending: true }),
     supabase.from("receipt_items").select("*").order("created_at", { ascending: true }),
+    supabase.from("purchase_orders").select("id,order_date,created_at").order("order_date", { ascending: true }),
     supabase.from("purchase_order_items").select("id,product_id,purchase_order_id,landed_cost_per_unit_cad,created_at").order("created_at", { ascending: true }),
     supabase.from("sales_orders").select("*").order("sold_date", { ascending: false }),
     supabase.from("sales_order_items").select("*").order("created_at", { ascending: true }),
@@ -16,12 +17,38 @@ export async function loadPricingData() {
   const error = results.find(result => result.error)?.error;
   if (error) throw error;
 
-  const [products, receipts, receiptItems, purchaseOrderItems, salesOrders, salesOrderItems, quotes, marketPrices, pricingReviews] = results;
+  const [products, receipts, receiptItems, purchaseOrders, purchaseOrderItems, salesOrders, salesOrderItems, quotes, marketPrices, pricingReviews] = results;
+
+  const receiptRows = receipts.data || [];
+  const purchaseOrderRows = purchaseOrders.data || [];
+  const receiptMap = new Map(receiptRows.map(row => [row.id, row]));
+  const purchaseOrderMap = new Map(purchaseOrderRows.map(row => [row.id, row]));
+
+  // Pricing cost fallback must follow business chronology, not technical insert timestamps.
+  // Keep a compatible created_at sort value because pricingIntelligence uses it to select
+  // the latest historical Receipt / PO cost. Performance analytics already prefers the
+  // parent receipt's received_date, so this normalization is safe for shared pricing data.
+  const receiptItemRows = (receiptItems.data || []).map(item => {
+    const receipt = receiptMap.get(item.receipt_id);
+    return {
+      ...item,
+      created_at: receipt?.received_date || receipt?.created_at || item.created_at,
+    };
+  });
+
+  const purchaseOrderItemRows = (purchaseOrderItems.data || []).map(item => {
+    const purchaseOrder = purchaseOrderMap.get(item.purchase_order_id);
+    return {
+      ...item,
+      created_at: purchaseOrder?.order_date || purchaseOrder?.created_at || item.created_at,
+    };
+  });
+
   return {
     products: products.data || [],
-    receipts: receipts.data || [],
-    receiptItems: receiptItems.data || [],
-    purchaseOrderItems: purchaseOrderItems.data || [],
+    receipts: receiptRows,
+    receiptItems: receiptItemRows,
+    purchaseOrderItems: purchaseOrderItemRows,
     salesOrders: salesOrders.data || [],
     salesOrderItems: salesOrderItems.data || [],
     quotes: quotes.data || [],
