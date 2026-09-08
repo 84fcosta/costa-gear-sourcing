@@ -15,13 +15,21 @@ function firstNumber(value) {
 }
 
 function compareValues(a, b, direction) {
-  const an = firstNumber(a);
-  const bn = firstNumber(b);
+  const aText = String(a ?? "").trim();
+  const bText = String(b ?? "").trim();
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+  const aStartsNumeric = /^[\s$+-]*\d/.test(aText);
+  const bStartsNumeric = /^[\s$+-]*\d/.test(bText);
+  const an = firstNumber(aText);
+  const bn = firstNumber(bText);
   let result;
-  if (an !== null && bn !== null) {
+
+  if (isoDate.test(aText) && isoDate.test(bText)) {
+    result = aText.localeCompare(bText);
+  } else if (aStartsNumeric && bStartsNumeric && an !== null && bn !== null) {
     result = an - bn;
   } else {
-    result = String(a ?? "").trim().localeCompare(String(b ?? "").trim(), "en", {
+    result = aText.localeCompare(bText, "en", {
       numeric: true,
       sensitivity: "base",
     });
@@ -43,7 +51,8 @@ function decorate(node, active, direction, onActivate) {
   if (!node) return;
   if (!node.dataset.cgSortBaseLabel) node.dataset.cgSortBaseLabel = String(node.textContent || "").trim();
   const base = node.dataset.cgSortBaseLabel;
-  node.textContent = `${base}${active ? (direction === "asc" ? "  ↑" : "  ↓") : ""}`;
+  const nextText = `${base}${active ? (direction === "asc" ? "  ↑" : "  ↓") : ""}`;
+  if (String(node.textContent || "") !== nextText) node.textContent = nextText;
   Object.assign(node.style, {
     cursor: "pointer",
     userSelect: "none",
