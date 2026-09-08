@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import SalesWorkspace from "./SalesWorkspace";
+import SalesWorkspace from "./ResponsiveSalesWorkspace";
 import CommercialInsightsWorkspace from "./CommercialInsightsWorkspace";
 
 function resolveInitial(initialView){
