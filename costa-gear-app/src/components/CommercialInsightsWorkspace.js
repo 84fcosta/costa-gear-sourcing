@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PerformanceWorkspace from "./PerformanceWorkspace";
 import DemandPlanningWorkspace from "./DemandPlanningWorkspace";
 import PricingIntelligenceWorkspace from "./PricingIntelligenceWorkspace";
+import PricingMatrixSortControls from "./PricingMatrixSortControls";
 
 const tools = [
   { id: "performance", title: "Inventory & Profit", copy: "See aging, sell-through, realized margin and slow-moving stock when you need a deeper review." },
@@ -27,7 +28,7 @@ export default function CommercialInsightsWorkspace({ initialInsight="overview",
         </div>
         <button style={secondaryButton} onClick={()=>setView("overview")}>Back to Insights</button>
       </div>
-      {view==="performance"?<PerformanceWorkspace/>:view==="planning"?<DemandPlanningWorkspace onNavigate={onNavigate}/>:<PricingIntelligenceWorkspace/>}
+      {view==="performance"?<PerformanceWorkspace/>:view==="planning"?<DemandPlanningWorkspace onNavigate={onNavigate}/>:<><PricingMatrixSortControls/><PricingIntelligenceWorkspace/></>}
     </div>;
   }
 
