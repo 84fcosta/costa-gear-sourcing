@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 const REPOSITORY_KEY = "costa_gear";
 
-export const ONE_DRIVE_FILES_SCOPE = "Files.ReadWrite";
+export const ONE_DRIVE_FILES_SCOPE = "Files.ReadWrite.AppFolder";
 // Backward-compatible export used by existing UI modules.
 export const ONE_DRIVE_APP_FOLDER_SCOPE = ONE_DRIVE_FILES_SCOPE;
 
