@@ -5,7 +5,7 @@ export async function loadPricingData() {
     supabase.from("products").select("*").order("sku_id"),
     supabase.from("receipts").select("*").order("received_date", { ascending: true }),
     supabase.from("receipt_items").select("*").order("created_at", { ascending: true }),
-    supabase.from("purchase_order_items").select("id,product_id,landed_cost_per_unit_cad"),
+    supabase.from("purchase_order_items").select("id,product_id,purchase_order_id,landed_cost_per_unit_cad,created_at").order("created_at", { ascending: true }),
     supabase.from("sales_orders").select("*").order("sold_date", { ascending: false }),
     supabase.from("sales_order_items").select("*").order("created_at", { ascending: true }),
     supabase.from("quotes").select("*").order("quote_date", { ascending: false }),
