@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ReceivingInventoryWorkspace from "./ReceivingInventoryWorkspace";
 import MobileInventoryWorkspace from "./MobileInventoryWorkspace";
+import DesktopInventoryPositionControls from "./DesktopInventoryPositionControls";
 
 function useMobileBreakpoint() {
   const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 680px)").matches);
@@ -16,5 +17,10 @@ function useMobileBreakpoint() {
 }
 
 export default function ResponsiveInventoryWorkspace() {
-  return useMobileBreakpoint() ? <MobileInventoryWorkspace /> : <ReceivingInventoryWorkspace />;
+  const mobile = useMobileBreakpoint();
+  if (mobile) return <MobileInventoryWorkspace />;
+  return <>
+    <ReceivingInventoryWorkspace />
+    <DesktopInventoryPositionControls />
+  </>;
 }
