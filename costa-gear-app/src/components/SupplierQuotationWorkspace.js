@@ -318,7 +318,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
     </div>
 
     {newProductLine&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(9,10,8,.56)",display:"grid",placeItems:"center",padding:20}} onMouseDown={e=>{if(e.target===e.currentTarget)closeCreateProduct();}}>
-      <div style={{width:"min(720px,96vw)",background:"#fff",borderRadius:16,border:`1px solid ${C.border}`,boxShadow:"0 26px 80px rgba(9,10,8,.28)",overflow:"hidden"}}>
+      <div style={{width:"min(860px,96vw)",maxHeight:"92vh",background:"#fff",borderRadius:16,border:`1px solid ${C.border}`,boxShadow:"0 26px 80px rgba(9,10,8,.28)",overflow:"auto"}}>
         <div style={{background:"#20251F",color:"#fff",padding:"16px 18px"}}><div style={{fontSize:17,fontWeight:900}}>Create Costa Gear Product</div><div style={{fontSize:11,color:"#C9CFC4",marginTop:3}}>Create the Product Master record and match this supplier line in one step.</div></div>
         <div style={{padding:18,display:"grid",gap:13}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -334,11 +334,29 @@ export default function SupplierQuotationWorkspace({onNavigate}){
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>
             <Field label="Product Type *"><select style={input} value={newProductForm.productType} onChange={e=>setNewProductForm(f=>({...f,productType:e.target.value}))}><option value="">Select Product Type</option>{productTypes.map(t=><option key={t.id||t.name} value={t.name}>{t.name}</option>)}</select></Field>
             <Field label="Category (optional)"><select style={input} value={newProductForm.category} onChange={e=>setNewProductForm(f=>({...f,category:e.target.value}))}><option value="">Select existing category</option>{categoryOptions.map(category=><option key={category} value={category}>{category}</option>)}</select></Field>
-            <Field label="Material (optional)">{!addingMaterial?<select style={input} value={newProductForm.material} onChange={e=>{if(e.target.value==="__ADD__"){setAddingMaterial(true);setNewMaterialName("");setMaterialError("");}else setNewProductForm(f=>({...f,material:e.target.value}));}}><option value="">Select Material</option>{materials.map(m=><option key={m.id||m.name} value={m.name}>{m.name}</option>)}<option value="__ADD__">+ Add New Material…</option></select>:<div style={{display:"grid",gap:5}}><div style={{display:"flex",gap:6}}><input autoFocus style={input} value={newMaterialName} onChange={e=>setNewMaterialName(e.target.value)} placeholder="New material"/><button type="button" disabled={busy||!newMaterialName.trim()} style={btn(true)} onClick={addMaterial}>{busy?"Adding...":"Add"}</button><button type="button" disabled={busy} style={btn()} onClick={()=>{setAddingMaterial(false);setNewMaterialName("");setMaterialError("");}}>Cancel</button></div>{materialError&&<div style={{fontSize:10.5,color:C.red}}>{materialError}</div>}</div>}</Field>
-            <Field label="Fitment (optional)"><input style={input} value={newProductForm.fitment} onChange={e=>setNewProductForm(f=>({...f,fitment:e.target.value}))} placeholder="e.g. Wrangler JL 2018+"/></Field>
+            <Field label="Material (optional)">{!addingMaterial?<select style={input} value={newProductForm.material} onChange={e=>{if(e.target.value==="__ADD__"){setAddingMaterial(true);setNewMaterialName("");setMaterialError("");}else setNewProductForm(f=>({...f,material:e.target.value}));}}><option value="">Select Material</option>{materials.map(m=><option key={m.id||m.name} value={m.name}>{m.name}</option>)}<option value="__ADD__">+ Add New Material...</option></select>:<div style={{display:"grid",gap:5}}><div style={{display:"flex",gap:6}}><input autoFocus style={input} value={newMaterialName} onChange={e=>setNewMaterialName(e.target.value)} placeholder="New material"/><button type="button" disabled={busy||!newMaterialName.trim()} style={btn(true)} onClick={addMaterial}>{busy?"Adding...":"Add"}</button><button type="button" disabled={busy} style={btn()} onClick={()=>{setAddingMaterial(false);setNewMaterialName("");setMaterialError("");}}>Cancel</button></div>{materialError&&<div style={{fontSize:10.5,color:C.red}}>{materialError}</div>}</div>}</Field>
           </div>
+
+          <div style={{display:"grid",gap:6}}>
+            <div style={{fontSize:11,fontWeight:800,color:C.muted}}>Product Dimensions (cm) *</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8}}>
+              <Field label="Length *"><input type="number" min="0" step="0.1" style={input} value={newProductForm.length} onChange={e=>setNewProductForm(f=>({...f,length:e.target.value}))} placeholder="cm"/></Field>
+              <Field label="Width *"><input type="number" min="0" step="0.1" style={input} value={newProductForm.width} onChange={e=>setNewProductForm(f=>({...f,width:e.target.value}))} placeholder="cm"/></Field>
+              <Field label="Height *"><input type="number" min="0" step="0.1" style={input} value={newProductForm.height} onChange={e=>setNewProductForm(f=>({...f,height:e.target.value}))} placeholder="cm"/></Field>
+              <Field label="Weight (kg)"><input type="number" min="0" step="0.01" style={input} value={newProductForm.weight} onChange={e=>setNewProductForm(f=>({...f,weight:e.target.value}))} placeholder="kg"/></Field>
+            </div>
+          </div>
+
+          <QuotationFitmentEditor
+            catalog={vehicleFitments}
+            value={newProductForm.fitments}
+            onChange={fitments=>setNewProductForm(f=>({...f,fitments}))}
+            notes={newProductForm.fitmentNotes}
+            onNotesChange={fitmentNotes=>setNewProductForm(f=>({...f,fitmentNotes}))}
+          />
+
           <Field label="Notes (optional)"><input style={input} value={newProductForm.notes} onChange={e=>setNewProductForm(f=>({...f,notes:e.target.value}))} placeholder="Anything useful for Product Master"/></Field>
-          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.name.trim()||!newProductForm.productType} style={{...btn(true),opacity:(busy||!newProductForm.name.trim()||!newProductForm.productType)?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.name.trim()||!newProductForm.productType||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>!x.yearFrom)} style={{...btn(true),opacity:(busy||!newProductForm.name.trim()||!newProductForm.productType||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>!x.yearFrom))?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
         </div>
       </div>
     </div>}
