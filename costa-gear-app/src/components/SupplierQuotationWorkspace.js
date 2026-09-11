@@ -68,6 +68,24 @@ const ProductComparison=({line,product,currency})=>{
   </div>;
 };
 
+const QuotationFitmentEditor=({catalog,value,onChange,notes,onNotesChange})=>{
+  const years=Array.from({length:new Date().getFullYear()+6-2000},(_,i)=>2000+i);
+  const selected=new Map((value||[]).map(x=>[x.code,x]));
+  const toggle=code=>selected.has(code)?onChange((value||[]).filter(x=>x.code!==code)):onChange([...(value||[]),{code,yearFrom:"",yearTo:""}]);
+  const update=(code,key,next)=>onChange((value||[]).map(x=>x.code===code?{...x,[key]:next}:x));
+  return <div style={{display:"grid",gap:6}}>
+    <div style={{fontSize:11,fontWeight:800,color:C.muted}}>Vehicle Fitment *</div>
+    <div style={{border:"1px solid "+C.border,borderRadius:9,overflow:"hidden"}}>
+      {catalog.map((f,index)=>{const row=selected.get(f.code);return <div key={f.code} style={{display:"grid",gridTemplateColumns:"minmax(210px,1.4fr) 125px 135px",gap:7,alignItems:"center",padding:8,borderTop:index?"1px solid "+C.border:0,background:row?"#F8FAF0":"#fff"}}>
+        <label style={{display:"flex",gap:7,alignItems:"center",fontSize:11.5,fontWeight:row?800:650,cursor:"pointer"}}><input type="checkbox" checked={Boolean(row)} onChange={()=>toggle(f.code)}/>{f.display_name}</label>
+        {row?<><select style={input} value={row.yearFrom??""} onChange={e=>update(f.code,"yearFrom",e.target.value)}><option value="">Start year *</option>{years.map(y=><option key={y} value={String(y)}>{y}</option>)}</select><select style={input} value={row.yearTo??""} onChange={e=>update(f.code,"yearTo",e.target.value)}><option value="">Current / ongoing</option>{years.filter(y=>!row.yearFrom||y>=Number(row.yearFrom)).map(y=><option key={y} value={String(y)}>{y}</option>)}</select></>:<><div/><div/></>}
+      </div>})}
+    </div>
+    <div style={{fontSize:10.5,color:C.muted}}>Select every applicable platform. Start year is required for each selected fitment.</div>
+    <Field label="Fitment Notes / Restrictions"><input style={input} value={notes||""} onChange={e=>onNotesChange(e.target.value)} placeholder="e.g. Hard Top Only, Not for Wrangler 4xe"/></Field>
+  </div>;
+};
+
 const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,onIgnore})=>{
   const [open,setOpen]=useState(false);
   const [query,setQuery]=useState("");
@@ -174,15 +192,15 @@ const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,o
 
 export default function SupplierQuotationWorkspace({onNavigate}){
   const[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState("");
-  const[suppliers,setSuppliers]=useState([]),[products,setProducts]=useState([]),[productTypes,setProductTypes]=useState([]),[materials,setMaterials]=useState([]),[quotations,setQuotations]=useState([]),[orders,setOrders]=useState([]),[lines,setLines]=useState([]);
+  const[suppliers,setSuppliers]=useState([]),[products,setProducts]=useState([]),[productTypes,setProductTypes]=useState([]),[materials,setMaterials]=useState([]),[vehicleFitments,setVehicleFitments]=useState([]),[quotations,setQuotations]=useState([]),[orders,setOrders]=useState([]),[lines,setLines]=useState([]);
   const[selectedId,setSelectedId]=useState(""),[preview,setPreview]=useState(null),[importSupplierId,setImportSupplierId]=useState(""),[busy,setBusy]=useState(false);
   const[finalizeForm,setFinalizeForm]=useState({usdCadRate:"",allocationMethod:"value",dutyRatePct:""});
   const[selectedLines,setSelectedLines]=useState([]);
   const[newProductLine,setNewProductLine]=useState(null);
-  const[newProductForm,setNewProductForm]=useState({name:"",productType:"",category:"",material:"",fitment:"",notes:""});
+  const[newProductForm,setNewProductForm]=useState({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
   const[addingMaterial,setAddingMaterial]=useState(false),[newMaterialName,setNewMaterialName]=useState(""),[materialError,setMaterialError]=useState("");
 
-  const load=async()=>{setLoading(true);setError("");try{const[q,{data:s,error:se},{data:p,error:pe},{data:o,error:oe},{data:pt,error:pte},{data:pm,error:pme}]=await Promise.all([listSupplierQuotations(),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("products").select("*").order("sku_id"),supabase.from("purchase_orders").select("id,po_ref,status"),supabase.from("product_types").select("*").eq("active",true).order("name"),supabase.from("product_materials").select("*").eq("active",true).order("name")]);if(se||pe||oe||pte||pme)throw(se||pe||oe||pte||pme);setQuotations(q);setSuppliers(s||[]);setProducts(p||[]);setOrders(o||[]);setProductTypes(pt||[]);setMaterials(pm||[]);}catch(e){setError(e.message||"Unable to load supplier quotations.");}finally{setLoading(false);}};
+  const load=async()=>{setLoading(true);setError("");try{const[q,{data:s,error:se},{data:p,error:pe},{data:o,error:oe},{data:pt,error:pte},{data:pm,error:pme},{data:vf,error:vfe}]=await Promise.all([listSupplierQuotations(),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("products").select("*").order("sku_id"),supabase.from("purchase_orders").select("id,po_ref,status"),supabase.from("product_types").select("*").eq("active",true).order("name"),supabase.from("product_materials").select("*").eq("active",true).order("name"),supabase.from("vehicle_fitments").select("*").eq("active",true).order("sort_order")]);if(se||pe||oe||pte||pme||vfe)throw(se||pe||oe||pte||pme||vfe);setQuotations(q);setSuppliers(s||[]);setProducts(p||[]);setOrders(o||[]);setProductTypes(pt||[]);setMaterials(pm||[]);setVehicleFitments(vf||[]);}catch(e){setError(e.message||"Unable to load supplier quotations.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
   useEffect(()=>{if(!selectedId){setLines([]);setSelectedLines([]);return;}const q=quotations.find(x=>x.id===selectedId);if(q)setFinalizeForm({usdCadRate:q.usd_cad_rate==null?"":String(q.usd_cad_rate),allocationMethod:q.allocation_method||"value",dutyRatePct:q.duty_rate_pct==null?"":String(q.duty_rate_pct)});listSupplierQuotationLines(selectedId).then(rows=>{setLines(rows);setSelectedLines(q?.status==="Finalized"?rows.filter(r=>r.quote_id).map(r=>r.id):[]);}).catch(e=>setError(e.message));},[selectedId,quotations]);
 
@@ -213,9 +231,24 @@ export default function SupplierQuotationWorkspace({onNavigate}){
     }catch(e){setError(e.message||"Unable to update quotation line.");}
     finally{setBusy(false);}
   };
-  const openCreateProduct=line=>{setError("");setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductLine(line);setNewProductForm({name:line.supplier_description||line.supplier_sku||"",productType:"",category:"",material:"",fitment:"",notes:""});};
-  const closeCreateProduct=()=>{if(busy)return;setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitment:"",notes:""});};
-  const createProduct=async()=>{if(!newProductLine)return;if(!newProductForm.name.trim())return setError("Enter a product name before creating the Product Master record.");if(!newProductForm.productType)return setError("Select a Product Type before creating the Product Master record.");setBusy(true);setError("");try{const result=await createProductFromQuotationLine({lineId:newProductLine.id,...newProductForm});const[{data:p,error:pe},rows]=await Promise.all([supabase.from("products").select("*").order("sku_id"),listSupplierQuotationLines(selectedId)]);if(pe)throw pe;setProducts(p||[]);setLines(rows);setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitment:"",notes:""});setMessage(`${result?.product?.sku_id||"New CG product"} created and matched to ${newProductLine.supplier_sku||"this supplier line"}. Future quotations can reuse this mapping automatically.`);}catch(e){setError(e.message||"Unable to create and match the new product.");}finally{setBusy(false);}};
+  const openCreateProduct=line=>{setError("");setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductLine(line);setNewProductForm({...{name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""},name:line.supplier_description||line.supplier_sku||""});};
+  const closeCreateProduct=()=>{if(busy)return;setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});};
+  const createProduct=async()=>{
+    if(!newProductLine)return;
+    if(!newProductForm.name.trim())return setError("Enter a product name before creating the Product Master record.");
+    if(!newProductForm.productType)return setError("Select a Product Type before creating the Product Master record.");
+    if(!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0))return setError("Length, Width and Height are required.");
+    if(!newProductForm.fitments.length||newProductForm.fitments.some(x=>!x.yearFrom))return setError("Select at least one vehicle fitment and a starting year for every selected fitment.");
+    setBusy(true);setError("");
+    try{
+      const result=await createProductFromQuotationLine({lineId:newProductLine.id,...newProductForm});
+      const[{data:p,error:pe},rows]=await Promise.all([supabase.from("products").select("*").order("sku_id"),listSupplierQuotationLines(selectedId)]);
+      if(pe)throw pe;
+      setProducts(p||[]);setLines(rows);setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
+      setMessage(`${result?.product?.sku_id||"New CG product"} created and matched to ${newProductLine.supplier_sku||"this supplier line"}. Future quotations can reuse this mapping automatically.`);
+    }catch(e){setError(e.message||"Unable to create and match the new product.");}
+    finally{setBusy(false);}
+  };
   const addMaterial=async()=>{const name=newMaterialName.trim();if(!name)return;setBusy(true);setMaterialError("");try{const {data,error}=await supabase.rpc("add_product_material",{p_name:name});if(error)throw error;const row=Array.isArray(data)?data[0]:data;if(row){setMaterials(prev=>[...prev.filter(x=>x.id!==row.id),row].sort((a,b)=>a.name.localeCompare(b.name)));setNewProductForm(v=>({...v,material:row.name}));}setAddingMaterial(false);setNewMaterialName("");}catch(e){setMaterialError(e.message||"Unable to add material.");}finally{setBusy(false);}};
   const finalize=async()=>{if(!canFinalize)return;setBusy(true);setError("");try{await finalizeSupplierQuotation({quotationId:selectedId,...finalizeForm});await load();setLines(await listSupplierQuotationLines(selectedId));setMessage("Quotation finalized. Its matched lines are now available as comparable quotes in Decision Lab.");}catch(e){setError(e.message||"Unable to finalize quotation.");}finally{setBusy(false);}};
   const createPO=async()=>{if(!canBuy)return;setBusy(true);setError("");try{const po=await createBuyingDraftFromQuotation(selectedId,selectedLines);await load();setMessage(`${po.po_ref} created with ${selectedLines.length} selected quotation line(s).`);onNavigate?.("buying",{type:"buying-draft-created",purchaseOrderId:po.id,poRef:po.po_ref});}catch(e){setError(e.message||"Unable to create Buying Draft.");}finally{setBusy(false);}};
