@@ -17,7 +17,7 @@ const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,
 const btn=(primary=false)=>({border:primary?0:`1px solid ${C.border}`,background:primary?"linear-gradient(180deg,#929A44,#747B31)":"#fff",color:primary?"#fff":C.ink,borderRadius:9,padding:"8px 11px",fontWeight:800,fontSize:11.5,cursor:"pointer"});
 const money=(v,currency="USD")=>{if(v===null||v===undefined||v==="")return"—";const code=["USD","CAD","EUR","CNY"].includes(currency)?currency:"USD";return Number(v).toLocaleString(code==="CAD"?"en-CA":"en-US",{style:"currency",currency:code,maximumFractionDigits:2});};
 const Field=({label,children})=><label style={{display:"grid",gap:5,fontSize:11,fontWeight:750,color:C.muted}}>{label}{children}</label>;
-const badge=(status)=>{const map={PASS:[C.green,"#EDF7EE"],MATCHED:[C.green,"#EDF7EE"],RESOLVED:[C.green,"#EDF7EE"],IGNORED:[C.muted,"#EEF0EC"],Finalized:[C.green,"#EDF7EE"],Converted:[C.oliveDark,"#F1F4DD"],Imported:[C.amber,"#FFF7E5"],"REVIEW REQUIRED":[C.red,"#FFF1EF"],UNMATCHED:[C.red,"#FFF1EF"]};const [color,bg]=map[status]||[C.muted,"#F3F4EF"];return <span style={{display:"inline-flex",padding:"3px 7px",borderRadius:999,fontSize:10.5,fontWeight:850,color,background:bg}}>{status||"—"}</span>};
+const badge=(status)=>{const map={PASS:[C.green,"#EDF7EE"],MATCHED:[C.green,"#EDF7EE"],RESOLVED:[C.green,"#EDF7EE"],IGNORED:[C.muted,"#EEF0EC"],REVIEW:[C.amber,"#FFF7E5"],Finalized:[C.green,"#EDF7EE"],Converted:[C.oliveDark,"#F1F4DD"],Imported:[C.amber,"#FFF7E5"],"REVIEW REQUIRED":[C.red,"#FFF1EF"],UNMATCHED:[C.red,"#FFF1EF"]};const [color,bg]=map[status]||[C.muted,"#F3F4EF"];return <span style={{display:"inline-flex",padding:"3px 7px",borderRadius:999,fontSize:10.5,fontWeight:850,color,background:bg}}>{status||"—"}</span>};
 
 const cleanNumber=value=>{const n=Number(value);return Number.isFinite(n)&&n>0?n:null;};
 const productDimensions=product=>{
@@ -65,6 +65,110 @@ const ProductComparison=({line,product,currency})=>{
       </div>
     </div>
     {warning&&<div style={{padding:"7px 8px",background:"#FFF7E5",color:C.amber,fontSize:10.5,fontWeight:750}}>CHECK DIMENSIONS · {warning}</div>}
+  </div>;
+};
+
+const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,onIgnore})=>{
+  const [open,setOpen]=useState(false);
+  const [query,setQuery]=useState("");
+  const [candidateId,setCandidateId]=useState(line.match_status==="REVIEW"&&line.product_id?line.product_id:"");
+  const [reviewAck,setReviewAck]=useState(false);
+
+  useEffect(()=>{
+    setCandidateId(line.match_status==="REVIEW"&&line.product_id?line.product_id:"");
+    setReviewAck(false);
+    setOpen(false);
+    setQuery("");
+  },[line.id,line.product_id,line.match_status]);
+
+  const confirmed=line.match_status==="MATCHED"&&line.product_id;
+  const current=products.find(p=>p.id===line.product_id)||null;
+  const candidate=products.find(p=>p.id===candidateId)||null;
+  const activeProduct=candidate||current;
+  const warning=activeProduct?dimensionWarning(line,activeProduct):null;
+  const needsReview=line.match_status==="REVIEW"||Boolean(candidateId);
+  const editable=status==="Imported";
+  const q=query.trim().toLowerCase();
+  const filtered=products.filter(p=>{
+    if(!q)return true;
+    return [p.sku_id,p.name,p.product_type,p.material,p.fitment].some(v=>String(v||"").toLowerCase().includes(q));
+  }).slice(0,40);
+
+  const choose=id=>{setCandidateId(id);setReviewAck(false);setOpen(false);};
+  const clearCandidate=()=>{setCandidateId("");setReviewAck(false);setOpen(true);};
+
+  if(confirmed&&!candidateId){
+    return <div>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+        <div style={{fontSize:11.5,fontWeight:850}}>{current?.sku_id} · {current?.name}</div>
+        {editable&&<button type="button" style={{...btn(),padding:"5px 8px"}} onClick={()=>setOpen(v=>!v)}>Change Match</button>}
+      </div>
+      {current&&<ProductComparison line={line} product={current} currency={currency}/>}
+      {editable&&<div style={{display:"flex",gap:6,marginTop:6}}><button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button></div>}
+      {open&&<div style={{marginTop:7,border:"1px solid "+C.border,borderRadius:9,padding:8,background:"#fff"}}>
+        <input autoFocus style={input} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search SKU, product, type, material or fitment"/>
+        <div style={{display:"grid",gap:5,maxHeight:290,overflowY:"auto",marginTop:7}}>
+          {filtered.map(p=><button key={p.id} type="button" onClick={()=>choose(p.id)} style={{textAlign:"left",border:"1px solid "+C.border,borderRadius:8,padding:8,background:"#fff",cursor:"pointer"}}>
+            <div style={{fontSize:11.5,fontWeight:850}}>{p.sku_id} · {p.name}</div>
+            <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{p.product_type||"Type TBD"} · {p.material||"Material TBD"}</div>
+            <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{p.fitment||"Fitment TBD"}</div>
+            <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Dimensions: {formatDimensions(p)} · Weight: {cleanNumber(p.weight_kg)!==null?Number(Number(p.weight_kg).toFixed(2))+" kg":"Not recorded"}</div>
+          </button>)}
+          {filtered.length===0&&<div style={{fontSize:11,color:C.muted,padding:8}}>No matching Costa Gear product.</div>}
+        </div>
+      </div>}
+      {candidateId&&candidate&&<div style={{marginTop:7}}><ProductComparison line={line} product={candidate} currency={currency}/></div>}
+    </div>;
+  }
+
+  return <div>
+    {!candidate&&<button type="button" disabled={!editable||busy} style={{...btn(),width:"100%",justifyContent:"space-between",padding:"8px 10px"}} onClick={()=>setOpen(v=>!v)}><span>{line.match_status==="REVIEW"&&current?"Review current candidate":"Select Costa Gear product"}</span><span>▾</span></button>}
+
+    {candidate&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+        <div style={{fontSize:11.5,fontWeight:850}}>{candidate.sku_id} · {candidate.name}</div>
+        {editable&&<button type="button" style={{...btn(),padding:"5px 8px"}} onClick={clearCandidate}>Choose Different</button>}
+      </div>
+      <ProductComparison line={line} product={candidate} currency={currency}/>
+      {warning&&<label style={{display:"flex",gap:7,alignItems:"flex-start",fontSize:10.5,color:C.amber,marginTop:6,cursor:"pointer"}}>
+        <input type="checkbox" checked={reviewAck} onChange={e=>setReviewAck(e.target.checked)}/>
+        <span>I reviewed the dimensional difference and confirm this is the intended Costa Gear product.</span>
+      </label>}
+      {editable&&<div style={{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}}>
+        <button type="button" disabled={busy||(warning&&!reviewAck)} style={{...btn(true),opacity:(busy||(warning&&!reviewAck))?.45:1}} onClick={()=>onConfirm(line.id,candidate.id)}>{warning?"Confirm Match Anyway":"Confirm Match"}</button>
+        <button type="button" disabled={busy} style={{...btn(),color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button>
+      </div>}
+    </div>}
+
+    {!candidate&&open&&<div style={{marginTop:7,border:"1px solid "+C.border,borderRadius:9,padding:8,background:"#fff"}}>
+      <input autoFocus style={input} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search SKU, product, type, material or fitment"/>
+      <div style={{display:"grid",gap:5,maxHeight:290,overflowY:"auto",marginTop:7}}>
+        {filtered.map(p=><button key={p.id} type="button" onClick={()=>choose(p.id)} style={{textAlign:"left",border:"1px solid "+C.border,borderRadius:8,padding:8,background:"#fff",cursor:"pointer"}}>
+          <div style={{fontSize:11.5,fontWeight:850}}>{p.sku_id} · {p.name}</div>
+          <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{p.product_type||"Type TBD"} · {p.material||"Material TBD"}</div>
+          <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{p.fitment||"Fitment TBD"}</div>
+          <div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Dimensions: {formatDimensions(p)} · Weight: {cleanNumber(p.weight_kg)!==null?Number(Number(p.weight_kg).toFixed(2))+" kg":"Not recorded"}</div>
+        </button>)}
+        {filtered.length===0&&<div style={{fontSize:11,color:C.muted,padding:8}}>No matching Costa Gear product.</div>}
+      </div>
+    </div>}
+
+    {!candidate&&editable&&<div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+      <button type="button" style={{...btn(),padding:"6px 9px",color:C.oliveDark,borderColor:"rgba(133,140,56,.35)"}} onClick={()=>onCreate(line)}>+ Create New Product</button>
+      <button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button>
+    </div>}
+
+    {line.match_status==="REVIEW"&&current&&!candidate&&<div style={{marginTop:7}}>
+      <ProductComparison line={line} product={current} currency={currency}/>
+      {dimensionWarning(line,current)&&<label style={{display:"flex",gap:7,alignItems:"flex-start",fontSize:10.5,color:C.amber,marginTop:6,cursor:"pointer"}}>
+        <input type="checkbox" checked={reviewAck} onChange={e=>setReviewAck(e.target.checked)}/>
+        <span>I reviewed the dimensional difference and confirm this is the intended Costa Gear product.</span>
+      </label>}
+      {editable&&<div style={{display:"flex",gap:6,marginTop:7}}>
+        <button type="button" disabled={busy||(dimensionWarning(line,current)&&!reviewAck)} style={{...btn(true),opacity:(busy||(dimensionWarning(line,current)&&!reviewAck))?.45:1}} onClick={()=>onConfirm(line.id,current.id)}>Confirm Match Anyway</button>
+        <button type="button" style={btn()} onClick={()=>setOpen(true)}>Choose Different</button>
+      </div>}
+    </div>}
   </div>;
 };
 
