@@ -53,16 +53,30 @@ export async function createProductFromQuotationLine({
   productType,
   category,
   material,
-  fitment,
+  fitments,
+  fitmentNotes,
+  length,
+  width,
+  height,
+  weight,
   notes,
 }) {
-  const { data, error } = await supabase.rpc("create_product_from_quotation_line", {
+  const { data, error } = await supabase.rpc("create_product_from_quotation_line_v2", {
     p_line_id: lineId,
     p_name: name || null,
     p_product_type: productType || null,
     p_category: category || null,
     p_material: material || null,
-    p_fitment: fitment || null,
+    p_fitments: (fitments || []).map(x => ({
+      code: x.code,
+      yearFrom: x.yearFrom === "" || x.yearFrom == null ? null : Number(x.yearFrom),
+      yearTo: x.yearTo === "" || x.yearTo == null ? null : Number(x.yearTo),
+    })),
+    p_fitment_notes: fitmentNotes || null,
+    p_length_cm: length ? Number(length) : null,
+    p_width_cm: width ? Number(width) : null,
+    p_height_cm: height ? Number(height) : null,
+    p_weight_kg: weight ? Number(weight) : null,
     p_notes: notes || null,
   });
   if (error) throw error;
