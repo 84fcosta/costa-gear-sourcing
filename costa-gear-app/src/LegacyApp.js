@@ -1317,7 +1317,7 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
                     {yearsFor(fitment).map(y => <option key={y} value={String(y)}>{y}</option>)}
                   </select>
                   <select value={selected.yearTo ?? ""} onChange={e => update(fitment.code, "yearTo", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
-                    <option value="">Current / ongoing</option>
+                    <option value="">{fitment.model_year_end ? "End year *" : "Current / ongoing"}</option>
                     {yearsFor(fitment).filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
                   </select>
                 </>
@@ -1372,7 +1372,12 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
   const selectedType = productTypes.find(t => t.name === form.productType);
   const skuPreview = editing?.skuId || editing?.sku_id || (selectedType ? "CG-" + selectedType.family_code + "-##" : "Generated automatically on Save");
   const hasDimensions = Number(form.length) > 0 && Number(form.width) > 0 && Number(form.height) > 0;
-  const fitmentsValid = Array.isArray(form.fitments) && form.fitments.length > 0 && form.fitments.every(x => x.code && x.yearFrom);
+  const fitmentsValid = Array.isArray(form.fitments) && form.fitments.length > 0 && form.fitments.every(x => {
+    const meta = vehicleFitments.find(v => v.code === x.code);
+    if (!x.code || !x.yearFrom || !meta) return false;
+    if (meta.model_year_end && !x.yearTo) return false;
+    return true;
+  });
   const valid = Boolean(form.productType) && hasDimensions && fitmentsValid;
 
   const addMaterial = async () => {
@@ -1468,7 +1473,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
           <Input label="Pricing Notes" value={form.pricingNotes} onChange={set("pricingNotes")} placeholder="Notes about market price, competitor, margin strategy..." />
         </div>
 
-        {!fitmentsValid && <div style={{ fontSize: 11.5, color: C.amber }}>Select at least one vehicle fitment and choose a starting year for every selected fitment.</div>}
+        {!fitmentsValid && <div style={{ fontSize: 11.5, color: C.amber }}>Select at least one vehicle fitment. A start year is required for every selection, and discontinued platforms also require an end year.</div>}
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
