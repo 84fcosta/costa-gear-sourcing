@@ -397,6 +397,8 @@ export default function App() {
   const [products,  setProducts]  = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [quotes,    setQuotes]    = useState([]);
+  const [productTypes, setProductTypes] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
 
@@ -407,13 +409,15 @@ export default function App() {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }] = await Promise.all([
+      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }, { data: pt, error: pte }, { data: pm, error: pme }] = await Promise.all([
         supabase.from("suppliers").select("*").order("sup_id"),
         supabase.from("products").select("*").order("sku_id"),
         supabase.from("quotes").select("*").order("created_at", { ascending: false }),
+        supabase.from("product_types").select("*").eq("active", true).order("name"),
+        supabase.from("product_materials").select("*").eq("active", true).order("name"),
       ]);
-      if (se || pe || qe) throw new Error((se || pe || qe).message);
-      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []);
+      if (se || pe || qe || pte || pme) throw new Error((se || pe || qe || pte || pme).message);
+      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setMaterials(pm || []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -439,28 +443,63 @@ export default function App() {
   };
 
   const saveProduct = async (f) => {
-    const row = {
-      sku_id: f.skuId,
-      product_type: f.productType,
-      material: f.material,
-      fitment: f.fitment,
-      name: f.name,
-      category: f.category,
-      length_cm: f.length ? Number(f.length) : null,
-      width_cm: f.width ? Number(f.width) : null,
-      height_cm: f.height ? Number(f.height) : null,
-      weight_kg: f.weight ? Number(f.weight) : null,
-      notes: f.notes,
-      market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
-      target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
-      target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
-      competitor_reference: f.competitorReference || null,
-      competitor_url: f.competitorUrl || null,
-      pricing_notes: f.pricingNotes || null,
-    };
-    if (editing) await supabase.from("products").update(row).eq("id", editing.id);
-    else         await supabase.from("products").insert(row);
-    closeModal(); fetchAll();
+    setError(null);
+    try {
+      if (editing) {
+        const row = {
+          product_type: f.productType,
+          material: f.material || null,
+          fitment: f.fitment || null,
+          name: f.name,
+          category: f.category || null,
+          length_cm: f.length ? Number(f.length) : null,
+          width_cm: f.width ? Number(f.width) : null,
+          height_cm: f.height ? Number(f.height) : null,
+          weight_kg: f.weight ? Number(f.weight) : null,
+          notes: f.notes || null,
+          market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
+          target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
+          target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
+          competitor_reference: f.competitorReference || null,
+          competitor_url: f.competitorUrl || null,
+          pricing_notes: f.pricingNotes || null,
+        };
+        const { error } = await supabase.from("products").update(row).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("create_costa_gear_product", {
+          p_product_type: f.productType,
+          p_material: f.material || null,
+          p_fitment: f.fitment || null,
+          p_name: f.name || null,
+          p_category: f.category || null,
+          p_length_cm: f.length ? Number(f.length) : null,
+          p_width_cm: f.width ? Number(f.width) : null,
+          p_height_cm: f.height ? Number(f.height) : null,
+          p_weight_kg: f.weight ? Number(f.weight) : null,
+          p_notes: f.notes || null,
+          p_market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
+          p_target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
+          p_target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
+          p_competitor_reference: f.competitorReference || null,
+          p_competitor_url: f.competitorUrl || null,
+          p_pricing_notes: f.pricingNotes || null,
+        });
+        if (error) throw error;
+      }
+      closeModal();
+      fetchAll();
+    } catch (e) {
+      setError(e.message || "Unable to save product.");
+    }
+  };
+
+  const addProductMaterial = async (name) => {
+    const { data, error } = await supabase.rpc("add_product_material", { p_name: name });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) setMaterials(prev => [...prev.filter(x => x.id !== row.id), row].sort((a,b)=>a.name.localeCompare(b.name)));
+    return row;
   };
 
   const deleteProduct = async (id) => { await supabase.from("products").delete().eq("id", id); fetchAll(); };
@@ -606,7 +645,7 @@ export default function App() {
         )}
       </div>
 
-      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} />}
+      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} materials={materials} onAddMaterial={addProductMaterial} />}
       {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
       {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
       {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
@@ -1214,7 +1253,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
 // ════════════════════════════════════════════════════════════════
 // PRODUCT MODAL
 // ════════════════════════════════════════════════════════════════
-function ProductModal({ onSave, onClose, editing }) {
+function ProductModal({ onSave, onClose, editing, productTypes = [], materials = [], onAddMaterial }) {
   const [form, setForm] = useState(editing || {
     skuId: "",
     productType: "",
@@ -1234,6 +1273,11 @@ function ProductModal({ onSave, onClose, editing }) {
     competitorUrl: "",
     pricingNotes: "",
   });
+  const [addingMaterial,setAddingMaterial] = useState(false);
+  const [newMaterial,setNewMaterial] = useState("");
+  const [materialBusy,setMaterialBusy] = useState(false);
+  const [materialError,setMaterialError] = useState("");
+
   const set = (k) => (v) => {
     setForm(f => {
       const u = { ...f, [k]: v };
@@ -1242,28 +1286,74 @@ function ProductModal({ onSave, onClose, editing }) {
       return u;
     });
   };
-  const valid = form.skuId && form.productType;
+
+  const selectedType = productTypes.find(t => t.name === form.productType);
+  const skuPreview = editing?.skuId || editing?.sku_id || (selectedType ? "CG-" + selectedType.family_code + "-##" : "Generated automatically on Save");
+  const valid = Boolean(form.productType);
+
+  const addMaterial = async () => {
+    const name = newMaterial.trim();
+    if (!name || !onAddMaterial) return;
+    setMaterialBusy(true); setMaterialError("");
+    try {
+      const row = await onAddMaterial(name);
+      if (row?.name) set("material")(row.name);
+      setAddingMaterial(false); setNewMaterial("");
+    } catch (e) {
+      setMaterialError(e.message || "Unable to add material.");
+    } finally {
+      setMaterialBusy(false);
+    }
+  };
+
   return (
     <Modal title={editing ? "Edit Product" : "Add Product"} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", gap: 12 }}>
-          <Input label="SKU ID" value={form.skuId} onChange={set("skuId")} placeholder="e.g. CG-004" required />
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>SKU ID</label>
+            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 15, color: selectedType || editing ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box", fontFamily: "monospace", fontWeight: 800 }}>{skuPreview}</div>
+            {!editing && <div style={{ fontSize: 11, color: C.dgray, marginTop: 4 }}>Assigned by the database when the product is saved.</div>}
+          </div>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Auto Name</label>
-            <div style={{ border: `1px solid ${C.mgray}`, borderRadius: 6, padding: "7px 10px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 34 }}>{form.name || "Filled automatically…"}</div>
+            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box" }}>{form.name || "Filled automatically…"}</div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Product Type *" value={form.productType} onChange={set("productType")} placeholder="e.g. Side Steps" required />
-          <Input label="Material"       value={form.material}    onChange={set("material")}    placeholder="e.g. Aluminum" />
-          <Input label="Fitment"        value={form.fitment}     onChange={set("fitment")}     options={FITMENTS} />
+
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <Input label="Product Type" value={form.productType} onChange={set("productType")} options={productTypes.map(t => t.name)} required />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 140 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Material</label>
+            {!addingMaterial ? (
+              <select value={form.material || ""} onChange={e => {
+                if (e.target.value === "__ADD__") { setAddingMaterial(true); setNewMaterial(""); }
+                else set("material")(e.target.value);
+              }} style={inputStyle}>
+                <option value="">— select —</option>
+                {materials.map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}
+                <option value="__ADD__">+ Add New Material…</option>
+              </select>
+            ) : (
+              <div style={{ display: "grid", gap: 5 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input autoFocus value={newMaterial} onChange={e => setNewMaterial(e.target.value)} placeholder="New material" style={{ ...inputStyle, minWidth: 0 }} />
+                  <Btn small disabled={materialBusy || !newMaterial.trim()} onClick={addMaterial}>{materialBusy ? "Adding…" : "Add"}</Btn>
+                  <Btn small variant="ghost" disabled={materialBusy} onClick={() => { setAddingMaterial(false); setNewMaterial(""); setMaterialError(""); }}>Cancel</Btn>
+                </div>
+                {materialError && <div style={{ fontSize: 11, color: C.red }}>{materialError}</div>}
+              </div>
+            )}
+          </div>
+          <Input label="Fitment" value={form.fitment} onChange={set("fitment")} options={FITMENTS} />
         </div>
+
         <Input label="Category" value={form.category} onChange={set("category")} options={CATEGORIES} />
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 6 }}>Dimensions (cm) & Weight</label>
           <div style={{ display: "flex", gap: 12 }}>
             <Input label="Length" value={form.length} onChange={set("length")} type="number" placeholder="cm" small />
-            <Input label="Width"  value={form.width}  onChange={set("width")}  type="number" placeholder="cm" small />
+            <Input label="Width" value={form.width} onChange={set("width")} type="number" placeholder="cm" small />
             <Input label="Height" value={form.height} onChange={set("height")} type="number" placeholder="cm" small />
             <Input label="Weight (kg)" value={form.weight} onChange={set("weight")} type="number" placeholder="kg" small />
           </div>
