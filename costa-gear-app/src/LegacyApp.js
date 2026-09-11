@@ -1275,12 +1275,63 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
 // ════════════════════════════════════════════════════════════════
 // PRODUCT MODAL
 // ════════════════════════════════════════════════════════════════
-function ProductModal({ onSave, onClose, editing, productTypes = [], materials = [], onAddMaterial }) {
+function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", onNotesChange }) {
+  const yearOptions = Array.from({ length: new Date().getFullYear() + 6 - 2000 }, (_, i) => 2000 + i);
+  const selectedByCode = new Map((value || []).map(item => [item.code, item]));
+
+  const toggle = code => {
+    if (selectedByCode.has(code)) {
+      onChange((value || []).filter(item => item.code !== code));
+    } else {
+      onChange([...(value || []), { code, yearFrom: "", yearTo: "" }]);
+    }
+  };
+
+  const update = (code, key, next) => {
+    onChange((value || []).map(item => item.code === code ? { ...item, [key]: next } : item));
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Vehicle Fitment *</div>
+      <div style={{ border: "1px solid rgba(50,56,42,0.13)", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+        {catalog.map((fitment, index) => {
+          const selected = selectedByCode.get(fitment.code);
+          return (
+            <div key={fitment.code} style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.4fr) minmax(125px,.7fr) minmax(135px,.7fr)", gap: 10, alignItems: "center", padding: "10px 12px", borderTop: index ? "1px solid rgba(50,56,42,0.08)" : 0, background: selected ? "#F8FAF0" : "#fff" }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: selected ? 750 : 600, color: C.navy, cursor: "pointer" }}>
+                <input type="checkbox" checked={Boolean(selected)} onChange={() => toggle(fitment.code)} />
+                <span>{fitment.display_name}</span>
+              </label>
+              {selected ? (
+                <>
+                  <select value={selected.yearFrom ?? ""} onChange={e => update(fitment.code, "yearFrom", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
+                    <option value="">Start year *</option>
+                    {yearOptions.map(y => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
+                  <select value={selected.yearTo ?? ""} onChange={e => update(fitment.code, "yearTo", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
+                    <option value="">Current / ongoing</option>
+                    {yearOptions.filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
+                </>
+              ) : <><div /><div /></>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: C.dgray }}>Select every applicable platform. Start year is required for each selection. Leave End Year as Current / ongoing when compatibility continues.</div>
+      <Input label="Fitment Notes / Restrictions" value={notes} onChange={onNotesChange} placeholder="e.g. Hard Top Only, Not for Wrangler 4xe" />
+    </div>
+  );
+}
+
+function ProductModal({ onSave, onClose, editing, productTypes = [], materials = [], vehicleFitments = [], onAddMaterial }) {
   const [form, setForm] = useState(editing || {
     skuId: "",
     productType: "",
     material: "",
-    fitment: "",
+    fitments: [],
+    fitmentNotes: "",
     name: "",
     category: "",
     length: "",
@@ -1303,15 +1354,19 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
   const set = (k) => (v) => {
     setForm(f => {
       const u = { ...f, [k]: v };
-      const parts = [k === "productType" ? v : f.productType, k === "material" ? v : f.material, k === "fitment" ? v : f.fitment].filter(Boolean);
-      u.name = parts.join(" – ");
+      if (k === "productType" || k === "material") {
+        const parts = [k === "productType" ? v : f.productType, k === "material" ? v : f.material].filter(Boolean);
+        u.name = parts.join(" - ");
+      }
       return u;
     });
   };
 
   const selectedType = productTypes.find(t => t.name === form.productType);
   const skuPreview = editing?.skuId || editing?.sku_id || (selectedType ? "CG-" + selectedType.family_code + "-##" : "Generated automatically on Save");
-  const valid = Boolean(form.productType);
+  const hasDimensions = Number(form.length) > 0 && Number(form.width) > 0 && Number(form.height) > 0;
+  const fitmentsValid = Array.isArray(form.fitments) && form.fitments.length > 0 && form.fitments.every(x => x.code && x.yearFrom);
+  const valid = Boolean(form.productType) && hasDimensions && fitmentsValid;
 
   const addMaterial = async () => {
     const name = newMaterial.trim();
@@ -1339,7 +1394,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Auto Name</label>
-            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box" }}>{form.name || "Filled automatically…"}</div>
+            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box" }}>{form.name || "Filled automatically..."}</div>
           </div>
         </div>
 
@@ -1352,34 +1407,44 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
                 if (e.target.value === "__ADD__") { setAddingMaterial(true); setNewMaterial(""); }
                 else set("material")(e.target.value);
               }} style={inputStyle}>
-                <option value="">— select —</option>
+                <option value="">- select -</option>
                 {materials.map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}
-                <option value="__ADD__">+ Add New Material…</option>
+                <option value="__ADD__">+ Add New Material...</option>
               </select>
             ) : (
               <div style={{ display: "grid", gap: 5 }}>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input autoFocus value={newMaterial} onChange={e => setNewMaterial(e.target.value)} placeholder="New material" style={{ ...inputStyle, minWidth: 0 }} />
-                  <Btn small disabled={materialBusy || !newMaterial.trim()} onClick={addMaterial}>{materialBusy ? "Adding…" : "Add"}</Btn>
+                  <Btn small disabled={materialBusy || !newMaterial.trim()} onClick={addMaterial}>{materialBusy ? "Adding..." : "Add"}</Btn>
                   <Btn small variant="ghost" disabled={materialBusy} onClick={() => { setAddingMaterial(false); setNewMaterial(""); setMaterialError(""); }}>Cancel</Btn>
                 </div>
                 {materialError && <div style={{ fontSize: 11, color: C.red }}>{materialError}</div>}
               </div>
             )}
           </div>
-          <Input label="Fitment" value={form.fitment} onChange={set("fitment")} options={FITMENTS} />
         </div>
 
         <Input label="Category" value={form.category} onChange={set("category")} options={CATEGORIES} />
+
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 6 }}>Dimensions (cm) & Weight</label>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 6 }}>Product Dimensions (cm) *</label>
           <div style={{ display: "flex", gap: 12 }}>
-            <Input label="Length" value={form.length} onChange={set("length")} type="number" placeholder="cm" small />
-            <Input label="Width" value={form.width} onChange={set("width")} type="number" placeholder="cm" small />
-            <Input label="Height" value={form.height} onChange={set("height")} type="number" placeholder="cm" small />
+            <Input label="Length *" value={form.length} onChange={set("length")} type="number" placeholder="cm" small required />
+            <Input label="Width *" value={form.width} onChange={set("width")} type="number" placeholder="cm" small required />
+            <Input label="Height *" value={form.height} onChange={set("height")} type="number" placeholder="cm" small required />
             <Input label="Weight (kg)" value={form.weight} onChange={set("weight")} type="number" placeholder="kg" small />
           </div>
+          {!hasDimensions && <div style={{ fontSize: 11, color: C.amber, marginTop: 5 }}>Length, Width and Height are required before the product can be saved.</div>}
         </div>
+
+        <VehicleFitmentEditor
+          catalog={vehicleFitments}
+          value={form.fitments || []}
+          onChange={set("fitments")}
+          notes={form.fitmentNotes || ""}
+          onNotesChange={set("fitmentNotes")}
+        />
+
         <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Optional notes" />
 
         <div style={{ border: "1px solid rgba(132,140,56,0.25)", background: "#F7F9ED", borderRadius: 14, padding: 14 }}>
@@ -1395,6 +1460,8 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
           </div>
           <Input label="Pricing Notes" value={form.pricingNotes} onChange={set("pricingNotes")} placeholder="Notes about market price, competitor, margin strategy..." />
         </div>
+
+        {!fitmentsValid && <div style={{ fontSize: 11.5, color: C.amber }}>Select at least one vehicle fitment and choose a starting year for every selected fitment.</div>}
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
