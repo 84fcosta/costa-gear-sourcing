@@ -38,6 +38,15 @@ export async function mapSupplierQuotationLine(lineId, productId) {
   return data;
 }
 
+export async function setSupplierQuotationLineIgnored(lineId, ignored) {
+  const { data, error } = await supabase.rpc("set_supplier_quotation_line_ignored", {
+    p_line_id: lineId,
+    p_ignored: Boolean(ignored),
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function createProductFromQuotationLine({
   lineId,
   name,
