@@ -3,6 +3,20 @@
 -- Ignored lines remain in supplier_quotation_lines for traceability and validation,
 -- but are excluded from comparable quotes and Buying Drafts.
 
+-- Extend the existing match-status guard to support ignored supplier items.
+alter table public.supplier_quotation_lines
+  drop constraint if exists supplier_quotation_lines_match_ck;
+
+alter table public.supplier_quotation_lines
+  add constraint supplier_quotation_lines_match_ck
+  check (match_status = any (array[
+    'MATCHED'::text,
+    'REVIEW'::text,
+    'UNMATCHED'::text,
+    'NEW PRODUCT'::text,
+    'IGNORED'::text
+  ]));
+
 CREATE OR REPLACE FUNCTION public.finalize_supplier_quotation(p_quotation_id uuid, p_usd_cad_rate numeric, p_allocation_method text DEFAULT 'value'::text, p_duty_rate_pct numeric DEFAULT NULL::numeric)
  RETURNS supplier_quotations
  LANGUAGE plpgsql
