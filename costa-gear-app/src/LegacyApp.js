@@ -399,6 +399,8 @@ export default function App() {
   const [quotes,    setQuotes]    = useState([]);
   const [productTypes, setProductTypes] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [vehicleFitments, setVehicleFitments] = useState([]);
+  const [productFitmentRows, setProductFitmentRows] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
 
@@ -409,15 +411,17 @@ export default function App() {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }, { data: pt, error: pte }, { data: pm, error: pme }] = await Promise.all([
+      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }, { data: pt, error: pte }, { data: pm, error: pme }, { data: vf, error: vfe }, { data: pf, error: pfe }] = await Promise.all([
         supabase.from("suppliers").select("*").order("sup_id"),
         supabase.from("products").select("*").order("sku_id"),
         supabase.from("quotes").select("*").order("created_at", { ascending: false }),
         supabase.from("product_types").select("*").eq("active", true).order("name"),
         supabase.from("product_materials").select("*").eq("active", true).order("name"),
+        supabase.from("vehicle_fitments").select("*").eq("active", true).order("sort_order"),
+        supabase.from("product_fitments").select("*"),
       ]);
-      if (se || pe || qe || pte || pme) throw new Error((se || pe || qe || pte || pme).message);
-      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setMaterials(pm || []);
+      if (se || pe || qe || pte || pme || vfe || pfe) throw new Error((se || pe || qe || pte || pme || vfe || pfe).message);
+      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setMaterials(pm || []); setVehicleFitments(vf || []); setProductFitmentRows(pf || []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -445,11 +449,16 @@ export default function App() {
   const saveProduct = async (f) => {
     setError(null);
     try {
+      const fitments = (f.fitments || []).map(x => ({
+        code: x.code,
+        yearFrom: x.yearFrom === "" || x.yearFrom == null ? null : Number(x.yearFrom),
+        yearTo: x.yearTo === "" || x.yearTo == null ? null : Number(x.yearTo),
+      }));
+
       if (editing) {
         const row = {
           product_type: f.productType,
           material: f.material || null,
-          fitment: f.fitment || null,
           name: f.name,
           category: f.category || null,
           length_cm: f.length ? Number(f.length) : null,
@@ -464,13 +473,20 @@ export default function App() {
           competitor_url: f.competitorUrl || null,
           pricing_notes: f.pricingNotes || null,
         };
-        const { error } = await supabase.from("products").update(row).eq("id", editing.id);
-        if (error) throw error;
+        const { error: updateError } = await supabase.from("products").update(row).eq("id", editing.id);
+        if (updateError) throw updateError;
+        const { error: fitmentError } = await supabase.rpc("set_product_fitments", {
+          p_product_id: editing.id,
+          p_fitments: fitments,
+          p_fitment_notes: f.fitmentNotes || null,
+        });
+        if (fitmentError) throw fitmentError;
       } else {
-        const { error } = await supabase.rpc("create_costa_gear_product", {
+        const { error: createError } = await supabase.rpc("create_costa_gear_product_v2", {
           p_product_type: f.productType,
           p_material: f.material || null,
-          p_fitment: f.fitment || null,
+          p_fitments: fitments,
+          p_fitment_notes: f.fitmentNotes || null,
           p_name: f.name || null,
           p_category: f.category || null,
           p_length_cm: f.length ? Number(f.length) : null,
@@ -485,7 +501,7 @@ export default function App() {
           p_competitor_url: f.competitorUrl || null,
           p_pricing_notes: f.pricingNotes || null,
         });
-        if (error) throw error;
+        if (createError) throw createError;
       }
       closeModal();
       fetchAll();
@@ -546,6 +562,12 @@ export default function App() {
     productType: p.product_type,
     material: p.material,
     fitment: p.fitment,
+    fitmentNotes: p.fitment_notes || "",
+    fitments: productFitmentRows.filter(r => r.product_id === p.id).map(r => ({
+      code: r.fitment_code,
+      yearFrom: r.year_from == null ? "" : String(r.year_from),
+      yearTo: r.year_to == null ? "" : String(r.year_to),
+    })),
     name: p.name,
     category: p.category,
     length: p.length_cm,
@@ -645,7 +667,7 @@ export default function App() {
         )}
       </div>
 
-      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} materials={materials} onAddMaterial={addProductMaterial} />}
+      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} materials={materials} vehicleFitments={vehicleFitments} onAddMaterial={addProductMaterial} />}
       {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
       {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
       {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
