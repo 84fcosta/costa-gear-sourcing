@@ -1272,7 +1272,18 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
 // PRODUCT MODAL
 // ════════════════════════════════════════════════════════════════
 function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", onNotesChange }) {
-  const yearOptions = Array.from({ length: new Date().getFullYear() + 6 - 2000 }, (_, i) => 2000 + i);
+  const currentModelYear = new Date().getFullYear() + 1;
+  const yearsFor = fitment => {
+    const start = Number(fitment.model_year_start) || 2000;
+    const end = Number(fitment.model_year_end) || currentModelYear;
+    return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => start + i);
+  };
+  const modelRange = fitment => {
+    const start = fitment.model_year_start;
+    const end = fitment.model_year_end;
+    if (!start) return "";
+    return end ? `${start}-${end}` : `${start}+`;
+  };
   const selectedByCode = new Map((value || []).map(item => [item.code, item]));
 
   const toggle = code => {
@@ -1297,17 +1308,17 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
             <div key={fitment.code} style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.4fr) minmax(125px,.7fr) minmax(135px,.7fr)", gap: 10, alignItems: "center", padding: "10px 12px", borderTop: index ? "1px solid rgba(50,56,42,0.08)" : 0, background: selected ? "#F8FAF0" : "#fff" }}>
               <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: selected ? 750 : 600, color: C.navy, cursor: "pointer" }}>
                 <input type="checkbox" checked={Boolean(selected)} onChange={() => toggle(fitment.code)} />
-                <span>{fitment.display_name}</span>
+                <span>{fitment.display_name}<span style={{ display:"block", fontSize:10.5, color:C.dgray, fontWeight:600, marginTop:1 }}>{modelRange(fitment)}</span></span>
               </label>
               {selected ? (
                 <>
                   <select value={selected.yearFrom ?? ""} onChange={e => update(fitment.code, "yearFrom", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
                     <option value="">Start year *</option>
-                    {yearOptions.map(y => <option key={y} value={String(y)}>{y}</option>)}
+                    {yearsFor(fitment).map(y => <option key={y} value={String(y)}>{y}</option>)}
                   </select>
                   <select value={selected.yearTo ?? ""} onChange={e => update(fitment.code, "yearTo", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
                     <option value="">Current / ongoing</option>
-                    {yearOptions.filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
+                    {yearsFor(fitment).filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
                   </select>
                 </>
               ) : <><div /><div /></>}
@@ -1315,7 +1326,7 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
           );
         })}
       </div>
-      <div style={{ fontSize: 11, color: C.dgray }}>Select every applicable platform. Start year is required for each selection. Leave End Year as Current / ongoing when compatibility continues.</div>
+      <div style={{ fontSize: 11, color: C.dgray }}>Year options are limited to each vehicle's valid model-year range. Start year is required. Leave End Year as Current / ongoing only for platforms still in production.</div>
       <Input label="Fitment Notes / Restrictions" value={notes} onChange={onNotesChange} placeholder="e.g. Hard Top Only, Not for Wrangler 4xe" />
     </div>
   );
