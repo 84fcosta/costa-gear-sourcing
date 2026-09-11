@@ -7,6 +7,13 @@ import { getMicrosoftOneDriveAuthState } from "../services/microsoftOneDriveAuth
 const MEDIA_WIDTH = 220;
 const ACTION_WIDTH = 468;
 const ROW_MIN_WIDTH = 1060;
+const DESKTOP_STICKY_BREAKPOINT = 1180;
+
+function topbarOffset() {
+  const topbar = document.querySelector(".cg-topbar");
+  const height = Math.round(topbar?.getBoundingClientRect?.().height || 96);
+  return `${height}px`;
+}
 
 function findProductLayout(sku) {
   if (typeof document === "undefined") return null;
@@ -56,7 +63,10 @@ function compactActionButton(button, column) {
 
 function applyCompactLayout(layout) {
   const { card, infoGroup, actionGroup, skuNode, edit, del, list } = layout;
-  if (list) Object.assign(list.style, { gap: "3px", overflowX: "auto" });
+  if (list) Object.assign(list.style, {
+    gap: "3px",
+    overflowX: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "visible" : "auto",
+  });
 
   Object.assign(card.style, {
     display: "grid",
@@ -122,7 +132,17 @@ function ensureHeaderHost(list) {
     host.setAttribute("data-cg-product-table-header", "true");
     list.insertBefore(host, list.firstChild || null);
   }
-  host.style.minWidth = `${ROW_MIN_WIDTH}px`;
+  const sticky = window.innerWidth >= DESKTOP_STICKY_BREAKPOINT;
+  Object.assign(host.style, {
+    minWidth: `${ROW_MIN_WIDTH}px`,
+    position: sticky ? "sticky" : "relative",
+    top: sticky ? topbarOffset() : "auto",
+    zIndex: "18",
+    background: "#fff",
+    paddingTop: sticky ? "2px" : "0",
+    paddingBottom: sticky ? "2px" : "0",
+    boxShadow: sticky ? "0 4px 10px rgba(28,39,24,.08)" : "none",
+  });
   return host;
 }
 

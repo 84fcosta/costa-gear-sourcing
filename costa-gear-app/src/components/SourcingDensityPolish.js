@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 const PRODUCT_ROW_HEIGHT = 45;
+const DESKTOP_STICKY_BREAKPOINT = 1180;
 
 function exactHeading(selector, text) {
   return Array.from(document.querySelectorAll(selector)).find(
@@ -13,6 +14,84 @@ function setStyles(node, styles) {
   Object.assign(node.style, styles);
 }
 
+function setImportantStyles(node, styles) {
+  if (!node) return;
+  Object.entries(styles).forEach(([property, value]) => {
+    node.style.setProperty(property, value, "important");
+  });
+}
+
+function topbarOffset() {
+  const topbar = document.querySelector(".cg-topbar");
+  const height = Math.round(topbar?.getBoundingClientRect?.().height || 96);
+  return `${height}px`;
+}
+
+function makeScrollableStickyTable(table, maxHeight) {
+  if (!table) return;
+  const wrapper = table.parentElement;
+  setStyles(wrapper, {
+    maxHeight,
+    overflowX: "auto",
+    overflowY: "auto",
+    position: "relative",
+    overscrollBehavior: "contain",
+    scrollbarGutter: "stable",
+  });
+
+  table.querySelectorAll("thead th").forEach(cell => {
+    setStyles(cell, {
+      position: "sticky",
+      top: "0",
+      zIndex: "7",
+      background: "#F5F7F1",
+      boxShadow: "0 1px 0 rgba(50,56,42,.10)",
+    });
+  });
+}
+
+function compactTable(table, { rowHeight = PRODUCT_ROW_HEIGHT, productDetails = false } = {}) {
+  if (!table) return;
+
+  table.querySelectorAll("th").forEach(cell => {
+    setImportantStyles(cell, {
+      "font-size": "9.5px",
+      "padding-top": "5px",
+      "padding-bottom": "5px",
+      "line-height": "1.1",
+    });
+    setStyles(cell, {
+      paddingLeft: "8px",
+      paddingRight: "8px",
+      letterSpacing: ".045em",
+    });
+  });
+
+  table.querySelectorAll("tbody tr").forEach(row => {
+    setStyles(row, { height: `${rowHeight}px` });
+    Array.from(row.querySelectorAll("td")).forEach((cell, index) => {
+      setImportantStyles(cell, {
+        "font-size": "11.5px",
+        "padding-top": "5px",
+        "padding-bottom": "5px",
+        "line-height": "1.15",
+      });
+      setStyles(cell, {
+        paddingLeft: "8px",
+        paddingRight: "8px",
+      });
+
+      const lines = Array.from(cell.children);
+      if (productDetails && index === 1) {
+        if (lines[0]) setStyles(lines[0], { fontSize: "13px", lineHeight: "1.15" });
+        if (lines[1]) setStyles(lines[1], { fontSize: "10px", lineHeight: "1.1", marginTop: "1px" });
+      } else if (lines[1]) {
+        setStyles(lines[1], { fontSize: "9.5px", lineHeight: "1.1", marginTop: "1px" });
+      }
+    });
+  });
+}
+
 function compactOverview() {
   const title = exactHeading("h1", "Product Sourcing");
   if (!title) return;
@@ -22,42 +101,42 @@ function compactOverview() {
   const root = titleRow?.parentElement;
   if (!root) return;
 
-  setStyles(root, { gap: "10px" });
-  setStyles(titleRow, { gap: "10px" });
-  setStyles(title, {
-    fontSize: "24px",
-    lineHeight: "1.1",
-    letterSpacing: "-0.025em",
+  setStyles(root, { gap: "8px" });
+  setStyles(titleRow, { gap: "8px" });
+  setImportantStyles(title, {
+    "font-size": "20px",
+    "line-height": "1.1",
   });
+  setStyles(title, { letterSpacing: "-0.025em" });
 
   const subtitle = titleInner?.querySelector("p");
-  setStyles(subtitle, {
-    margin: "3px 0 0",
-    fontSize: "12.5px",
-    lineHeight: "1.25",
+  setImportantStyles(subtitle, {
+    "font-size": "11.5px",
+    "line-height": "1.25",
   });
+  setStyles(subtitle, { margin: "2px 0 0" });
 
   const kpiGrid = root.children?.[1];
   if (kpiGrid) {
-    setStyles(kpiGrid, { gap: "10px" });
+    setStyles(kpiGrid, { gap: "8px" });
     Array.from(kpiGrid.children).forEach(card => {
       setStyles(card, {
-        padding: "10px 13px",
-        borderRadius: "10px",
+        padding: "8px 11px",
+        borderRadius: "9px",
         minHeight: "0",
       });
       const parts = Array.from(card.children);
-      setStyles(parts[0], { fontSize: "10.5px", lineHeight: "1.1" });
+      setStyles(parts[0], { fontSize: "9.5px", lineHeight: "1.1" });
       setStyles(parts[1], {
-        fontSize: "22px",
+        fontSize: "20px",
         lineHeight: "1.05",
-        marginTop: "3px",
+        marginTop: "2px",
         letterSpacing: "-0.025em",
       });
       setStyles(parts[2], {
-        fontSize: "10.5px",
+        fontSize: "9.5px",
         lineHeight: "1.15",
-        marginTop: "3px",
+        marginTop: "2px",
       });
     });
   }
@@ -71,54 +150,82 @@ function compactOverview() {
   if (!snapshotCard) return;
 
   setStyles(snapshotCard, {
-    padding: "11px 12px 12px",
-    borderRadius: "11px",
+    padding: "10px 11px 11px",
+    borderRadius: "10px",
   });
   setStyles(snapshotHeader, {
-    marginBottom: "7px",
-    gap: "10px",
+    marginBottom: "6px",
+    gap: "8px",
   });
-  setStyles(snapshotTitle, {
-    fontSize: "16px",
-    lineHeight: "1.15",
+  setImportantStyles(snapshotTitle, {
+    "font-size": "15px",
+    "line-height": "1.15",
   });
-  setStyles(snapshotTitleWrap?.querySelector("p"), {
-    margin: "2px 0 0",
-    fontSize: "11px",
-    lineHeight: "1.2",
+  setImportantStyles(snapshotTitleWrap?.querySelector("p"), {
+    "font-size": "10.5px",
+    "line-height": "1.2",
   });
+  setStyles(snapshotTitleWrap?.querySelector("p"), { margin: "2px 0 0" });
 
   const coverageBadge = snapshotHeader.children?.[1];
   setStyles(coverageBadge, {
     padding: "3px 7px",
-    fontSize: "10px",
+    fontSize: "9.5px",
     lineHeight: "1.1",
   });
 
   const table = snapshotCard.querySelector("table");
   if (!table) return;
   setStyles(table.parentElement, { borderRadius: "8px" });
+  compactTable(table, { productDetails: true });
+  makeScrollableStickyTable(table, "min(62vh, 640px)");
 
-  table.querySelectorAll("th").forEach(cell => setStyles(cell, {
-    padding: "5px 8px",
-    fontSize: "9px",
-    lineHeight: "1.1",
-    letterSpacing: ".035em",
-  }));
-
-  table.querySelectorAll("tbody tr").forEach(row => {
-    setStyles(row, { height: `${PRODUCT_ROW_HEIGHT}px` });
-    row.querySelectorAll("td").forEach(cell => {
-      setStyles(cell, {
-        padding: "5px 8px",
-        fontSize: "11.5px",
-        lineHeight: "1.15",
-      });
-      const lines = Array.from(cell.children);
-      if (lines[0]) setStyles(lines[0], { fontSize: "11.5px", lineHeight: "1.15" });
-      if (lines[1]) setStyles(lines[1], { fontSize: "9.5px", lineHeight: "1.1", marginTop: "1px" });
+  const note = snapshotCard.lastElementChild;
+  if (note && note !== table.parentElement) {
+    setImportantStyles(note, {
+      "font-size": "10px",
+      "line-height": "1.3",
     });
-  });
+    setStyles(note, { marginTop: "8px" });
+  }
+
+  const recentTitle = exactHeading("h2", "Recent Quotes");
+  const recentTitleWrap = recentTitle?.parentElement;
+  const recentHeader = recentTitleWrap?.parentElement;
+  const recentCard = recentHeader?.parentElement;
+  const recentTable = recentCard?.querySelector("table");
+
+  if (recentTitle && recentCard && recentTable) {
+    setStyles(recentCard, {
+      padding: "10px 11px 11px",
+      borderRadius: "10px",
+    });
+    setStyles(recentHeader, {
+      marginBottom: "6px",
+      gap: "8px",
+    });
+    setImportantStyles(recentTitle, {
+      "font-size": "15px",
+      "line-height": "1.15",
+    });
+    setImportantStyles(recentTitleWrap?.querySelector("p"), {
+      "font-size": "10.5px",
+      "line-height": "1.2",
+    });
+    setStyles(recentTitleWrap?.querySelector("p"), { margin: "2px 0 0" });
+    compactTable(recentTable, { rowHeight: 40 });
+    makeScrollableStickyTable(recentTable, "min(48vh, 430px)");
+  }
+}
+
+function compactQuoteRegister() {
+  const heading = exactHeading("h2", "Quotes");
+  const section = heading?.parentElement?.parentElement;
+  const table = section?.querySelector("table");
+  if (!heading || !table) return;
+
+  compactTable(table, { rowHeight: 42 });
+  makeScrollableStickyTable(table, "min(64vh, 680px)");
 }
 
 function supplierHeader() {
@@ -162,7 +269,7 @@ function compactSuppliers() {
   setStyles(sectionHeader, { marginBottom: "8px" });
   setStyles(list, {
     gap: "4px",
-    overflowX: "auto",
+    overflowX: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "visible" : "auto",
   });
 
   let header = Array.from(list.children).find(child => child.hasAttribute?.("data-cg-supplier-table-header"));
@@ -170,6 +277,13 @@ function compactSuppliers() {
     header = supplierHeader();
     list.insertBefore(header, list.firstChild || null);
   }
+
+  setStyles(header, {
+    position: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "sticky" : "relative",
+    top: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? topbarOffset() : "auto",
+    zIndex: "18",
+    boxShadow: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "0 4px 10px rgba(28,39,24,.08)" : "none",
+  });
 
   Array.from(list.children)
     .filter(card => !card.hasAttribute?.("data-cg-supplier-table-header") && card.children?.length >= 3)
@@ -261,9 +375,29 @@ function compactSuppliers() {
     });
 }
 
+function stickyProductHeader() {
+  const header = document.querySelector("[data-cg-product-table-header]");
+  const list = header?.parentElement;
+  if (!header || !list) return;
+
+  const sticky = window.innerWidth >= DESKTOP_STICKY_BREAKPOINT;
+  setStyles(list, { overflowX: sticky ? "visible" : "auto" });
+  setStyles(header, {
+    position: sticky ? "sticky" : "relative",
+    top: sticky ? topbarOffset() : "auto",
+    zIndex: "18",
+    background: "#fff",
+    paddingTop: sticky ? "2px" : "0",
+    paddingBottom: sticky ? "2px" : "0",
+    boxShadow: sticky ? "0 4px 10px rgba(28,39,24,.08)" : "none",
+  });
+}
+
 function applyDensity() {
   compactOverview();
+  compactQuoteRegister();
   compactSuppliers();
+  stickyProductHeader();
 }
 
 export default function SourcingDensityPolish() {
