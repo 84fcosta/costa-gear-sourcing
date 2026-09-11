@@ -456,31 +456,27 @@ export default function App() {
       }));
 
       if (editing) {
-        const row = {
-          product_type: f.productType,
-          material: f.material || null,
-          name: f.name,
-          category: f.category || null,
-          length_cm: f.length ? Number(f.length) : null,
-          width_cm: f.width ? Number(f.width) : null,
-          height_cm: f.height ? Number(f.height) : null,
-          weight_kg: f.weight ? Number(f.weight) : null,
-          notes: f.notes || null,
-          market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
-          target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
-          target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
-          competitor_reference: f.competitorReference || null,
-          competitor_url: f.competitorUrl || null,
-          pricing_notes: f.pricingNotes || null,
-        };
-        const { error: updateError } = await supabase.from("products").update(row).eq("id", editing.id);
-        if (updateError) throw updateError;
-        const { error: fitmentError } = await supabase.rpc("set_product_fitments", {
+        const { error: updateError } = await supabase.rpc("update_costa_gear_product_v2", {
           p_product_id: editing.id,
+          p_product_type: f.productType,
+          p_material: f.material || null,
           p_fitments: fitments,
           p_fitment_notes: f.fitmentNotes || null,
+          p_name: f.name || null,
+          p_category: f.category || null,
+          p_length_cm: f.length ? Number(f.length) : null,
+          p_width_cm: f.width ? Number(f.width) : null,
+          p_height_cm: f.height ? Number(f.height) : null,
+          p_weight_kg: f.weight ? Number(f.weight) : null,
+          p_notes: f.notes || null,
+          p_market_reference_cad: f.marketReferenceCad ? Number(f.marketReferenceCad) : null,
+          p_target_sell_price_cad: f.targetSellPriceCad ? Number(f.targetSellPriceCad) : null,
+          p_target_margin_pct: f.targetMarginPct ? Number(f.targetMarginPct) : null,
+          p_competitor_reference: f.competitorReference || null,
+          p_competitor_url: f.competitorUrl || null,
+          p_pricing_notes: f.pricingNotes || null,
         });
-        if (fitmentError) throw fitmentError;
+        if (updateError) throw updateError;
       } else {
         const { error: createError } = await supabase.rpc("create_costa_gear_product_v2", {
           p_product_type: f.productType,
