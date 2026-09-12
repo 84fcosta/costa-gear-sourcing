@@ -20,15 +20,6 @@ import {
 } from "../services/supplierIntakeService";
 import "../supplier-intake.css";
 
-const C = {
-  ink: "#20251F",
-  muted: "#6F786C",
-  border: "rgba(50,56,42,.14)",
-  soft: "#F6F7F2",
-  accent: "#858C38",
-  green: "#4D7D57",
-  red: "#B65145",
-};
 
 const ACCEPT = ".pdf,.xlsx,.xls,.xlsm,.csv,.txt,.png,.jpg,.jpeg,.webp";
 const money = value => value === null || value === undefined || value === "" ? "" : value;
