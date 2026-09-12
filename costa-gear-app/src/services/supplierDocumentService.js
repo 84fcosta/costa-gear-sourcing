@@ -211,14 +211,15 @@ export function governedSupplierDocumentName({
   return `CG_SUP_${supplierKey}_${shortName}_${desc}${datePart}${ext}`;
 }
 
-async function sha1Base64(file) {
+async function sha1Hex(file) {
   if (!file?.arrayBuffer || !globalThis.crypto?.subtle) return null;
   try {
     const bytes = await file.arrayBuffer();
     const digest = await globalThis.crypto.subtle.digest("SHA-1", bytes);
-    const values = Array.from(new Uint8Array(digest));
-    const binary = values.map(value => String.fromCharCode(value)).join("");
-    return globalThis.btoa(binary);
+    return Array.from(new Uint8Array(digest))
+      .map(value => value.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
   } catch (_) {
     return null;
   }
@@ -331,7 +332,7 @@ export async function uploadSupplierDocument({
   }
 
   const existingRole = await findQuotationRoleDocument(quotationId, documentType);
-  const localSha1 = await sha1Base64(file);
+  const localSha1 = await sha1Hex(file);
   const [duplicate, indexedFileDuplicate] = await Promise.all([
     indexedDuplicateByHash(supplier.id, localSha1),
     indexedOneDriveDuplicateByHash(folder.name, localSha1),
