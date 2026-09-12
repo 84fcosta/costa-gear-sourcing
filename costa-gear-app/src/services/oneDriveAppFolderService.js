@@ -477,7 +477,7 @@ export async function uploadSupplierIntakeStagingFile(file) {
   if (!file) throw new Error("Choose a supplier document before intake.");
   const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
   try { await cleanupSupplierIntakeStaging({ olderThanHours: 48 }); } catch (_) {}
-  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 17) + "_" + Date.now().toString(36).slice(-5);
   const safeOriginal = cleanOneDriveNamePart(
     String(file.name || "Supplier_Document").replace(/\.[^.]+$/, ""),
     "Supplier_Document",
