@@ -156,7 +156,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
               <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>The app chooses the folder and generates the governed filename. Do not create folders manually for this upload.</div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "180px minmax(0,1fr) 160px", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
               <label style={{ display: "grid", gap: 4, fontSize: 10.5, color: C.muted, fontWeight: 750 }}>
                 Document Type
                 <select style={input} value={documentType} onChange={e => setDocumentType(e.target.value)}>
