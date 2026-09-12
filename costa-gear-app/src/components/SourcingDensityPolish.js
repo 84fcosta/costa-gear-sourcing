@@ -236,7 +236,6 @@ function compactOverview() {
   const table = snapshotCard.querySelector("table");
   if (!table) return;
   setStyles(table.parentElement, { borderRadius: "8px" });
-  compactTable(table, { rowHeight: 40, productDetails: true, snapshot: true });
   makeSnapshotStickyTable(table);
 
   const note = snapshotCard.lastElementChild;
