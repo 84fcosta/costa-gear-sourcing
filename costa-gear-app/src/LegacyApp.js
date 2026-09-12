@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
-import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";\nimport { SupplierDocumentsDialog } from "./components/SupplierDocuments";
+import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
+import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
