@@ -240,7 +240,7 @@ export default function DesktopProductSnapshotControls({ active = true }) {
       </label>
 
       <div className="cg-desktop-snapshot-result">
-        <strong>{visibleCount || products.length}</strong>
+        <strong>{filtered ? visibleCount : products.length}</strong>
         <span>of {products.length} products</span>
         {filtered ? <button type="button" onClick={() => { setSearch(""); setCategory(""); setVehicleCode(""); setModelYear(""); }}>Clear</button> : null}
       </div>
