@@ -453,9 +453,30 @@ export async function moveOneDriveItem({ itemId, folderPath, newName }) {
   };
 }
 
+export async function cleanupSupplierIntakeStaging({ olderThanHours = 48 } = {}) {
+  const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
+  const threshold = Date.now() - Math.max(1, Number(olderThanHours) || 48) * 60 * 60 * 1000;
+  const children = await listOneDriveChildren(stagingFolder.id);
+  let removed = 0;
+
+  for (const item of children) {
+    if (item?.folder) continue;
+    if (!String(item?.name || "").startsWith("CG_INTAKE_")) continue;
+    const modified = new Date(item?.lastModifiedDateTime || item?.createdDateTime || 0).getTime();
+    if (!Number.isFinite(modified) || modified >= threshold) continue;
+    try {
+      await deleteOneDriveItem(item.id);
+      removed += 1;
+    } catch (_) {}
+  }
+
+  return { removed, folderId: stagingFolder.id };
+}
+
 export async function uploadSupplierIntakeStagingFile(file) {
   if (!file) throw new Error("Choose a supplier document before intake.");
   const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
+  try { await cleanupSupplierIntakeStaging({ olderThanHours: 48 }); } catch (_) {}
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
   const safeOriginal = cleanOneDriveNamePart(
     String(file.name || "Supplier_Document").replace(/\.[^.]+$/, ""),
