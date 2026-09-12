@@ -1,12 +1,12 @@
 import * as XLSX from "xlsx";
 
-const QUOTATION_HEADERS = [
+export const QUOTATION_HEADERS = [
   "Supplier Name","Supplier Quote Ref","Quote Date","Currency","Incoterm","Shipping Method",
   "Shipping Total","Shipping Currency","Product Subtotal","Grand Total","Transit Time Days",
   "Dispatch Lead Time Days","Packaging","Payment Terms","Notes","Validation Status",
 ];
 
-const ITEM_HEADERS = [
+export const ITEM_HEADERS = [
   "Line","Supplier SKU","Supplier Description","Unit","Qty","Unit Price","Supplier Line Total",
   "Calculated Line Total","Line Validation","Original Notes","CG SKU","Match Status",
 ];
