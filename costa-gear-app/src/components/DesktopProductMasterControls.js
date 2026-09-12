@@ -5,6 +5,35 @@ import { supabase } from "../supabase";
 import "../desktop-sourcing-overrides.css";
 
 const normalize = value => String(value || "").trim().toLowerCase();
+const DESKTOP_STICKY_BREAKPOINT = 1180;
+
+function topbarHeight() {
+  const topbar = document.querySelector(".cg-topbar");
+  return Math.round(topbar?.getBoundingClientRect?.().height || 96);
+}
+
+function applyStickyStack(host, list) {
+  if (!host || !list) return;
+  const sticky = window.innerWidth >= DESKTOP_STICKY_BREAKPOINT;
+  const top = topbarHeight();
+
+  Object.assign(host.style, {
+    position: sticky ? "sticky" : "relative",
+    top: sticky ? `${top}px` : "auto",
+    zIndex: "20",
+    background: sticky ? "#fff" : "transparent",
+    paddingTop: sticky ? "4px" : "0",
+    paddingBottom: sticky ? "4px" : "0",
+    marginBottom: sticky ? "4px" : "14px",
+    boxShadow: sticky ? "0 5px 14px rgba(28,39,24,.08)" : "none",
+  });
+
+  const hostHeight = Math.ceil(host.getBoundingClientRect?.().height || 0);
+  list.style.setProperty(
+    "--cg-product-controls-stack",
+    sticky ? `${top + hostHeight + 4}px` : `${top}px`
+  );
+}
 
 function productCards(list, headerHost) {
   return Array.from(list?.children || []).filter(node => {
@@ -91,6 +120,7 @@ export default function DesktopProductMasterControls({ active = true }) {
         productCards(currentList, currentHeader).forEach(card => { card.style.display = ""; });
       }
       if (currentLegacyRow?.isConnected) currentLegacyRow.style.display = "";
+      if (currentList) currentList.style.removeProperty("--cg-product-controls-stack");
       if (currentHost?.isConnected) currentHost.remove();
       currentHost = null;
       currentList = null;
@@ -141,6 +171,8 @@ export default function DesktopProductMasterControls({ active = true }) {
         currentLegacyRow = nextLegacyRow;
         setLegacyFilterRow(nextLegacyRow);
       }
+
+      applyStickyStack(nextHost, nextList);
     };
 
     const timer = window.setTimeout(locate, 0);
@@ -149,10 +181,12 @@ export default function DesktopProductMasterControls({ active = true }) {
       setRevision(value => value + 1);
     });
     observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", locate);
 
     return () => {
       window.clearTimeout(timer);
       observer.disconnect();
+      window.removeEventListener("resize", locate);
       reset();
     };
   }, [active]);
