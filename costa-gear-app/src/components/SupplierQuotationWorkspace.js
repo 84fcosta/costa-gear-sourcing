@@ -10,7 +10,9 @@ import {
   listSupplierQuotations,
   mapSupplierQuotationLine,
   setSupplierQuotationLineIgnored,
-} from "../services/supplierQuotationRepository";\nimport { QuotationDocumentsPanel } from "./SupplierDocuments";\nimport { uploadSupplierDocument } from "../services/supplierDocumentService";
+} from "../services/supplierQuotationRepository";
+import { QuotationDocumentsPanel } from "./SupplierDocuments";
+import { uploadSupplierDocument } from "../services/supplierDocumentService";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
 const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 10px",fontSize:12.5,background:"#fff",color:C.ink};
