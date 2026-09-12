@@ -58,7 +58,7 @@ const statusFor = row => {
   return { label: "Near market", tone: "neutral" };
 };
 
-export default function MobileProductCostSnapshot() {
+export default function MobileProductCostSnapshot({ active = true }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [productFitments, setProductFitments] = useState([]);
@@ -77,7 +77,8 @@ export default function MobileProductCostSnapshot() {
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
-    let active = true;
+    if (!active) return undefined;
+    let mounted = true;
     const load = async () => {
       setLoading(true);
       setError("");
@@ -92,7 +93,7 @@ export default function MobileProductCostSnapshot() {
         supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
         supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
       ]);
-      if (!active) return;
+      if (!mounted) return;
       if (productError || quoteError || productFitmentError || vehicleFitmentError) {
         setError((productError || quoteError || productFitmentError || vehicleFitmentError)?.message || "Unable to load product costs.");
       } else {
@@ -104,8 +105,8 @@ export default function MobileProductCostSnapshot() {
       setLoading(false);
     };
     load();
-    return () => { active = false; };
-  }, []);
+    return () => { mounted = false; };
+  }, [active]);
 
   useEffect(() => {
     try { window.localStorage.setItem(SORT_KEY, sort); } catch {}
@@ -178,6 +179,8 @@ export default function MobileProductCostSnapshot() {
   }, [rows, search, category, vehicleCode, modelYear, fitmentsByProduct, sort]);
 
   const filterCount = Number(Boolean(category)) + Number(Boolean(vehicleCode)) + Number(Boolean(modelYear));
+
+  if (!active) return null;
 
   return <section className="cg-mobile-product-snapshot" aria-label="Product Cost Snapshot">
     <div className="cg-mobile-snapshot-head">
