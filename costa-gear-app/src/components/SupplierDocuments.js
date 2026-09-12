@@ -3,7 +3,6 @@ import {
   getSupplierSourcingFolderStatus,
   listSupplierDocuments,
   QUOTATION_DOCUMENT_TYPES,
-  SUPPLIER_DOCUMENT_TYPES,
   supplierDocumentTypeLabel,
   uploadSupplierDocument,
 } from "../services/supplierDocumentService";
@@ -21,16 +20,6 @@ const C = {
   soft: "#F3F4EF",
 };
 
-const input = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: `1px solid ${C.border}`,
-  borderRadius: 9,
-  padding: "8px 10px",
-  fontSize: 12.5,
-  background: "#fff",
-  color: C.ink,
-};
 
 const btn = primary => ({
   border: primary ? 0 : `1px solid ${C.border}`,
@@ -43,9 +32,6 @@ const btn = primary => ({
   cursor: "pointer",
 });
 
-function stripExtension(name) {
-  return String(name || "").replace(/\.[A-Za-z0-9]{1,12}$/, "");
-}
 
 function roleDocument(documents, role) {
   return documents.find(doc => doc.document_type === role) || null;
