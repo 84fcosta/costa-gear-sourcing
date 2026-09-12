@@ -149,8 +149,8 @@ export default function SourcingWorkspace({ onNavigate, initialView = "intake" }
       <DesktopProductMasterControls active={showLegacyMaster} />
       <DesktopSupplierControls active={showLegacyMaster} />
       <MobileProductMaster active={mobileLegacyTab === "products"} />
-      <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />
-      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} /></div>}
+      <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} />
+      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} initialQuotationId={quotationFocusId} onOpenIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
