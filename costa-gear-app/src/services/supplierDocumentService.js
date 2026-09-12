@@ -262,6 +262,21 @@ async function indexedDuplicateByHash(supplierId, sha1Hash) {
   return data || null;
 }
 
+async function indexedOneDriveDuplicateByHash(folderName, sha1Hash) {
+  if (!sha1Hash || !folderName) return null;
+  const { data, error } = await supabase
+    .from("onedrive_items")
+    .select("item_id,name,path,web_url,sha1_hash")
+    .eq("is_folder", false)
+    .eq("is_deleted", false)
+    .eq("sha1_hash", sha1Hash)
+    .like("path", `${SUPPLIER_ROOT_INDEX_PATH}/${folderName}/%`)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 async function indexUploadedFile({ upload, folder, supplier, quotation, documentType, sha1Hash }) {
   const now = new Date().toISOString();
   const typeCode = documentType.startsWith("QUOTATION_") ? "QUO" : "SUP";
@@ -317,12 +332,27 @@ export async function uploadSupplierDocument({
 
   const existingRole = await findQuotationRoleDocument(quotationId, documentType);
   const localSha1 = await sha1Base64(file);
-  const duplicate = await indexedDuplicateByHash(supplier.id, localSha1);
+  const [duplicate, indexedFileDuplicate] = await Promise.all([
+    indexedDuplicateByHash(supplier.id, localSha1),
+    indexedOneDriveDuplicateByHash(folder.name, localSha1),
+  ]);
 
   if (duplicate && duplicate.id !== existingRole?.id) {
     const error = new Error(`This exact file is already registered as ${duplicate.file_name}.`);
     error.code = "DUPLICATE_SUPPLIER_DOCUMENT";
     error.existingDocument = duplicate;
+    throw error;
+  }
+
+  if (
+    indexedFileDuplicate &&
+    indexedFileDuplicate.item_id !== existingRole?.onedrive_item_id
+  ) {
+    const error = new Error(
+      `This exact file already exists in ${folder.name} as ${indexedFileDuplicate.name}. It was not uploaded again.`
+    );
+    error.code = "DUPLICATE_ONEDRIVE_FILE";
+    error.existingItem = indexedFileDuplicate;
     throw error;
   }
 
