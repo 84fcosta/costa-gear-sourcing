@@ -385,8 +385,17 @@ function normalizeAnalysis(raw, suppliers) {
 }
 
 module.exports = async function handler(req, res) {
+  if (req.method === "GET") {
+    return send(res, 200, {
+      ok: true,
+      aiConfigured: Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN),
+      supabaseConfigured: Boolean(process.env.REACT_APP_SUPABASE_URL && process.env.REACT_APP_SUPABASE_ANON_KEY),
+      model: AI_MODEL,
+    });
+  }
+
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+    res.setHeader("Allow", "GET, POST");
     return send(res, 405, { error: "Method not allowed." });
   }
 
