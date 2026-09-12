@@ -14,6 +14,7 @@ import {
   createSupplierFromIntake,
   discardSupplierIntakeStaging,
   finalizeQuotationSupplierIntake,
+  getSupplierIntakeReadiness,
   INTAKE_DOCUMENT_TYPES,
   listSupplierIntakeSuppliers,
   saveGeneralSupplierIntake,
@@ -128,6 +129,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   const inputRef = useRef(null);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [readiness, setReadiness] = useState(null);
   const [file, setFile] = useState(null);
   const [intake, setIntake] = useState(null);
   const [documentType, setDocumentType] = useState("");
@@ -144,9 +146,16 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   useEffect(() => {
     let mounted = true;
     setLoadingSuppliers(true);
-    listSupplierIntakeSuppliers()
-      .then(rows => { if (mounted) setSuppliers(rows); })
-      .catch(err => { if (mounted) setError(err.message || "Unable to load suppliers."); })
+    Promise.all([
+      listSupplierIntakeSuppliers(),
+      getSupplierIntakeReadiness(),
+    ])
+      .then(([rows, ready]) => {
+        if (!mounted) return;
+        setSuppliers(rows);
+        setReadiness(ready);
+      })
+      .catch(err => { if (mounted) setError(err.message || "Unable to load supplier intake."); })
       .finally(() => { if (mounted) setLoadingSuppliers(false); });
     return () => { mounted = false; };
   }, []);
@@ -364,6 +373,12 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         <div className="cg-intake-flow">Upload → Identify → Store → Extract → Review</div>
       </div>
 
+      {readiness && !readiness.aiConfigured && (
+        <div className="cg-intake-alert warning">
+          <AlertTriangle size={17}/>
+          <span>AI reading is not configured on Vercel yet. Official Costa Gear quotation XLSX files still import locally; supplier-native PDF/Excel automatic extraction will activate as soon as AI Gateway authentication is configured.</span>
+        </div>
+      )}
       {error && <div className="cg-intake-alert error"><AlertTriangle size={17}/><span>{error}</span></div>}
       {message && <div className="cg-intake-alert info"><CheckCircle2 size={17}/><span>{message}</span></div>}
 
