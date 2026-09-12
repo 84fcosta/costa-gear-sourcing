@@ -54,6 +54,83 @@ function supplierNotesFromAnalysis(supplier = {}) {
   return [...new Set(parts.filter(Boolean))].join(". ");
 }
 
+export async function getSupplierIntakeReadiness() {
+  try {
+    const response = await fetch("/api/supplier-intake-analyze", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    const body = await response.json().catch(() => ({}));
+    return {
+      reachable: response.ok,
+      aiConfigured: Boolean(body?.aiConfigured),
+      supabaseConfigured: Boolean(body?.supabaseConfigured),
+      model: body?.model || null,
+    };
+  } catch (_) {
+    return { reachable: false, aiConfigured: false, supabaseConfigured: false, model: null };
+  }
+}
+
+function normalizedSupplierName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(co|company|ltd|limited|inc|incorporated|corp|corporation)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function analysisFromCostaGearWorkbook(parsed, suppliers) {
+  const supplierName = parsed?.header?.supplierName || "";
+  const normalized = normalizedSupplierName(supplierName);
+  const match = (suppliers || []).find(item =>
+    normalized && normalizedSupplierName(item.name) === normalized
+  ) || null;
+
+  return {
+    documentType: "QUOTATION",
+    documentTypeConfidence: 1,
+    supplier: {
+      matchedSupId: match?.sup_id || null,
+      matchedSupplierName: match?.name || null,
+      matchConfidence: match ? 1 : 0,
+      detectedName: supplierName || null,
+      contact: null,
+      email: null,
+      phone: null,
+      platformHint: null,
+      address: null,
+      notes: null,
+      matchReason: match ? "Exact supplier name match from Costa Gear quotation workbook." : "Supplier name read from Costa Gear quotation workbook.",
+    },
+    quotation: {
+      quoteRef: parsed.header.quoteRef || null,
+      quoteDate: parsed.header.quoteDate || null,
+      currency: parsed.header.currency || "USD",
+      incoterm: parsed.header.incoterm || null,
+      shippingMethod: parsed.header.shippingMethod || null,
+      shippingTotal: parsed.header.shippingTotal === "" ? null : parsed.header.shippingTotal,
+      shippingCurrency: parsed.header.shippingCurrency || parsed.header.currency || "USD",
+      productSubtotal: parsed.header.productSubtotal === "" ? null : parsed.header.productSubtotal,
+      grandTotal: parsed.header.grandTotal === "" ? null : parsed.header.grandTotal,
+      transitTimeDays: parsed.header.transitTimeDays === "" ? null : parsed.header.transitTimeDays,
+      dispatchLeadTimeDays: parsed.header.dispatchLeadTimeDays === "" ? null : parsed.header.dispatchLeadTimeDays,
+      packaging: parsed.header.packaging || null,
+      paymentTerms: parsed.header.paymentTerms || null,
+      notes: parsed.header.notes || null,
+      lines: (parsed.lines || []).map(line => ({
+        ...line,
+        supplierLineTotal: line.supplierLineTotal === "" ? null : line.supplierLineTotal,
+        calculatedLineTotal: line.calculatedLineTotal === "" ? null : line.calculatedLineTotal,
+        cgSku: "",
+        matchStatus: "UNMATCHED",
+      })),
+    },
+    warnings: parsed.warnings || [],
+  };
+}
+
 export async function listSupplierIntakeSuppliers() {
   const { data, error } = await supabase
     .from("suppliers")
@@ -68,6 +145,21 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
 
   const staging = await uploadSupplierIntakeStagingFile(file);
   try {
+    if (/\.xlsx?$/i.test(file.name || "")) {
+      try {
+        const parsed = await parseCostaGearSupplierQuotation(file);
+        return {
+          file,
+          staging,
+          analysis: analysisFromCostaGearWorkbook(parsed, suppliers),
+          model: "local-costa-gear-template",
+          usage: null,
+        };
+      } catch (_) {
+        // Supplier-native Excel files continue to AI analysis below.
+      }
+    }
+
     const source = await getOneDriveItemDownloadUrl(staging.itemId);
     const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
