@@ -739,6 +739,30 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
     verticalAlign: "top",
   };
 
+  const snapshotHeaderStyle = {
+    padding: "5px 8px",
+    textAlign: "left",
+    color: "#6F786C",
+    fontSize: 9.5,
+    fontWeight: 800,
+    lineHeight: 1.1,
+    letterSpacing: "0.055em",
+    textTransform: "uppercase",
+    background: "#F5F7F1",
+    borderBottom: "1px solid rgba(50,56,42,0.08)",
+    whiteSpace: "nowrap",
+  };
+
+  const snapshotCellStyle = {
+    padding: "4px 8px",
+    color: "#253024",
+    fontSize: 10.5,
+    lineHeight: 1.1,
+    borderBottom: "1px solid rgba(50,56,42,0.07)",
+    background: "#ffffff",
+    verticalAlign: "middle",
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, marginBottom: 0 }}>
@@ -773,7 +797,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
               <thead>
                 <tr>
                   {["SKU", "Product", "Quotes Received", "Cost Range USD", "Shipping/unit CAD", "Best Supplier", "Est. Landed CAD", "Target Sell CAD", "Market Ref. CAD"].map(h => (
-                    <th key={h} style={tableHeaderStyle}>{h}</th>
+                    <th key={h} style={snapshotHeaderStyle}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -783,23 +807,23 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
                     ? `${formatUsd(p.bestPrice)} – ${formatUsd(p.highestPrice)}`
                     : formatUsd(p.bestPrice);
                   return (
-                    <tr key={p.id} onClick={() => onOpenDetail(p.id)} style={{ cursor: "pointer" }}>
-                      <td style={{ ...tableCellStyle, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
-                      <td style={{ ...tableCellStyle, minWidth: 260 }}>
-                        <div style={{ fontWeight: 650, color: C.navy }}>{p.name}</div>
-                        <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.fitment || "Fitment TBD"}</div>
+                    <tr key={p.id} onClick={() => onOpenDetail(p.id)} style={{ cursor: "pointer", height: 40 }}>
+                      <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
+                      <td style={{ ...snapshotCellStyle, minWidth: 260 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.15, color: C.navy }}>{p.name}</div>
+                        <div style={{ color: C.dgray, fontSize: 10, lineHeight: 1.1, marginTop: 1 }}>{p.fitment || "Fitment TBD"}</div>
                       </td>
-                      <td style={tableCellStyle}>{quoteText(p.quoteCount)}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 700 }}>{costRange}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.blue }}>{formatCad(p.shippingCadPerUnit)}</td>
-                      <td style={tableCellStyle}>{p.bestQuote?.supplierName || "—"}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.teal }}>{formatCad(p.landedCad)}</td>
-                      <td style={{ ...tableCellStyle, fontWeight: 750, color: C.accent2 }}>{formatCad(p.targetSellCad)}</td>
-                      <td style={tableCellStyle}>
+                      <td style={snapshotCellStyle}>{quoteText(p.quoteCount)}</td>
+                      <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 700 }}>{costRange}</td>
+                      <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 750, color: C.blue }}>{formatCad(p.shippingCadPerUnit)}</td>
+                      <td style={{ ...snapshotCellStyle, maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.bestQuote?.supplierName || ""}>{p.bestQuote?.supplierName || "—"}</td>
+                      <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 750, color: C.teal }}>{formatCad(p.landedCad)}</td>
+                      <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 750, color: C.accent2 }}>{formatCad(p.targetSellCad)}</td>
+                      <td style={snapshotCellStyle}>
                         {p.marketReferenceCad ? (
                           <div>
-                            <div style={{ fontWeight: 750 }}>{formatCad(p.marketReferenceCad)}</div>
-                            {p.competitorReference && <div style={{ color: C.dgray, fontSize: 12, marginTop: 2 }}>{p.competitorReference}</div>}
+                            <div style={{ fontSize: 11.5, lineHeight: 1.1, fontWeight: 750 }}>{formatCad(p.marketReferenceCad)}</div>
+                            {p.competitorReference && <div style={{ color: C.dgray, fontSize: 9.5, lineHeight: 1.05, marginTop: 1 }}>{p.competitorReference}</div>}
                           </div>
                         ) : <span style={{ color: C.dgray }}>Not tracked</span>}
                       </td>
