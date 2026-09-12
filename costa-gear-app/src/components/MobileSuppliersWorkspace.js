@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../supabase";\nimport { SupplierDocumentsDialog } from "./SupplierDocuments";
+import { supabase } from "../supabase";
+import { SupplierDocumentsDialog } from "./SupplierDocuments";
 
 const PLATFORMS = ["Alibaba", "WeChat", "WhatsApp", "Email", "Direct", "Other"];
 const STATUSES = ["Active", "Inactive", "Blocked"];
