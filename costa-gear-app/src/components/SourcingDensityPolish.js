@@ -27,6 +27,10 @@ function topbarOffset() {
   return `${height}px`;
 }
 
+function productHeaderOffset() {
+  return "var(--cg-product-controls-stack, 96px)";
+}
+
 function makeScrollableStickyTable(table, maxHeight) {
   if (!table) return;
   const wrapper = table.parentElement;
@@ -384,7 +388,7 @@ function stickyProductHeader() {
   setStyles(list, { overflowX: sticky ? "visible" : "auto" });
   setStyles(header, {
     position: sticky ? "sticky" : "relative",
-    top: sticky ? topbarOffset() : "auto",
+    top: sticky ? productHeaderOffset() : "auto",
     zIndex: "18",
     background: "#fff",
     paddingTop: sticky ? "2px" : "0",
