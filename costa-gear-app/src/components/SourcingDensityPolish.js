@@ -31,6 +31,10 @@ function productHeaderOffset() {
   return "var(--cg-product-controls-stack, 96px)";
 }
 
+function supplierHeaderOffset() {
+  return "var(--cg-supplier-controls-stack, 96px)";
+}
+
 function makeScrollableStickyTable(table, maxHeight) {
   if (!table) return;
   const wrapper = table.parentElement;
@@ -338,7 +342,7 @@ function compactSuppliers() {
 
   setStyles(header, {
     position: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "sticky" : "relative",
-    top: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? topbarOffset() : "auto",
+    top: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? supplierHeaderOffset() : "auto",
     zIndex: "18",
     boxShadow: window.innerWidth >= DESKTOP_STICKY_BREAKPOINT ? "0 4px 10px rgba(28,39,24,.08)" : "none",
   });
