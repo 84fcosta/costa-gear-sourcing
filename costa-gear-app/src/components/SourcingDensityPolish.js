@@ -291,7 +291,7 @@ function supplierHeader() {
   header.setAttribute("data-cg-supplier-table-header", "true");
   header.style.cssText = [
     "display:grid",
-    "grid-template-columns:72px minmax(0,1fr) 310px",
+    "grid-template-columns:72px minmax(0,1fr) 332px",
     "gap:12px",
     "align-items:center",
     "padding:6px 12px",
@@ -306,7 +306,7 @@ function supplierHeader() {
   header.innerHTML = `
     <span style="${labelStyle}">ID</span>
     <span style="${labelStyle}">Supplier / Details</span>
-    <div style="display:grid;grid-template-columns:110px 70px 112px;gap:6px;align-items:center">
+    <div style="display:grid;grid-template-columns:100px 64px 156px;gap:6px;align-items:center">
       <span style="${labelStyle};text-align:right">Quotes / Rating</span>
       <span style="${labelStyle};text-align:center">Status</span>
       <span style="${labelStyle};text-align:center">Actions</span>
@@ -352,7 +352,7 @@ function compactSuppliers() {
 
       setStyles(card, {
         display: "grid",
-        gridTemplateColumns: "72px minmax(0,1fr) 310px",
+        gridTemplateColumns: "72px minmax(0,1fr) 332px",
         alignItems: "center",
         gap: "12px",
         padding: "6px 12px",
@@ -398,16 +398,18 @@ function compactSuppliers() {
       if (actions) {
         setStyles(actions, {
           display: "grid",
-          gridTemplateColumns: "110px 70px 52px 52px",
+          gridTemplateColumns: "100px 64px 48px 48px 48px",
           alignItems: "center",
           gap: "6px",
-          width: "310px",
+          width: "332px",
+          whiteSpace: "nowrap",
         });
         const parts = Array.from(actions.children);
         const quoteMeta = parts[0];
         const status = parts[1];
-        const edit = parts[2];
-        const del = parts[3];
+        const docs = parts[2];
+        const edit = parts[3];
+        const del = parts[4];
 
         if (quoteMeta) {
           setStyles(quoteMeta, { textAlign: "right" });
@@ -420,14 +422,16 @@ function compactSuppliers() {
           lineHeight: "1.1",
           justifySelf: "center",
         });
-        [edit, del].forEach(button => setStyles(button, {
-          width: "52px",
+        [docs, edit, del].forEach(button => setStyles(button, {
+          width: "48px",
+          minWidth: "48px",
           minHeight: "30px",
           height: "30px",
-          padding: "4px 7px",
+          padding: "4px 5px",
           borderRadius: "8px",
-          fontSize: "12px",
+          fontSize: "11.5px",
           justifyContent: "center",
+          whiteSpace: "nowrap",
         }));
       }
     });
