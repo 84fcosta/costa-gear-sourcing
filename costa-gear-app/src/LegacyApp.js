@@ -393,7 +393,7 @@ const QSTATUS_COLOR = {
 // ════════════════════════════════════════════════════════════════
 // MAIN APP
 // ════════════════════════════════════════════════════════════════
-export default function App({ onOpenSupplierQuotations }) {
+export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) {
   const [tab, setTab]           = useState("dashboard");
   const [products,  setProducts]  = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -671,8 +671,8 @@ export default function App({ onOpenSupplierQuotations }) {
           <>
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
             {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
-            {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} />}
-            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
+            {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} onOpenSupplierIntake={onOpenSupplierIntake} />}
+            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onOpenSupplierIntake={onOpenSupplierIntake} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
             {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
           </>
         )}
@@ -954,7 +954,7 @@ function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
 // ════════════════════════════════════════════════════════════════
 // SUPPLIERS TAB
 // ════════════════════════════════════════════════════════════════
-function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
+function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete, onOpenSupplierIntake }) {
   const [documentSupplier, setDocumentSupplier] = useState(null);
 
   return (
@@ -990,7 +990,7 @@ function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
           </div>
         )}
       </Section>
-      {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} />}
+      {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} onOpenIntake={onOpenSupplierIntake} />}
     </>
   );
 }
@@ -998,7 +998,7 @@ function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
 // ════════════════════════════════════════════════════════════════
 // QUOTES TAB
 // ════════════════════════════════════════════════════════════════
-function Quotes({ quotes, products, suppliers, onOpenSupplierQuotations, onEdit, onDelete }) {
+function Quotes({ quotes, products, suppliers, onOpenSupplierQuotations, onOpenSupplierIntake, onEdit, onDelete }) {
   const [filter, setFilter]         = useState("");
   const [statusFilter, setStatus]   = useState("");
   const [supplierFilter, setSupFil] = useState("");
@@ -1012,9 +1012,9 @@ function Quotes({ quotes, products, suppliers, onOpenSupplierQuotations, onEdit,
   });
 
   return (
-    <Section title="Quote Register" action={<Btn onClick={onOpenSupplierQuotations}>New Supplier Quotation</Btn>}>
+    <Section title="Quote Register" action={<Btn onClick={onOpenSupplierIntake}>New Supplier Intake</Btn>}>
       <div style={{ marginBottom: 16, padding: "11px 13px", border: "1px solid rgba(133,140,56,.22)", borderRadius: 10, background: "#F8FAF0", color: C.dgray, fontSize: 12.5, lineHeight: 1.45 }}>
-        New formal quotations are created only in <b style={{ color: C.navy }}>Supplier Quotations</b>. This register is the downstream comparison/history view. Historical standalone quotes remain editable until they are migrated.
+        New supplier files enter through <b style={{ color: C.navy }}>Supplier Intake</b>. This register is the downstream comparison/history view. Historical standalone quotes remain editable until they are migrated.
       </div>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <Input placeholder="Search product, supplier or SKU…" value={filter} onChange={setFilter} />
@@ -1033,7 +1033,7 @@ function Quotes({ quotes, products, suppliers, onOpenSupplierQuotations, onEdit,
         {(statusFilter || supplierFilter || filter) && <Btn variant="ghost" small onClick={() => { setFilter(""); setStatus(""); setSupFil(""); }}>Clear</Btn>}
       </div>
       {filtered.length === 0 ? (
-        <Empty msg={quotes.length === 0 ? "No quote records yet." : "No quote records match."} cta={quotes.length === 0 && <Btn onClick={onOpenSupplierQuotations}>New Supplier Quotation</Btn>} />
+        <Empty msg={quotes.length === 0 ? "No quote records yet." : "No quote records match."} cta={quotes.length === 0 && <Btn onClick={onOpenSupplierIntake}>New Supplier Intake</Btn>} />
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
