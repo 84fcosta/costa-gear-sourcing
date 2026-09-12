@@ -54,7 +54,39 @@ function makeScrollableStickyTable(table, maxHeight) {
   });
 }
 
-function compactTable(table, { rowHeight = PRODUCT_ROW_HEIGHT, productDetails = false } = {}) {
+function makeSnapshotStickyTable(table) {
+  if (!table) return;
+  const wrapper = table.parentElement;
+  const sticky = window.innerWidth >= DESKTOP_STICKY_BREAKPOINT;
+
+  setStyles(wrapper, sticky ? {
+    maxHeight: "none",
+    overflowX: "visible",
+    overflowY: "visible",
+    position: "relative",
+    overscrollBehavior: "auto",
+    scrollbarGutter: "auto",
+  } : {
+    maxHeight: "min(62vh, 640px)",
+    overflowX: "auto",
+    overflowY: "auto",
+    position: "relative",
+    overscrollBehavior: "contain",
+    scrollbarGutter: "stable",
+  });
+
+  table.querySelectorAll("thead th").forEach(cell => {
+    setStyles(cell, {
+      position: "sticky",
+      top: sticky ? "var(--cg-snapshot-controls-stack, 96px)" : "0",
+      zIndex: sticky ? "18" : "7",
+      background: "#F5F7F1",
+      boxShadow: sticky ? "0 4px 10px rgba(28,39,24,.08)" : "0 1px 0 rgba(50,56,42,.10)",
+    });
+  });
+}
+
+function compactTable(table, { rowHeight = PRODUCT_ROW_HEIGHT, productDetails = false, snapshot = false } = {}) {
   if (!table) return;
 
   table.querySelectorAll("th").forEach(cell => {
@@ -87,10 +119,20 @@ function compactTable(table, { rowHeight = PRODUCT_ROW_HEIGHT, productDetails = 
 
       const lines = Array.from(cell.children);
       if (productDetails && index === 1) {
-        if (lines[0]) setStyles(lines[0], { fontSize: "13px", lineHeight: "1.15" });
-        if (lines[1]) setStyles(lines[1], { fontSize: "10px", lineHeight: "1.1", marginTop: "1px" });
+        if (lines[0]) setStyles(lines[0], { fontSize: "13px", lineHeight: "1.18", fontWeight: "700" });
+        if (lines[1]) setStyles(lines[1], { fontSize: "10px", lineHeight: "1.15", marginTop: "1px", fontWeight: "400" });
       } else if (lines[1]) {
         setStyles(lines[1], { fontSize: "9.5px", lineHeight: "1.1", marginTop: "1px" });
+      }
+
+      if (snapshot) {
+        if (index === 0) {
+          setImportantStyles(cell, { "font-size": "11.5px", "font-weight": "800" });
+        } else if (index === 2 || index === 5) {
+          setImportantStyles(cell, { "font-size": "11.5px" });
+        } else if ([3, 4, 6, 7, 8].includes(index)) {
+          setImportantStyles(cell, { "font-size": "12.5px" });
+        }
       }
     });
   });
@@ -181,8 +223,8 @@ function compactOverview() {
   const table = snapshotCard.querySelector("table");
   if (!table) return;
   setStyles(table.parentElement, { borderRadius: "8px" });
-  compactTable(table, { productDetails: true });
-  makeScrollableStickyTable(table, "min(62vh, 640px)");
+  compactTable(table, { productDetails: true, snapshot: true });
+  makeSnapshotStickyTable(table);
 
   const note = snapshotCard.lastElementChild;
   if (note && note !== table.parentElement) {

@@ -5,6 +5,35 @@ import { supabase } from "../supabase";
 import "../desktop-sourcing-overrides.css";
 
 const normalize = value => String(value || "").trim().toLowerCase();
+const DESKTOP_STICKY_BREAKPOINT = 1180;
+
+function topbarHeight() {
+  const topbar = document.querySelector(".cg-topbar");
+  return Math.round(topbar?.getBoundingClientRect?.().height || 96);
+}
+
+function applyStickyStack(host, table) {
+  if (!host || !table) return;
+  const sticky = window.innerWidth >= DESKTOP_STICKY_BREAKPOINT;
+  const top = topbarHeight();
+
+  Object.assign(host.style, {
+    position: sticky ? "sticky" : "relative",
+    top: sticky ? `${top}px` : "auto",
+    zIndex: "20",
+    background: sticky ? "#fff" : "transparent",
+    paddingTop: sticky ? "4px" : "0",
+    paddingBottom: sticky ? "4px" : "0",
+    marginBottom: sticky ? "4px" : "14px",
+    boxShadow: sticky ? "0 5px 14px rgba(28,39,24,.08)" : "none",
+  });
+
+  const hostHeight = Math.ceil(host.getBoundingClientRect?.().height || 0);
+  table.parentElement?.style.setProperty(
+    "--cg-snapshot-controls-stack",
+    sticky ? `${top + hostHeight + 4}px` : `${top}px`
+  );
+}
 
 export default function DesktopProductSnapshotControls({ active = true }) {
   const [host, setHost] = useState(null);
@@ -71,6 +100,7 @@ export default function DesktopProductSnapshotControls({ active = true }) {
       if (!root) return;
       const heading = Array.from(root.querySelectorAll("h2")).find(node => String(node.textContent || "").trim() === "Product Cost Snapshot");
       if (!heading) {
+        if (currentTable?.parentElement) currentTable.parentElement.style.removeProperty("--cg-snapshot-controls-stack");
         if (currentHost?.isConnected) currentHost.remove();
         currentHost = null;
         currentTable = null;
@@ -100,18 +130,23 @@ export default function DesktopProductSnapshotControls({ active = true }) {
         currentTable = nextTable;
         setTable(nextTable);
       }
+
+      applyStickyStack(nextHost, nextTable);
     };
 
     const timer = window.setTimeout(locate, 0);
     const observer = new MutationObserver(locate);
     observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", locate);
 
     return () => {
       window.clearTimeout(timer);
       observer.disconnect();
+      window.removeEventListener("resize", locate);
       if (currentTable?.tBodies?.[0]) {
         Array.from(currentTable.tBodies[0].rows).forEach(row => { row.style.display = ""; });
       }
+      if (currentTable?.parentElement) currentTable.parentElement.style.removeProperty("--cg-snapshot-controls-stack");
       if (currentHost?.isConnected) currentHost.remove();
     };
   }, [active]);
