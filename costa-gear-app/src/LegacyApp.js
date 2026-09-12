@@ -393,7 +393,7 @@ const QSTATUS_COLOR = {
 // ════════════════════════════════════════════════════════════════
 // MAIN APP
 // ════════════════════════════════════════════════════════════════
-export default function App() {
+export default function App({ onOpenSupplierQuotations }) {
   const [tab, setTab]           = useState("dashboard");
   const [products,  setProducts]  = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -518,6 +518,11 @@ export default function App() {
   const deleteProduct = async (id) => { await supabase.from("products").delete().eq("id", id); fetchAll(); };
 
   const saveQuote = async (f) => {
+    if (editing?.supplierQuotationId) {
+      setError("Formal quotation quotes are managed in Supplier Quotations and cannot be edited here.");
+      closeModal();
+      return;
+    }
     const landed = calcQuoteLanded(f);
     const row = {
       product_id: f.productId,
@@ -549,7 +554,15 @@ export default function App() {
     closeModal(); fetchAll();
   };
 
-  const deleteQuote = async (id) => { await supabase.from("quotes").delete().eq("id", id); fetchAll(); };
+  const deleteQuote = async (id) => {
+    const target = quotes.find(q => q.id === id);
+    if (target?.supplier_quotation_id) {
+      setError("Formal quotation quotes are managed in Supplier Quotations and cannot be deleted here.");
+      return;
+    }
+    await supabase.from("quotes").delete().eq("id", id);
+    fetchAll();
+  };
 
   // Map DB → UI
   const uiSuppliers = suppliers.map(s => ({ id: s.id, supId: s.sup_id, name: s.name, platform: s.platform, contact: s.contact, responseTime: s.response_time, rating: s.rating, status: s.status, notes: s.notes }));
@@ -603,14 +616,15 @@ export default function App() {
     landedCostCad: q.landed_cost_cad,
     notes: q.notes,
     date: q.quote_date,
-    quoteStatus: q.quote_status
+    quoteStatus: q.quote_status,
+    supplierQuotationId: q.supplier_quotation_id || null
   }));
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
     { id: "products",  label: `Products (${uiProducts.length})`, Icon: PackageSearch },
     { id: "suppliers", label: `Suppliers (${uiSuppliers.length})`, Icon: Building2 },
-    { id: "quotes",    label: `Quotes (${uiQuotes.length})`, Icon: Tags },
+    { id: "quotes",    label: `Quote Register (${uiQuotes.length})`, Icon: Tags },
     { id: "export",    label: "Export / RFQ", Icon: FileSpreadsheet },
   ];
 
@@ -658,7 +672,7 @@ export default function App() {
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
             {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
             {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} />}
-            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onAdd={() => openAdd("quote")} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete quote?")) deleteQuote(id); }} />}
+            {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
             {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
           </>
         )}
@@ -667,7 +681,7 @@ export default function App() {
       {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} materials={materials} vehicleFitments={vehicleFitments} onAddMaterial={addProductMaterial} />}
       {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
       {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
-      {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
+      {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onOpenSupplierQuotations={onOpenSupplierQuotations} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
     </div>
   );
 }
@@ -984,7 +998,7 @@ function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
 // ════════════════════════════════════════════════════════════════
 // QUOTES TAB
 // ════════════════════════════════════════════════════════════════
-function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
+function Quotes({ quotes, products, suppliers, onOpenSupplierQuotations, onEdit, onDelete }) {
   const [filter, setFilter]         = useState("");
   const [statusFilter, setStatus]   = useState("");
   const [supplierFilter, setSupFil] = useState("");
@@ -998,7 +1012,10 @@ function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
   });
 
   return (
-    <Section title="Quotes" action={<Btn onClick={onAdd}>+ Add Quote</Btn>}>
+    <Section title="Quote Register" action={<Btn onClick={onOpenSupplierQuotations}>New Supplier Quotation</Btn>}>
+      <div style={{ marginBottom: 16, padding: "11px 13px", border: "1px solid rgba(133,140,56,.22)", borderRadius: 10, background: "#F8FAF0", color: C.dgray, fontSize: 12.5, lineHeight: 1.45 }}>
+        New formal quotations are created only in <b style={{ color: C.navy }}>Supplier Quotations</b>. This register is the downstream comparison/history view. Historical standalone quotes remain editable until they are migrated.
+      </div>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <Input placeholder="Search product, supplier or SKU…" value={filter} onChange={setFilter} />
         <div style={{ flex: 1, minWidth: 140 }}>
@@ -1016,13 +1033,13 @@ function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
         {(statusFilter || supplierFilter || filter) && <Btn variant="ghost" small onClick={() => { setFilter(""); setStatus(""); setSupFil(""); }}>Clear</Btn>}
       </div>
       {filtered.length === 0 ? (
-        <Empty msg={quotes.length === 0 ? "No quotes yet." : "No quotes match."} cta={quotes.length === 0 && <Btn onClick={onAdd}>+ Add First Quote</Btn>} />
+        <Empty msg={quotes.length === 0 ? "No quote records yet." : "No quote records match."} cta={quotes.length === 0 && <Btn onClick={onOpenSupplierQuotations}>New Supplier Quotation</Btn>} />
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ background: "#F5F7F1" }}>
-                {["SKU","Product","Supp. SKU","Supplier","Price USD","MOQ","Incoterm","Status","Date",""].map(h => (
+                {["SKU","Product","Supp. SKU","Supplier","Price USD","MOQ","Incoterm","Status","Date","Source",""].map(h => (
                   <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 700, color: C.mgray, textTransform: "uppercase", letterSpacing: .5, whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -1040,10 +1057,17 @@ function Quotes({ quotes, products, suppliers, onAdd, onEdit, onDelete }) {
                   <td style={{ padding: "10px 12px" }}>{q.quoteStatus ? <Badge label={q.quoteStatus} color={QSTATUS_COLOR[q.quoteStatus] || C.dgray} /> : "—"}</td>
                   <td style={{ padding: "10px 12px", fontSize: 12, color: C.dgray, whiteSpace: "nowrap" }}>{q.date || "—"}</td>
                   <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="ghost"  onClick={() => onEdit(q)}>Edit</Btn>
-                      <Btn small variant="danger" onClick={() => onDelete(q.id)}>Del</Btn>
-                    </div>
+                    <Badge label={q.supplierQuotationId ? "Formal" : "Legacy"} color={q.supplierQuotationId ? C.teal : C.dgray} />
+                  </td>
+                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                    {q.supplierQuotationId ? (
+                      <Btn small variant="ghost" onClick={onOpenSupplierQuotations}>Managed in Supplier Quotations</Btn>
+                    ) : (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Btn small variant="ghost" onClick={() => onEdit(q)}>Edit</Btn>
+                        <Btn small variant="danger" onClick={() => onDelete(q.id)}>Del</Btn>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1157,7 +1181,7 @@ function ExportRFQ({ products, suppliers, quotes }) {
 // ════════════════════════════════════════════════════════════════
 // PRODUCT DETAIL MODAL
 // ════════════════════════════════════════════════════════════════
-function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, onDeleteQuote }) {
+function ProductDetail({ id, products, quotes, suppliers, onClose, onOpenSupplierQuotations, onEditQuote, onDeleteQuote }) {
   const product = products.find(p => p.id === id);
   if (!product) return null;
   const pquotes = quotes.filter(q => q.productId === id);
@@ -1283,8 +1307,14 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onEditQuote, 
                         <div style={{ fontSize: 22, fontWeight: 900, color: isBest ? C.teal : C.navy }}>${q.unitPrice || "—"}</div>
                         <div style={{ fontSize: 12, color: C.dgray }}>per unit USD</div>
                         <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
-                          <Btn small variant="ghost"  onClick={() => onEditQuote(q)}>Edit</Btn>
-                          <Btn small variant="danger" onClick={() => onDeleteQuote(q.id)}>Del</Btn>
+                          {q.supplierQuotationId ? (
+                            <Btn small variant="ghost" onClick={onOpenSupplierQuotations}>Formal quotation</Btn>
+                          ) : (
+                            <>
+                              <Btn small variant="ghost" onClick={() => onEditQuote(q)}>Edit</Btn>
+                              <Btn small variant="danger" onClick={() => onDeleteQuote(q.id)}>Del</Btn>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

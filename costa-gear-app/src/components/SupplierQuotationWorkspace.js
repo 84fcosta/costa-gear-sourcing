@@ -5,14 +5,13 @@ import {
   createBuyingDraftFromQuotation,
   createProductFromQuotationLine,
   finalizeSupplierQuotation,
-  importSupplierQuotation,
   listSupplierQuotationLines,
   listSupplierQuotations,
   mapSupplierQuotationLine,
   setSupplierQuotationLineIgnored,
 } from "../services/supplierQuotationRepository";
 import { QuotationDocumentsPanel } from "./SupplierDocuments";
-import { uploadSupplierDocument } from "../services/supplierDocumentService";
+import { importStandardizedSupplierQuotation } from "../services/supplierQuotationIntakeService";
 import "../supplier-quotation-mobile.css";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
@@ -231,7 +230,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
   const categoryOptions=useMemo(()=>[...new Set(products.map(p=>String(p.category||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[products]);
 
   const onFile=async e=>{const file=e.target.files?.[0];if(!file)return;setError("");setMessage("");try{setPreview(await parseCostaGearSupplierQuotation(file));setPreviewFile(file);}catch(err){setPreview(null);setPreviewFile(null);setError(err.message||"Unable to read the workbook.");}finally{e.target.value="";}};
-  const doImport=async()=>{if(!preview||!importSupplierId)return setError("Select the supplier in Costa Gear before importing.");setBusy(true);setError("");try{const sourceRef=preview.header.quoteRef;const supplierId=importSupplierId;const workbookFile=previewFile;const created=await importSupplierQuotation({supplierId,header:preview.header,lines:preview.lines});let documentNote="";if(workbookFile){try{const stored=await uploadSupplierDocument({file:workbookFile,supplierId,quotationId:created.id,documentType:"QUOTATION_IMPORT"});documentNote=stored.duplicate?" Costa Gear import file was already archived.":" Costa Gear import file archived in OneDrive.";}catch(documentError){documentNote=` Quotation data was imported, but the workbook could not be archived: ${documentError.message||"unknown document error"}`;}}setPreview(null);setPreviewFile(null);setImportSupplierId("");await load();setSelectedId(created.id);const baseMessage=sourceRef?`Quotation ${created.quote_ref} imported. Supplier reference preserved.`:`Quotation ${created.quote_ref} imported. Costa Gear reference generated because the supplier did not provide one.`;setMessage(baseMessage+documentNote);}catch(e){setError(e.message||"Unable to import quotation.");}finally{setBusy(false);}};
+  const doImport=async()=>{if(!preview||!importSupplierId)return setError("Select the supplier in Costa Gear before importing.");setBusy(true);setError("");try{const sourceRef=preview.header.quoteRef;const result=await importStandardizedSupplierQuotation({supplierId:importSupplierId,header:preview.header,lines:preview.lines,workbookFile:previewFile});const created=result.quotation;let documentNote="";if(result.archive.attempted){if(result.archive.archived)documentNote=result.archive.duplicate?" Costa Gear import file was already archived.":" Costa Gear import file archived in OneDrive.";else documentNote=` Quotation data was imported, but the workbook could not be archived: ${result.archive.error||"unknown document error"}`;}setPreview(null);setPreviewFile(null);setImportSupplierId("");await load();setSelectedId(created.id);const baseMessage=sourceRef?`Quotation ${created.quote_ref} imported. Supplier reference preserved.`:`Quotation ${created.quote_ref} imported. Costa Gear reference generated because the supplier did not provide one.`;setMessage(baseMessage+documentNote);}catch(e){setError(e.message||"Unable to import quotation.");}finally{setBusy(false);}};
   const mapLine=async(lineId,productId)=>{if(!productId)return;setBusy(true);setError("");try{await mapSupplierQuotationLine(lineId,productId);setLines(await listSupplierQuotationLines(selectedId));setMessage("Product match confirmed. Supplier SKU mapping saved for future quotations.");}catch(e){setError(e.message||"Unable to save product match.");}finally{setBusy(false);}};
   const setIgnored=async(line,ignoredState)=>{
     if(ignoredState&&!window.confirm("Ignore this supplier item for Costa Gear? The original quotation line will be preserved, but it will not create a Product Master record, comparable quote or Buying Draft line."))return;
@@ -276,7 +275,7 @@ export default function SupplierQuotationWorkspace({onNavigate}){
       {message&&<div style={{background:"#EDF7EE",color:C.green,padding:10,borderRadius:9}}>{message}</div>}
 
       <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}><div><strong style={{fontSize:15}}>Import standardized quotation</strong><div style={{fontSize:11,color:C.muted,marginTop:2}}>Required workbook sheets: <b>Quotation</b> and <b>Items</b>. The app validates the file again before saving.</div></div><label style={{...btn(true),display:"inline-flex",alignItems:"center",gap:7}}>Choose XLSX<input type="file" accept=".xlsx,.xls" onChange={onFile} style={{display:"none"}}/></label></div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}><div><strong style={{fontSize:15}}>Formal Quotation Intake</strong><div style={{fontSize:11,color:C.muted,marginTop:2}}>This is the single entry point for formal supplier quotations. Required workbook sheets: <b>Quotation</b> and <b>Items</b>. The app validates the file again before saving.</div></div><label style={{...btn(true),display:"inline-flex",alignItems:"center",gap:7}}>Choose XLSX<input type="file" accept=".xlsx,.xls" onChange={onFile} style={{display:"none"}}/></label></div>
         {preview&&<div style={{marginTop:12,border:`1px solid ${C.border}`,borderRadius:11,padding:12,display:"grid",gap:10}}>
           <div className="cg-supplier-quotation-preview-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8}}>
             {[['Supplier in file',preview.header.supplierName||'—'],['Supplier Quote Ref',preview.header.quoteRef||'Not provided · CG ref generated on import'],['Date',preview.header.quoteDate||'—'],['Items',previewTotals.items],['Grand Total',money(preview.header.grandTotal,preview.header.currency)]].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:9,padding:9}}><div style={{fontSize:10,color:C.muted,fontWeight:750}}>{l}</div><div style={{fontSize:12,fontWeight:850,marginTop:3}}>{v}</div></div>)}
