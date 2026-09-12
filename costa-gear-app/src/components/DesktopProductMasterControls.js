@@ -102,6 +102,7 @@ export default function DesktopProductMasterControls({ active = true }) {
     products.forEach(product => {
       const productQuotes = quoteMap.get(product.id) || [];
       map.set(product.sku_id, {
+        productId: product.id,
         sku: product.sku_id || "",
         name: product.name || product.product_type || "",
         productType: product.product_type || "",
@@ -236,7 +237,7 @@ export default function DesktopProductMasterControls({ active = true }) {
           : [normalize(card.textContent)];
         const searchMatch = !query || haystack.some(value => value.includes(query));
         const categoryMatch = !category || meta?.category === category;
-        const structuredEntries = meta ? fitmentsByProduct.get(products.find(product => product.sku_id === sku)?.id) || [] : [];
+        const structuredEntries = meta ? fitmentsByProduct.get(meta.productId) || [] : [];
         const fitmentMatch = productMatchesStructuredFitment(structuredEntries, vehicleCode, modelYear);
         const visible = searchMatch && categoryMatch && fitmentMatch;
         card.style.display = visible ? "grid" : "none";
@@ -246,7 +247,7 @@ export default function DesktopProductMasterControls({ active = true }) {
     };
 
     apply();
-  }, [active, list, headerHost, rowsBySku, products, fitmentsByProduct, search, category, vehicleCode, modelYear, revision]);
+  }, [active, list, headerHost, rowsBySku, fitmentsByProduct, search, category, vehicleCode, modelYear, revision]);
 
   if (!active || !host) return null;
 
