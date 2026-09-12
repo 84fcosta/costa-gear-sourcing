@@ -316,6 +316,23 @@ export async function listOneDriveChildren(parentId) {
   return items;
 }
 
+export async function getOneDriveItemDownloadUrl(itemId) {
+  if (!itemId) throw new Error("A OneDrive item ID is required to read the temporary download URL.");
+  const path = await driveItemPath(itemId);
+  const item = await graphRequest(path);
+  const downloadUrl = item?.["@microsoft.graph.downloadUrl"] || null;
+  if (!downloadUrl) throw new Error("OneDrive did not return a temporary download URL for this item.");
+  return {
+    itemId: item?.id || itemId,
+    fileName: item?.name || null,
+    sizeBytes: Number(item?.size || 0),
+    mimeType: item?.file?.mimeType || null,
+    webUrl: item?.webUrl || null,
+    downloadUrl,
+    modifiedDateTime: item?.lastModifiedDateTime || null,
+  };
+}
+
 export async function getOneDriveItemContentHashes(itemId) {
   if (!itemId) throw new Error("A OneDrive item ID is required to read content hashes.");
   const path = await driveItemPath(itemId, "?$select=id,size,file");
@@ -433,6 +450,32 @@ export async function moveOneDriveItem({ itemId, folderPath, newName }) {
     sizeBytes: Number(item?.size || 0),
     mimeType: item?.file?.mimeType || null,
     destinationPath: [...folderPath, item?.name || newName].join("/"),
+  };
+}
+
+export async function uploadSupplierIntakeStagingFile(file) {
+  if (!file) throw new Error("Choose a supplier document before intake.");
+  const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const safeOriginal = cleanOneDriveNamePart(
+    String(file.name || "Supplier_Document").replace(/\.[^.]+$/, ""),
+    "Supplier_Document",
+    72
+  );
+  const extensionMatch = String(file.name || "").match(/\.([A-Za-z0-9]{1,12})$/);
+  const extension = extensionMatch ? "." + extensionMatch[1].toLowerCase() : "";
+  const stagingName = "CG_INTAKE_" + stamp + "_" + safeOriginal + extension;
+  const uploaded = await uploadFileToOneDriveFolder({
+    file,
+    parentId: stagingFolder.id,
+    fileName: stagingName,
+    replace: false,
+  });
+  return {
+    ...uploaded,
+    stagingFolderId: stagingFolder.id,
+    stagingFolderName: stagingFolder.name,
+    originalFileName: file.name,
   };
 }
 
