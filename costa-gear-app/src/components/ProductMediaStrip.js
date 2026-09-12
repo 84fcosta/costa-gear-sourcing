@@ -9,10 +9,8 @@ const ACTION_WIDTH = 468;
 const ROW_MIN_WIDTH = 1060;
 const DESKTOP_STICKY_BREAKPOINT = 1180;
 
-function topbarOffset() {
-  const topbar = document.querySelector(".cg-topbar");
-  const height = Math.round(topbar?.getBoundingClientRect?.().height || 96);
-  return `${height}px`;
+function productHeaderOffset() {
+  return "var(--cg-product-controls-stack, 96px)";
 }
 
 function findProductLayout(sku) {
@@ -136,7 +134,7 @@ function ensureHeaderHost(list) {
   Object.assign(host.style, {
     minWidth: `${ROW_MIN_WIDTH}px`,
     position: sticky ? "sticky" : "relative",
-    top: sticky ? topbarOffset() : "auto",
+    top: sticky ? productHeaderOffset() : "auto",
     zIndex: "18",
     background: "#fff",
     paddingTop: sticky ? "2px" : "0",
