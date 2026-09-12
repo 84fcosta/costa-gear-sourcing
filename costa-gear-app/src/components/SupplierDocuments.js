@@ -155,7 +155,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 13, display: "grid", gap: 10 }}>
             <div>
               <div style={{ fontWeight: 850, fontSize: 13 }}>Upload supplier sourcing document</div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>The app chooses the folder and generates the governed filename. Do not create folders manually for this upload.</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>Use this area for catalogs, price lists and other supplier sourcing documents. Formal quotation originals and Costa Gear import files are managed only in Supplier Quotations > Quotation Documents.</div>
             </div>
 
             <div className="cg-supplier-doc-form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
