@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 import { supabase } from "../supabase";
+import {
+  buildProductFitmentMap,
+  modelYearOptions,
+  productMatchesStructuredFitment,
+  vehicleModelOptions,
+} from "../domain/structuredFitmentFilter";
 import "../desktop-sourcing-overrides.css";
 
 const normalize = value => String(value || "").trim().toLowerCase();
@@ -55,9 +61,12 @@ export default function DesktopProductMasterControls({ active = true }) {
   const [legacyFilterRow, setLegacyFilterRow] = useState(null);
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [productFitments, setProductFitments] = useState([]);
+  const [vehicleFitments, setVehicleFitments] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [fitment, setFitment] = useState("");
+  const [vehicleCode, setVehicleCode] = useState("");
+  const [modelYear, setModelYear] = useState("");
   const [visibleCount, setVisibleCount] = useState(0);
   const [revision, setRevision] = useState(0);
 
@@ -68,10 +77,14 @@ export default function DesktopProductMasterControls({ active = true }) {
     Promise.all([
       supabase.from("products").select("id,sku_id,name,product_type,material,category,fitment"),
       supabase.from("quotes").select("product_id,supplier_sku,supplier_name"),
-    ]).then(([productResult, quoteResult]) => {
+      supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
+      supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
+    ]).then(([productResult, quoteResult, fitmentResult, vehicleResult]) => {
       if (cancelled) return;
       if (!productResult.error) setProducts(productResult.data || []);
       if (!quoteResult.error) setQuotes(quoteResult.data || []);
+      if (!fitmentResult.error) setProductFitments(fitmentResult.data || []);
+      if (!vehicleResult.error) setVehicleFitments(vehicleResult.data || []);
     });
 
     return () => { cancelled = true; };
@@ -89,6 +102,7 @@ export default function DesktopProductMasterControls({ active = true }) {
     products.forEach(product => {
       const productQuotes = quoteMap.get(product.id) || [];
       map.set(product.sku_id, {
+        productId: product.id,
         sku: product.sku_id || "",
         name: product.name || product.product_type || "",
         productType: product.product_type || "",
@@ -103,7 +117,16 @@ export default function DesktopProductMasterControls({ active = true }) {
   }, [products, quotes]);
 
   const categories = useMemo(() => [...new Set(products.map(product => product.category).filter(Boolean))].sort(), [products]);
-  const fitments = useMemo(() => [...new Set(products.map(product => product.fitment).filter(Boolean))].sort(), [products]);
+  const fitmentsByProduct = useMemo(
+    () => buildProductFitmentMap(productFitments, vehicleFitments),
+    [productFitments, vehicleFitments]
+  );
+  const vehicleOptions = useMemo(() => vehicleModelOptions(vehicleFitments), [vehicleFitments]);
+  const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
+
+  useEffect(() => {
+    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [modelYear, yearOptions]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -214,7 +237,8 @@ export default function DesktopProductMasterControls({ active = true }) {
           : [normalize(card.textContent)];
         const searchMatch = !query || haystack.some(value => value.includes(query));
         const categoryMatch = !category || meta?.category === category;
-        const fitmentMatch = !fitment || meta?.fitment === fitment;
+        const structuredEntries = meta ? fitmentsByProduct.get(meta.productId) || [] : [];
+        const fitmentMatch = productMatchesStructuredFitment(structuredEntries, vehicleCode, modelYear);
         const visible = searchMatch && categoryMatch && fitmentMatch;
         card.style.display = visible ? "grid" : "none";
         if (visible) count += 1;
@@ -223,11 +247,11 @@ export default function DesktopProductMasterControls({ active = true }) {
     };
 
     apply();
-  }, [active, list, headerHost, rowsBySku, search, category, fitment, revision]);
+  }, [active, list, headerHost, rowsBySku, fitmentsByProduct, search, category, vehicleCode, modelYear, revision]);
 
   if (!active || !host) return null;
 
-  const filtered = Boolean(search || category || fitment);
+  const filtered = Boolean(search || category || vehicleCode || modelYear);
   const countLabel = filtered ? visibleCount : products.length;
 
   return createPortal(
@@ -253,17 +277,25 @@ export default function DesktopProductMasterControls({ active = true }) {
       </label>
 
       <label className="cg-desktop-snapshot-filter fitment">
-        <span>Fitment</span>
-        <select value={fitment} onChange={event => setFitment(event.target.value)}>
-          <option value="">All fitments</option>
-          {fitments.map(value => <option key={value} value={value}>{value}</option>)}
+        <span>Vehicle Model</span>
+        <select value={vehicleCode} onChange={event => setVehicleCode(event.target.value)}>
+          <option value="">All models</option>
+          {vehicleOptions.map(option => <option key={option.code} value={option.code}>{option.display_name}</option>)}
+        </select>
+      </label>
+
+      <label className="cg-desktop-snapshot-filter model-year">
+        <span>Model Year</span>
+        <select value={modelYear} onChange={event => setModelYear(event.target.value)}>
+          <option value="">All years</option>
+          {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
         </select>
       </label>
 
       <div className="cg-desktop-snapshot-result">
         <strong>{countLabel}</strong>
         <span>of {products.length} products</span>
-        {filtered ? <button type="button" onClick={() => { setSearch(""); setCategory(""); setFitment(""); }}>Clear</button> : null}
+        {filtered ? <button type="button" onClick={() => { setSearch(""); setCategory(""); setVehicleCode(""); setModelYear(""); }}>Clear</button> : null}
       </div>
     </div>,
     host
