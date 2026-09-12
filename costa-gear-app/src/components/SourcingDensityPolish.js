@@ -119,19 +119,32 @@ function compactTable(table, { rowHeight = PRODUCT_ROW_HEIGHT, productDetails = 
 
       const lines = Array.from(cell.children);
       if (productDetails && index === 1) {
-        if (lines[0]) setStyles(lines[0], { fontSize: "13px", lineHeight: "1.18", fontWeight: "700" });
-        if (lines[1]) setStyles(lines[1], { fontSize: "10px", lineHeight: "1.15", marginTop: "1px", fontWeight: "400" });
+        if (lines[0]) setStyles(lines[0], {
+          fontSize: snapshot ? "12.5px" : "13px",
+          lineHeight: snapshot ? "1.12" : "1.18",
+          fontWeight: "700",
+        });
+        if (lines[1]) setStyles(lines[1], {
+          fontSize: snapshot ? "9.5px" : "10px",
+          lineHeight: snapshot ? "1.08" : "1.15",
+          marginTop: "1px",
+          fontWeight: "400",
+        });
       } else if (lines[1]) {
         setStyles(lines[1], { fontSize: "9.5px", lineHeight: "1.1", marginTop: "1px" });
       }
 
       if (snapshot) {
+        setImportantStyles(cell, {
+          "font-size": "10.5px",
+          "padding-top": "4px",
+          "padding-bottom": "4px",
+          "line-height": "1.1",
+        });
         if (index === 0) {
-          setImportantStyles(cell, { "font-size": "11.5px", "font-weight": "800" });
-        } else if (index === 2 || index === 5) {
-          setImportantStyles(cell, { "font-size": "11.5px" });
+          setImportantStyles(cell, { "font-size": "10.5px", "font-weight": "800" });
         } else if ([3, 4, 6, 7, 8].includes(index)) {
-          setImportantStyles(cell, { "font-size": "12.5px" });
+          setImportantStyles(cell, { "font-size": "11.5px" });
         }
       }
     });
@@ -223,7 +236,7 @@ function compactOverview() {
   const table = snapshotCard.querySelector("table");
   if (!table) return;
   setStyles(table.parentElement, { borderRadius: "8px" });
-  compactTable(table, { productDetails: true, snapshot: true });
+  compactTable(table, { rowHeight: 40, productDetails: true, snapshot: true });
   makeSnapshotStickyTable(table);
 
   const note = snapshotCard.lastElementChild;
