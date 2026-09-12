@@ -316,6 +316,23 @@ export async function listOneDriveChildren(parentId) {
   return items;
 }
 
+export async function getOneDriveItemDownloadUrl(itemId) {
+  if (!itemId) throw new Error("A OneDrive item ID is required to read the temporary download URL.");
+  const path = await driveItemPath(itemId);
+  const item = await graphRequest(path);
+  const downloadUrl = item?.["@microsoft.graph.downloadUrl"] || null;
+  if (!downloadUrl) throw new Error("OneDrive did not return a temporary download URL for this item.");
+  return {
+    itemId: item?.id || itemId,
+    fileName: item?.name || null,
+    sizeBytes: Number(item?.size || 0),
+    mimeType: item?.file?.mimeType || null,
+    webUrl: item?.webUrl || null,
+    downloadUrl,
+    modifiedDateTime: item?.lastModifiedDateTime || null,
+  };
+}
+
 export async function getOneDriveItemContentHashes(itemId) {
   if (!itemId) throw new Error("A OneDrive item ID is required to read content hashes.");
   const path = await driveItemPath(itemId, "?$select=id,size,file");
@@ -433,6 +450,53 @@ export async function moveOneDriveItem({ itemId, folderPath, newName }) {
     sizeBytes: Number(item?.size || 0),
     mimeType: item?.file?.mimeType || null,
     destinationPath: [...folderPath, item?.name || newName].join("/"),
+  };
+}
+
+export async function cleanupSupplierIntakeStaging({ olderThanHours = 48 } = {}) {
+  const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
+  const threshold = Date.now() - Math.max(1, Number(olderThanHours) || 48) * 60 * 60 * 1000;
+  const children = await listOneDriveChildren(stagingFolder.id);
+  let removed = 0;
+
+  for (const item of children) {
+    if (item?.folder) continue;
+    if (!String(item?.name || "").startsWith("CG_INTAKE_")) continue;
+    const modified = new Date(item?.lastModifiedDateTime || item?.createdDateTime || 0).getTime();
+    if (!Number.isFinite(modified) || modified >= threshold) continue;
+    try {
+      await deleteOneDriveItem(item.id);
+      removed += 1;
+    } catch (_) {}
+  }
+
+  return { removed, folderId: stagingFolder.id };
+}
+
+export async function uploadSupplierIntakeStagingFile(file) {
+  if (!file) throw new Error("Choose a supplier document before intake.");
+  const stagingFolder = await ensureFolderPath(["02_PRODUCTS", "Suppliers_Sourcing", "_INTAKE"]);
+  try { await cleanupSupplierIntakeStaging({ olderThanHours: 48 }); } catch (_) {}
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 17) + "_" + Date.now().toString(36).slice(-5);
+  const safeOriginal = cleanOneDriveNamePart(
+    String(file.name || "Supplier_Document").replace(/\.[^.]+$/, ""),
+    "Supplier_Document",
+    72
+  );
+  const extensionMatch = String(file.name || "").match(/\.([A-Za-z0-9]{1,12})$/);
+  const extension = extensionMatch ? "." + extensionMatch[1].toLowerCase() : "";
+  const stagingName = "CG_INTAKE_" + stamp + "_" + safeOriginal + extension;
+  const uploaded = await uploadFileToOneDriveFolder({
+    file,
+    parentId: stagingFolder.id,
+    fileName: stagingName,
+    replace: false,
+  });
+  return {
+    ...uploaded,
+    stagingFolderId: stagingFolder.id,
+    stagingFolderName: stagingFolder.name,
+    originalFileName: file.name,
   };
 }
 

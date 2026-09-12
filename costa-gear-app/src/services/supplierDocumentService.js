@@ -5,6 +5,7 @@ import {
   ensureOneDriveFolderPath,
   getOneDriveItemContentHashes,
   listOneDriveChildren,
+  moveOneDriveItem,
   uploadFileToOneDriveFolder,
 } from "./oneDriveAppFolderService";
 
@@ -460,6 +461,187 @@ export async function uploadSupplierDocument({
     }
     throw error;
   }
+}
+
+export async function adoptStagedSupplierDocument({
+  stagedItemId,
+  originalFileName,
+  supplierId,
+  quotationId = null,
+  documentType,
+  description = "",
+  documentDate = null,
+  replace = false,
+}) {
+  if (!stagedItemId) throw new Error("A staged OneDrive item is required.");
+  if (!supplierId) throw new Error("Select an existing Costa Gear supplier before saving.");
+  if (!documentType) throw new Error("Select a document type before saving.");
+
+  const [folderStatus, quotation, hashes] = await Promise.all([
+    resolveSupplierSourcingFolder(supplierId),
+    loadQuotation(quotationId),
+    getOneDriveItemContentHashes(stagedItemId),
+  ]);
+  const { supplier, folder } = folderStatus;
+
+  if (quotation && quotation.supplier_id !== supplier.id) {
+    throw new Error("The quotation does not belong to the selected supplier.");
+  }
+
+  const existingRole = await findQuotationRoleDocument(quotationId, documentType);
+  const sha1Hash = hashes?.sha1Hash || null;
+
+  const [registeredDuplicate, oneDriveDuplicate] = await Promise.all([
+    indexedDuplicateByHash(supplier.id, sha1Hash),
+    indexedOneDriveDuplicateByHash(folder.name, sha1Hash),
+  ]);
+
+  if (registeredDuplicate && registeredDuplicate.id !== existingRole?.id) {
+    try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
+    return {
+      document: registeredDuplicate,
+      duplicate: true,
+      folder: folderStatus,
+    };
+  }
+
+  if (existingRole && !replace) {
+    try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
+    if (sha1Hash && existingRole.sha1_hash === sha1Hash) {
+      return { document: existingRole, duplicate: true, folder: folderStatus };
+    }
+    const error = new Error(
+      `${documentType === "QUOTATION_SOURCE" ? "Supplier Original" : "Costa Gear Import File"} already exists for this quotation. Use Replace to update it.`
+    );
+    error.code = "SUPPLIER_DOCUMENT_ROLE_EXISTS";
+    error.existingDocument = existingRole;
+    throw error;
+  }
+
+  if (oneDriveDuplicate && oneDriveDuplicate.item_id !== existingRole?.onedrive_item_id) {
+    try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
+    const payload = {
+      supplier_id: supplier.id,
+      quotation_id: quotation?.id || null,
+      document_type: documentType,
+      description: description || null,
+      document_date: documentDate || quotation?.quote_date || null,
+      original_file_name: originalFileName || oneDriveDuplicate.name,
+      file_name: oneDriveDuplicate.name,
+      mime_type: null,
+      size_bytes: 0,
+      sha1_hash: sha1Hash,
+      onedrive_item_id: oneDriveDuplicate.item_id,
+      onedrive_web_url: oneDriveDuplicate.web_url || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = existingRole
+      ? await supabase.from("supplier_documents").update(payload).eq("id", existingRole.id).select().single()
+      : await supabase.from("supplier_documents").insert(payload).select().single();
+    if (error) throw error;
+    return { document: data, duplicate: true, folder: folderStatus };
+  }
+
+  const governedName = governedSupplierDocumentName({
+    fileName: originalFileName || "Supplier_Document",
+    supplier,
+    folderName: folder.name,
+    documentType,
+    quotation,
+    description,
+    documentDate,
+  });
+
+  const sameName = (await listOneDriveChildren(folder.id)).find(
+    item => !item?.folder && String(item.name || "").toLowerCase() === governedName.toLowerCase()
+  );
+  if (sameName && sameName.id !== existingRole?.onedrive_item_id) {
+    try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
+    const error = new Error(`A file named ${governedName} already exists in ${folder.name}.`);
+    error.code = "ONEDRIVE_FILE_EXISTS";
+    error.existingItem = sameName;
+    throw error;
+  }
+
+  const moved = await moveOneDriveItem({
+    itemId: stagedItemId,
+    folderPath: [...SUPPLIER_ROOT_PATH, folder.name],
+    newName: governedName,
+  });
+
+  let officialHash = sha1Hash;
+  try {
+    const movedHashes = await getOneDriveItemContentHashes(moved.itemId);
+    officialHash = movedHashes.sha1Hash || sha1Hash;
+  } catch (_) {}
+
+  const payload = {
+    supplier_id: supplier.id,
+    quotation_id: quotation?.id || null,
+    document_type: documentType,
+    description: description || null,
+    document_date: documentDate || quotation?.quote_date || null,
+    original_file_name: originalFileName || moved.fileName,
+    file_name: moved.fileName,
+    mime_type: moved.mimeType || null,
+    size_bytes: moved.sizeBytes || 0,
+    sha1_hash: officialHash,
+    onedrive_item_id: moved.itemId,
+    onedrive_web_url: moved.webUrl || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  let document;
+  if (existingRole) {
+    const { data, error } = await supabase
+      .from("supplier_documents")
+      .update(payload)
+      .eq("id", existingRole.id)
+      .select()
+      .single();
+    if (error) throw error;
+    document = data;
+  } else {
+    const { data, error } = await supabase
+      .from("supplier_documents")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    document = data;
+  }
+
+  await indexUploadedFile({
+    upload: {
+      itemId: moved.itemId,
+      parentItemId: folder.id,
+      fileName: moved.fileName,
+      mimeType: moved.mimeType || null,
+      sizeBytes: moved.sizeBytes || 0,
+      webUrl: moved.webUrl || null,
+      eTag: null,
+      createdDateTime: null,
+      modifiedDateTime: null,
+    },
+    folder,
+    supplier,
+    quotation,
+    documentType,
+    sha1Hash: officialHash,
+  });
+
+  if (existingRole && existingRole.onedrive_item_id && existingRole.onedrive_item_id !== moved.itemId) {
+    try {
+      await deleteOneDriveItem(existingRole.onedrive_item_id);
+      await supabase
+        .from("onedrive_items")
+        .update({ is_deleted: true, indexed_at: new Date().toISOString() })
+        .eq("item_id", existingRole.onedrive_item_id);
+    } catch (_) {}
+  }
+
+  return { document, duplicate: false, folder: folderStatus };
 }
 
 export function supplierDocumentTypeLabel(value) {

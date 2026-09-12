@@ -161,7 +161,7 @@
 
   .cg-sourcing-mobile-nav {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 92px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 82px;
     gap: 8px;
     position: relative;
     z-index: 220;

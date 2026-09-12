@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import LegacyApp from "../LegacyApp";
 import SourcingDecisionLab from "./SourcingDecisionLab";
 import SupplierQuotationWorkspace from "./SupplierQuotationWorkspace";
+import SupplierIntakeWorkspace from "./SupplierIntakeWorkspace";
 import ProductMediaStrip from "./ProductMediaStrip";
 import SourcingDensityPolish from "./SourcingDensityPolish";
 import SourcingSortControls from "./SourcingSortControls";
@@ -27,13 +28,14 @@ const legacyTabLabels = {
   export: "Export / RFQ",
 };
 
-export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
+export default function SourcingWorkspace({ onNavigate, initialView = "intake" }) {
   const [view, setView] = useState(initialView === "images" ? "master" : initialView);
   const [handoffError, setHandoffError] = useState("");
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileLegacyTab, setMobileLegacyTab] = useState("dashboard");
   const [pendingLegacyTab, setPendingLegacyTab] = useState(null);
+  const [quotationFocusId, setQuotationFocusId] = useState(null);
 
   useEffect(() => setView(initialView === "images" ? "master" : initialView), [initialView]);
 
@@ -111,19 +113,20 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     finally { setHandoffBusy(false); }
   };
 
-  const mobileMoreActive = view !== "master" || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
+  const mobileMoreActive = !["intake", "master"].includes(view) || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
   const showLegacyMaster = mobileLegacyTab !== "suppliers";
 
   return <div className={`cg-sourcing-workspace cg-sourcing-mobile-${mobileLegacyTab}`}>
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
 
     <div className="cg-sourcing-mobile-nav" aria-label="Sourcing mobile navigation">
+      <button type="button" className={view === "intake" ? "active" : ""} onClick={() => selectSourcingView("intake")}>Intake</button>
       <button type="button" className={view === "master" && mobileLegacyTab === "dashboard" ? "active" : ""} onClick={() => selectLegacyTab("dashboard")}>Overview</button>
       <button type="button" className={view === "master" && mobileLegacyTab === "products" ? "active" : ""} onClick={() => selectLegacyTab("products")}>Products</button>
       <div className="cg-sourcing-mobile-more-wrap">
         <button type="button" className={mobileMoreActive || mobileMoreOpen ? "active" : ""} aria-expanded={mobileMoreOpen} onClick={() => setMobileMoreOpen(open => !open)}>More</button>
         {mobileMoreOpen && <div className="cg-sourcing-mobile-more-menu">
-          <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}><strong>Supplier Quotations</strong><span>Import and manage formal supplier quotations</span></button>
+          <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}><strong>Supplier Quotations</strong><span>Review, match and finalize formal quotations</span></button>
           <button type="button" className={view === "analysis" ? "active" : ""} onClick={() => selectSourcingView("analysis")}><strong>Decision Lab</strong><span>Compare quotes and sourcing decisions</span></button>
           <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}><strong>Suppliers</strong><span>Supplier directory and sourcing history</span></button>
           <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}><strong>Quote Register</strong><span>Historical and comparable quote records</span></button>
@@ -134,10 +137,11 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
 
     <div className="cg-subworkspace-header">
       <div className="cg-subworkspace-inner">
-        <div><div className="cg-subworkspace-title">Sourcing</div><div className="cg-subworkspace-copy">Maintain master data, intake formal supplier quotations once, then compare and buy.</div></div>
-        <div className="cg-segmented"><button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Master Data</button><button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button><button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button></div>
+        <div><div className="cg-subworkspace-title">Sourcing</div><div className="cg-subworkspace-copy">One intake channel for supplier documents, then master data, quotation review and sourcing decisions.</div></div>
+        <div className="cg-segmented"><button className={view === "intake" ? "active" : ""} onClick={() => setView("intake")}>Supplier Intake</button><button className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Master Data</button><button className={view === "quotations" ? "active" : ""} onClick={() => setView("quotations")}>Supplier Quotations</button><button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Decision Lab</button></div>
       </div>
     </div>
+    {view === "intake" && <div className="cg-module-embedded"><SupplierIntakeWorkspace onCompleteQuotation={quotationId => { setQuotationFocusId(quotationId); setMobileMoreOpen(false); setView("quotations"); }} /></div>}
     {view === "master" && <>
       {showLegacyMaster && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /></>}
       <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
@@ -145,10 +149,10 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
       <DesktopProductMasterControls active={showLegacyMaster} />
       <DesktopSupplierControls active={showLegacyMaster} />
       <MobileProductMaster active={mobileLegacyTab === "products"} />
-      <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} />
-      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} /></div>}
+      <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} />
+      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     </>}
-    {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} /></div>}
+    {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} initialQuotationId={quotationFocusId} onOpenIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}
   </div>;
 }

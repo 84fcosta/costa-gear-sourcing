@@ -78,7 +78,7 @@ function initialWorkspace() {
 
 export default function App() {
   const [workspace, setWorkspace] = useState(initialWorkspace);
-  const [sourcingView, setSourcingView] = useState(() => readSessionValue("cg:sourcing-view", "master", ["master", "analysis"]));
+  const [sourcingView, setSourcingView] = useState(() => readSessionValue("cg:sourcing-view", "intake", ["intake", "master", "quotations", "analysis"]));
   const [logisticsView, setLogisticsView] = useState(() => readSessionValue("cg:logistics-view", "shipments", ["shipments", "costs"]));
   const [salesView, setSalesView] = useState(() => readSessionValue("cg:sales-view", "orders", ["orders", "performance", "planning", "pricing"]));
   const [handoff, setHandoff] = useState(null);

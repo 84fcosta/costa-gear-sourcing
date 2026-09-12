@@ -3,7 +3,6 @@ import {
   getSupplierSourcingFolderStatus,
   listSupplierDocuments,
   QUOTATION_DOCUMENT_TYPES,
-  SUPPLIER_DOCUMENT_TYPES,
   supplierDocumentTypeLabel,
   uploadSupplierDocument,
 } from "../services/supplierDocumentService";
@@ -21,16 +20,6 @@ const C = {
   soft: "#F3F4EF",
 };
 
-const input = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: `1px solid ${C.border}`,
-  borderRadius: 9,
-  padding: "8px 10px",
-  fontSize: 12.5,
-  background: "#fff",
-  color: C.ink,
-};
 
 const btn = primary => ({
   border: primary ? 0 : `1px solid ${C.border}`,
@@ -43,24 +32,15 @@ const btn = primary => ({
   cursor: "pointer",
 });
 
-function stripExtension(name) {
-  return String(name || "").replace(/\.[A-Za-z0-9]{1,12}$/, "");
-}
 
 function roleDocument(documents, role) {
   return documents.find(doc => doc.document_type === role) || null;
 }
 
-export function SupplierDocumentsDialog({ supplier, onClose }) {
+export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
   const [documents, setDocuments] = useState([]);
   const [folderStatus, setFolderStatus] = useState(null);
-  const [documentType, setDocumentType] = useState("CATALOG");
-  const [description, setDescription] = useState("");
-  const [documentDate, setDocumentDate] = useState("");
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   const load = async () => {
     if (!supplier?.id) return;
@@ -79,41 +59,6 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
 
   useEffect(() => { load(); }, [supplier?.id]);
 
-  const onChooseFile = event => {
-    const next = event.target.files?.[0] || null;
-    setFile(next);
-    if (next && !description) setDescription(stripExtension(next.name));
-  };
-
-  const upload = async () => {
-    if (!file) return setError("Choose a file before uploading.");
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await uploadSupplierDocument({
-        file,
-        supplierId: supplier.id,
-        documentType,
-        description,
-        documentDate: documentDate || null,
-      });
-      setMessage(
-        result.folder?.willCreate
-          ? `Uploaded and created ${result.folder.folderName}.`
-          : "Supplier document uploaded."
-      );
-      setFile(null);
-      setDescription("");
-      setDocumentDate("");
-      await load();
-    } catch (e) {
-      setError(e.message || "Unable to upload supplier document.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (!supplier) return null;
 
   return (
@@ -128,7 +73,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
         placeItems: "center",
         padding: 20,
       }}
-      onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}
+      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div className="cg-supplier-doc-dialog" style={{ width: "min(900px,96vw)", maxHeight: "92vh", overflow: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 26px 80px rgba(9,10,8,.28)" }}>
         <div className="cg-supplier-doc-dialog-head" style={{ background: "#20251F", color: "#fff", padding: "16px 18px", display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -136,12 +81,12 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
             <div style={{ fontSize: 17, fontWeight: 900 }}>Supplier Documents</div>
             <div style={{ fontSize: 11, color: "#C9CFC4", marginTop: 3 }}>{supplier.supId || supplier.sup_id} · {supplier.name}</div>
           </div>
-          <button type="button" disabled={busy} onClick={onClose} style={{ ...btn(), height: 34 }}>Close</button>
+          <button type="button" onClick={onClose} style={{ ...btn(), height: 34 }}>Close</button>
         </div>
 
         <div className="cg-supplier-doc-dialog-body" style={{ padding: 18, display: "grid", gap: 14 }}>
           {error && <div style={{ background: "#FFF1EF", color: C.red, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{error}</div>}
-          {message && <div style={{ background: "#EDF7EE", color: C.green, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{message}</div>}
+
 
           <div style={{ background: "#F8F9F5", border: `1px solid ${C.border}`, borderRadius: 10, padding: 11 }}>
             <div style={{ fontSize: 9.5, color: C.muted, fontWeight: 850, textTransform: "uppercase" }}>OneDrive destination</div>
@@ -152,36 +97,12 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
             {folderStatus?.folder?.webUrl && <a href={folderStatus.folder.webUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 5, fontSize: 10.5, color: C.oliveDark }}>Open supplier folder in OneDrive</a>}
           </div>
 
-          <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 13, display: "grid", gap: 10 }}>
+          <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 13, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <div>
-              <div style={{ fontWeight: 850, fontSize: 13 }}>Upload supplier sourcing document</div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>Use this area for catalogs, price lists and other supplier sourcing documents. Formal quotation originals and Costa Gear import files are managed only in Supplier Quotations > Quotation Documents.</div>
+              <div style={{ fontWeight: 850, fontSize: 13 }}>Single document intake channel</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>New catalogs, price lists, technical files and quotations are uploaded through Supplier Intake. This screen is now the supplier document register.</div>
             </div>
-
-            <div className="cg-supplier-doc-form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
-              <label style={{ display: "grid", gap: 4, fontSize: 10.5, color: C.muted, fontWeight: 750 }}>
-                Document Type
-                <select style={input} value={documentType} onChange={e => setDocumentType(e.target.value)}>
-                  {SUPPLIER_DOCUMENT_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label style={{ display: "grid", gap: 4, fontSize: 10.5, color: C.muted, fontWeight: 750 }}>
-                Description
-                <input style={input} value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Wrangler JL accessories" />
-              </label>
-              <label style={{ display: "grid", gap: 4, fontSize: 10.5, color: C.muted, fontWeight: 750 }}>
-                Document Date
-                <input style={input} type="date" value={documentDate} onChange={e => setDocumentDate(e.target.value)} />
-              </label>
-            </div>
-
-            <div className="cg-supplier-doc-file-row" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" onChange={onChooseFile} />
-              <button type="button" disabled={busy || !file} onClick={upload} style={{ ...btn(true), opacity: busy || !file ? .45 : 1 }}>
-                {busy ? "Uploading..." : "Upload"}
-              </button>
-              {file && <span style={{ fontSize: 10.5, color: C.muted }}>Original: {file.name}</span>}
-            </div>
+            {onOpenIntake && <button type="button" onClick={() => { onClose(); onOpenIntake(); }} style={btn(true)}>Open Supplier Intake</button>}
           </div>
 
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
