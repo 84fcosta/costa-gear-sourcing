@@ -13,6 +13,7 @@ import {
 } from "../services/supplierQuotationRepository";
 import { QuotationDocumentsPanel } from "./SupplierDocuments";
 import { uploadSupplierDocument } from "../services/supplierDocumentService";
+import "../supplier-quotation-mobile.css";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
 const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 10px",fontSize:12.5,background:"#fff",color:C.ink};
@@ -268,16 +269,16 @@ export default function SupplierQuotationWorkspace({onNavigate}){
 
   const previewTotals=useMemo(()=>{if(!preview)return null;const itemTotal=preview.lines.reduce((s,l)=>s+Number(l.supplierLineTotal===""?Number(l.quantity||0)*Number(l.unitPrice||0):l.supplierLineTotal||0),0);return{itemTotal,items:preview.lines.length};},[preview]);
 
-  return <div style={{minHeight:"100vh",background:C.soft,color:C.ink}}>
-    <div style={{background:"#20251F",color:"#fff",padding:"20px 28px"}}><div><h1 style={{margin:0,fontSize:25}}>Supplier Quotations</h1><div style={{color:"#C9CFC4",fontSize:12,marginTop:4}}>Import the standardized workbook from Supplier Quote Formatter, match or create products once, and convert selected lines into one Buying Draft.</div></div></div>
-    <div style={{padding:"16px 0 28px",display:"grid",gap:14}}>
+  return <div className="cg-supplier-quotation-workspace" style={{minHeight:"100vh",background:C.soft,color:C.ink}}>
+    <div className="cg-supplier-quotation-titlebar" style={{background:"#20251F",color:"#fff",padding:"20px 28px"}}><div><h1 style={{margin:0,fontSize:25}}>Supplier Quotations</h1><div style={{color:"#C9CFC4",fontSize:12,marginTop:4}}>Import the standardized workbook from Supplier Quote Formatter, match or create products once, and convert selected lines into one Buying Draft.</div></div></div>
+    <div className="cg-supplier-quotation-body" style={{padding:"16px 0 28px",display:"grid",gap:14}}>
       {error&&<div style={{background:"#FFF1EF",color:C.red,padding:10,borderRadius:9}}>{error}</div>}
       {message&&<div style={{background:"#EDF7EE",color:C.green,padding:10,borderRadius:9}}>{message}</div>}
 
       <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}><div><strong style={{fontSize:15}}>Import standardized quotation</strong><div style={{fontSize:11,color:C.muted,marginTop:2}}>Required workbook sheets: <b>Quotation</b> and <b>Items</b>. The app validates the file again before saving.</div></div><label style={{...btn(true),display:"inline-flex",alignItems:"center",gap:7}}>Choose XLSX<input type="file" accept=".xlsx,.xls" onChange={onFile} style={{display:"none"}}/></label></div>
         {preview&&<div style={{marginTop:12,border:`1px solid ${C.border}`,borderRadius:11,padding:12,display:"grid",gap:10}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8}}>
+          <div className="cg-supplier-quotation-preview-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8}}>
             {[['Supplier in file',preview.header.supplierName||'—'],['Supplier Quote Ref',preview.header.quoteRef||'Not provided · CG ref generated on import'],['Date',preview.header.quoteDate||'—'],['Items',previewTotals.items],['Grand Total',money(preview.header.grandTotal,preview.header.currency)]].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:9,padding:9}}><div style={{fontSize:10,color:C.muted,fontWeight:750}}>{l}</div><div style={{fontSize:12,fontWeight:850,marginTop:3}}>{v}</div></div>)}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:8,alignItems:"end"}}>
@@ -291,13 +292,13 @@ export default function SupplierQuotationWorkspace({onNavigate}){
         </div>}
       </div>
 
-      {loading?<div style={{padding:30,textAlign:"center",color:C.muted}}>Loading quotations…</div>:<div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:14,alignItems:"start"}}>
-        <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:12,display:"grid",gap:7,alignContent:"start"}}><strong>Quotation History</strong>{quotations.length===0&&<div style={{fontSize:11,color:C.muted,padding:"8px 0"}}>No standardized quotations imported yet.</div>}{quotations.map(q=>{const s=supplierById(q.supplier_id);return <button key={q.id} onClick={()=>setSelectedId(q.id)} style={{textAlign:"left",padding:9,borderRadius:9,border:`1px solid ${selectedId===q.id?C.olive:C.border}`,background:selectedId===q.id?"#F8FAF0":"#fff",cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",gap:6}}><b>{q.quote_ref}</b>{badge(q.status)}</div><div style={{fontSize:10.5,color:C.muted,marginTop:3}}>{s?.name||"Supplier"}</div><div style={{fontSize:10.5,color:C.muted}}>{q.quote_date||"No date"} · {money(q.grand_total,q.currency)}</div></button>})}</div>
+      {loading?<div style={{padding:30,textAlign:"center",color:C.muted}}>Loading quotations…</div>:<div className="cg-supplier-quotation-layout" style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:14,alignItems:"start"}}>
+        <div className="cg-supplier-quotation-history" style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:12,display:"grid",gap:7,alignContent:"start"}}><strong>Quotation History</strong>{quotations.length===0&&<div style={{fontSize:11,color:C.muted,padding:"8px 0"}}>No standardized quotations imported yet.</div>}{quotations.map(q=>{const s=supplierById(q.supplier_id);return <button key={q.id} onClick={()=>setSelectedId(q.id)} style={{textAlign:"left",padding:9,borderRadius:9,border:`1px solid ${selectedId===q.id?C.olive:C.border}`,background:selectedId===q.id?"#F8FAF0":"#fff",cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",gap:6}}><b>{q.quote_ref}</b>{badge(q.status)}</div><div style={{fontSize:10.5,color:C.muted,marginTop:3}}>{s?.name||"Supplier"}</div><div style={{fontSize:10.5,color:C.muted}}>{q.quote_date||"No date"} · {money(q.grand_total,q.currency)}</div></button>})}</div>
 
-        <div style={{display:"grid",gap:14}}>{selected?<>
+        <div className="cg-supplier-quotation-detail" style={{display:"grid",gap:14}}>{selected?<>
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}><div><div style={{fontWeight:900,fontSize:17}}>{selected.quote_ref}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{supplierById(selected.supplier_id)?.name} · {selected.quote_date||"No date"} · {selected.incoterm||"Incoterm TBD"}</div><div style={{fontSize:10.5,color:C.muted,marginTop:3}}>Supplier Quote Ref: <b style={{color:C.ink}}>{selected.supplier_quote_ref||"Not provided"}</b>{!selected.supplier_quote_ref&&<span style={{marginLeft:6,color:C.oliveDark,fontWeight:800}}>· Costa Gear generated the reference above</span>}</div></div><div style={{display:"flex",gap:5}}>{badge(selected.validation_status)}{badge(selected.status)}</div></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:8,marginTop:11}}>{[['Lines',lines.length],['Resolved',`${resolved}/${lines.length}`],['Products',money(selected.product_subtotal,selected.currency)],['Shipping',money(selected.shipping_total,selected.shipping_currency)],['Grand Total',money(selected.grand_total,selected.currency)],['Linked PO',selected.purchase_order_id?orderById(selected.purchase_order_id)?.po_ref||'Created':'—']].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:8,padding:8}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>{l}</div><div style={{fontSize:12.5,fontWeight:850,marginTop:2}}>{v}</div></div>)}</div>
+            <div className="cg-supplier-quotation-metrics" style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:8,marginTop:11}}>{[['Lines',lines.length],['Resolved',`${resolved}/${lines.length}`],['Products',money(selected.product_subtotal,selected.currency)],['Shipping',money(selected.shipping_total,selected.shipping_currency)],['Grand Total',money(selected.grand_total,selected.currency)],['Linked PO',selected.purchase_order_id?orderById(selected.purchase_order_id)?.po_ref||'Created':'—']].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:8,padding:8}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>{l}</div><div style={{fontSize:12.5,fontWeight:850,marginTop:2}}>{v}</div></div>)}</div>
           </div>
 
           <QuotationDocumentsPanel quotation={selected} supplier={supplierById(selected.supplier_id)} />
