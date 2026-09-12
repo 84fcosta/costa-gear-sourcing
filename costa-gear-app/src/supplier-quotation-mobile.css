@@ -1,0 +1,39 @@
+@media (max-width: 680px) {
+  .cg-supplier-quotation-titlebar {
+    padding: 16px !important;
+  }
+
+  .cg-supplier-quotation-titlebar h1 {
+    font-size: 22px !important;
+  }
+
+  .cg-supplier-quotation-body {
+    padding: 12px !important;
+    gap: 12px !important;
+  }
+
+  .cg-supplier-quotation-preview-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .cg-supplier-quotation-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cg-supplier-quotation-history {
+    max-height: 260px !important;
+    overflow-y: auto !important;
+  }
+
+  .cg-supplier-quotation-detail {
+    min-width: 0 !important;
+  }
+
+  .cg-supplier-quotation-metrics {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .cg-supplier-quotation-workspace table {
+    max-width: none;
+  }
+}
