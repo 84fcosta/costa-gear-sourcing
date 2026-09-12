@@ -216,7 +216,7 @@ export default function DesktopProductMasterControls({ active = true }) {
         const categoryMatch = !category || meta?.category === category;
         const fitmentMatch = !fitment || meta?.fitment === fitment;
         const visible = searchMatch && categoryMatch && fitmentMatch;
-        card.style.display = visible ? "" : "none";
+        card.style.display = visible ? "grid" : "none";
         if (visible) count += 1;
       });
       setVisibleCount(count);
