@@ -127,3 +127,30 @@
     justify-content: flex-start;
   }
 }
+
+
+@media (min-width: 681px) {
+  .cg-desktop-supplier-controls {
+    grid-template-columns: minmax(320px, 1fr) auto;
+    padding: 10px 12px;
+  }
+
+  .cg-desktop-supplier-controls .cg-desktop-snapshot-search {
+    min-height: 40px;
+  }
+
+  .cg-desktop-supplier-controls .cg-desktop-snapshot-result {
+    min-height: 40px;
+  }
+}
+
+@media (min-width: 681px) and (max-width: 1120px) {
+  .cg-desktop-supplier-controls {
+    grid-template-columns: minmax(260px, 1fr) auto;
+  }
+
+  .cg-desktop-supplier-controls .cg-desktop-snapshot-result {
+    grid-column: auto;
+    justify-content: flex-end;
+  }
+}
