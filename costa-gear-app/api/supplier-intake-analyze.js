@@ -128,8 +128,15 @@ async function fetchSourceFile(downloadUrl) {
 function compactWorkbookSnapshot(buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheets = [];
+  const maxSheets = 8;
+  const maxRowsPerSheet = 250;
+  const maxColumnsPerRow = 30;
+  const maxCellChars = 300;
+  let remainingChars = 180000;
 
-  for (const sheetName of workbook.SheetNames.slice(0, 10)) {
+  for (const sheetName of workbook.SheetNames.slice(0, maxSheets)) {
+    if (remainingChars <= 0) break;
+
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
@@ -138,19 +145,40 @@ function compactWorkbookSnapshot(buffer) {
       dateNF: "yyyy-mm-dd",
     });
 
-    const compactRows = rows.slice(0, 300).map(row =>
-      row.slice(0, 40).map(cell => String(cell ?? "").replace(/\s+/g, " ").trim().slice(0, 500))
-    );
+    const compactRows = [];
+    const sourceRows = rows.slice(0, maxRowsPerSheet);
+
+    for (const row of sourceRows) {
+      if (remainingChars <= 0) break;
+      const compactRow = [];
+
+      for (const cell of row.slice(0, maxColumnsPerRow)) {
+        if (remainingChars <= 0) break;
+        const normalized = String(cell ?? "").replace(/\s+/g, " ").trim();
+        const clipped = normalized.slice(0, Math.min(maxCellChars, remainingChars));
+        remainingChars -= clipped.length;
+        compactRow.push(clipped);
+      }
+
+      compactRows.push(compactRow);
+    }
 
     sheets.push({
       sheetName,
       rowCount: rows.length,
       rows: compactRows,
-      truncated: rows.length > 300,
+      truncated:
+        rows.length > compactRows.length ||
+        sourceRows.some(row => row.length > maxColumnsPerRow) ||
+        remainingChars <= 0,
     });
   }
 
-  return { sheets, truncatedSheets: workbook.SheetNames.length > 10 };
+  return {
+    sheets,
+    truncatedSheets: workbook.SheetNames.length > sheets.length || remainingChars <= 0,
+    characterBudget: 180000,
+  };
 }
 
 function csvOrTextSnapshot(buffer) {
