@@ -123,8 +123,8 @@ function analysisFromCostaGearWorkbook(parsed, suppliers) {
         ...line,
         supplierLineTotal: line.supplierLineTotal === "" ? null : line.supplierLineTotal,
         calculatedLineTotal: line.calculatedLineTotal === "" ? null : line.calculatedLineTotal,
-        cgSku: "",
-        matchStatus: "UNMATCHED",
+        cgSku: line.cgSku || "",
+        matchStatus: line.matchStatus || "UNMATCHED",
       })),
     },
     warnings: parsed.warnings || [],
@@ -306,8 +306,8 @@ export async function finalizeQuotationSupplierIntake({
         : "",
     lineValidation: "AI EXTRACTED - USER REVIEWED",
     notes: line.notes || "",
-    cgSku: "",
-    matchStatus: "UNMATCHED",
+    cgSku: line.cgSku || "",
+    matchStatus: ["MATCHED","REVIEW","UNMATCHED","IGNORED"].includes(line.matchStatus) ? line.matchStatus : "UNMATCHED",
   }));
 
   const missing = lines.filter(line =>
