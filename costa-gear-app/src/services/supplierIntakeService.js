@@ -145,7 +145,7 @@ export async function createSupplierFromIntake(supplierAnalysis, overrides = {})
     p_notes: notes || null,
   });
   if (error) throw error;
-  return data;
+  return Array.isArray(data) ? data[0] : data;
 }
 
 export function generalDocumentTypeForIntake(documentType) {
