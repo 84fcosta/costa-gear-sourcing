@@ -42,7 +42,7 @@ function Label({ children }) {
   return <label style={{ display: "grid", gap: 6, fontSize: 13, fontWeight: 800, color: "#647062" }}>{children}</label>;
 }
 
-export default function MobileSuppliersWorkspace({ active = false }) {
+export default function MobileSuppliersWorkspace({ active = false, onOpenSupplierIntake }) {
   const [suppliers, setSuppliers] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -286,7 +286,7 @@ export default function MobileSuppliersWorkspace({ active = false }) {
       {visible.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "#647062" }}>No suppliers match this search.</div>}
     </div>}
 
-    {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} />}
+    {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} onOpenIntake={onOpenSupplierIntake} />}
 
     {editing && <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(20,24,19,.48)", display: "flex", alignItems: "flex-end" }}>
       <div style={{ width: "100%", maxWidth: "100%", maxHeight: "88vh", overflowY: "auto", overflowX: "hidden", background: "#F7F8F3", borderRadius: "22px 22px 0 0", padding: "20px 18px 30px", boxSizing: "border-box" }}>
