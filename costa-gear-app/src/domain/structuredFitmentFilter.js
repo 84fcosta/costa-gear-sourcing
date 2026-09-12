@@ -18,13 +18,13 @@ export function buildProductFitmentMap(productFitments = [], vehicleFitments = [
     const platformStart = Number(vehicle.model_year_start);
     const platformEnd = vehicle.model_year_end == null ? horizon : Number(vehicle.model_year_end);
 
-    const rawStart = row.year_from == null ? platformStart : Number(row.year_from);
+    const yearFrom = row.year_from == null
+      ? null
+      : Math.max(platformStart, Number(row.year_from));
     const rawEnd = row.year_to == null ? platformEnd : Number(row.year_to);
-
-    const yearFrom = Math.max(platformStart, rawStart);
     const yearTo = Math.min(platformEnd, rawEnd);
 
-    if (!Number.isFinite(yearFrom) || !Number.isFinite(yearTo) || yearFrom > yearTo) return;
+    if (yearFrom != null && (!Number.isFinite(yearFrom) || !Number.isFinite(yearTo) || yearFrom > yearTo)) return;
 
     const entries = map.get(row.product_id) || [];
     entries.push({
@@ -45,7 +45,10 @@ export function productMatchesStructuredFitment(entries = [], vehicleCode = "", 
 
   return entries.some(entry => {
     if (vehicleCode && entry.fitmentCode !== vehicleCode) return false;
-    if (selectedYear != null && (selectedYear < entry.yearFrom || selectedYear > entry.yearTo)) return false;
+    if (selectedYear != null) {
+      if (!Number.isFinite(entry.yearFrom) || !Number.isFinite(entry.yearTo)) return false;
+      if (selectedYear < entry.yearFrom || selectedYear > entry.yearTo) return false;
+    }
     return true;
   });
 }
