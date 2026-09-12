@@ -151,7 +151,7 @@ No document-type subfolders are introduced.
     └── ...
 ```
 
-_INTake staging files are moved to their final supplier folder during successful intake. Abandoned CG_INTAKE files older than 48 hours are cleaned opportunistically.
+_INTAKE staging files are moved to their final supplier folder during successful intake. Abandoned CG_INTAKE files older than 48 hours are cleaned opportunistically.
 
 ## AI dependency and fallback
 
