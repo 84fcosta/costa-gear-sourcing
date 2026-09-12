@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, ChevronRight, X } from "lucide-react";
 import { supabase } from "../supabase";
 import { selectBestQuote } from "../domain/sourcingIntelligence";
+import {
+  buildProductFitmentMap,
+  modelYearOptions,
+  productMatchesStructuredFitment,
+  vehicleModelOptions,
+} from "../domain/structuredFitmentFilter";
 import "../mobile-product-snapshot.css";
 
 const SORT_KEY = "cg-sourcing-mobile-sort";
@@ -52,9 +58,11 @@ const statusFor = row => {
   return { label: "Near market", tone: "neutral" };
 };
 
-export default function MobileProductCostSnapshot() {
+export default function MobileProductCostSnapshot({ active = true }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [productFitments, setProductFitments] = useState([]);
+  const [vehicleFitments, setVehicleFitments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -63,31 +71,42 @@ export default function MobileProductCostSnapshot() {
     catch { return "sku-asc"; }
   });
   const [category, setCategory] = useState("");
-  const [fitment, setFitment] = useState("");
+  const [vehicleCode, setVehicleCode] = useState("");
+  const [modelYear, setModelYear] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
-    let active = true;
+    if (!active) return undefined;
+    let mounted = true;
     const load = async () => {
       setLoading(true);
       setError("");
-      const [{ data: productRows, error: productError }, { data: quoteRows, error: quoteError }] = await Promise.all([
+      const [
+        { data: productRows, error: productError },
+        { data: quoteRows, error: quoteError },
+        { data: productFitmentRows, error: productFitmentError },
+        { data: vehicleFitmentRows, error: vehicleFitmentError },
+      ] = await Promise.all([
         supabase.from("products").select("*").order("sku_id"),
         supabase.from("quotes").select("*").order("quote_date", { ascending: false }),
+        supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
+        supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
       ]);
-      if (!active) return;
-      if (productError || quoteError) {
-        setError((productError || quoteError)?.message || "Unable to load product costs.");
+      if (!mounted) return;
+      if (productError || quoteError || productFitmentError || vehicleFitmentError) {
+        setError((productError || quoteError || productFitmentError || vehicleFitmentError)?.message || "Unable to load product costs.");
       } else {
         setProducts(productRows || []);
         setQuotes(quoteRows || []);
+        setProductFitments(productFitmentRows || []);
+        setVehicleFitments(vehicleFitmentRows || []);
       }
       setLoading(false);
     };
     load();
-    return () => { active = false; };
-  }, []);
+    return () => { mounted = false; };
+  }, [active]);
 
   useEffect(() => {
     try { window.localStorage.setItem(SORT_KEY, sort); } catch {}
@@ -123,7 +142,16 @@ export default function MobileProductCostSnapshot() {
   }), [products, quotes]);
 
   const categories = useMemo(() => [...new Set(rows.map(row => row.category).filter(Boolean))].sort(), [rows]);
-  const fitments = useMemo(() => [...new Set(rows.map(row => row.fitment).filter(Boolean))].sort(), [rows]);
+  const fitmentsByProduct = useMemo(
+    () => buildProductFitmentMap(productFitments, vehicleFitments),
+    [productFitments, vehicleFitments]
+  );
+  const vehicleOptions = useMemo(() => vehicleModelOptions(vehicleFitments), [vehicleFitments]);
+  const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
+
+  useEffect(() => {
+    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [modelYear, yearOptions]);
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -131,7 +159,12 @@ export default function MobileProductCostSnapshot() {
       const matchesSearch = !query || [row.sku, row.name, row.productType, row.fitment, ...row.supplierSkus]
         .filter(Boolean)
         .some(value => String(value).toLowerCase().includes(query));
-      return matchesSearch && (!category || row.category === category) && (!fitment || row.fitment === fitment);
+      const fitmentMatch = productMatchesStructuredFitment(
+        fitmentsByProduct.get(row.id) || [],
+        vehicleCode,
+        modelYear
+      );
+      return matchesSearch && (!category || row.category === category) && fitmentMatch;
     });
 
     return [...filtered].sort((a, b) => {
@@ -143,9 +176,11 @@ export default function MobileProductCostSnapshot() {
       if (sort === "updated-desc") return b.updatedAt - a.updatedAt;
       return a.sku.localeCompare(b.sku, undefined, { numeric: true });
     });
-  }, [rows, search, category, fitment, sort]);
+  }, [rows, search, category, vehicleCode, modelYear, fitmentsByProduct, sort]);
 
-  const filterCount = Number(Boolean(category)) + Number(Boolean(fitment));
+  const filterCount = Number(Boolean(category)) + Number(Boolean(vehicleCode)) + Number(Boolean(modelYear));
+
+  if (!active) return null;
 
   return <section className="cg-mobile-product-snapshot" aria-label="Product Cost Snapshot">
     <div className="cg-mobile-snapshot-head">
@@ -224,8 +259,9 @@ export default function MobileProductCostSnapshot() {
           <button type="button" onClick={() => setFilterOpen(false)}>Done</button>
         </div>
         <label>Category<select value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{categories.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-        <label>Fitment<select value={fitment} onChange={event => setFitment(event.target.value)}><option value="">All fitments</option>{fitments.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-        {filterCount > 0 && <button type="button" className="cg-mobile-snapshot-clear" onClick={() => { setCategory(""); setFitment(""); }}>Clear filters</button>}
+        <label>Vehicle Model<select value={vehicleCode} onChange={event => setVehicleCode(event.target.value)}><option value="">All models</option>{vehicleOptions.map(value => <option key={value.code} value={value.code}>{value.display_name}</option>)}</select></label>
+        <label>Model Year<select value={modelYear} onChange={event => setModelYear(event.target.value)}><option value="">All years</option>{yearOptions.map(year => <option key={year} value={year}>{year}</option>)}</select></label>
+        {filterCount > 0 && <button type="button" className="cg-mobile-snapshot-clear" onClick={() => { setCategory(""); setVehicleCode(""); setModelYear(""); }}>Clear filters</button>}
       </div>
     </div>}
 

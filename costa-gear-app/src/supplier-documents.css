@@ -1,0 +1,77 @@
+@media (max-width: 680px) {
+  .cg-supplier-doc-backdrop {
+    place-items: end stretch !important;
+    padding: 0 !important;
+  }
+
+  .cg-supplier-doc-dialog {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+
+  .cg-supplier-doc-dialog-head {
+    padding: 14px 16px !important;
+    align-items: center !important;
+  }
+
+  .cg-supplier-doc-dialog-body {
+    padding: 14px !important;
+    gap: 12px !important;
+  }
+
+  .cg-supplier-doc-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cg-supplier-doc-file-row {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .cg-supplier-doc-file-row input[type="file"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 13px !important;
+  }
+
+  .cg-supplier-doc-record {
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+    padding: 10px 12px !important;
+  }
+
+  .cg-supplier-doc-record > div:last-child {
+    text-align: left !important;
+  }
+
+  .cg-quotation-documents-head {
+    align-items: flex-start !important;
+  }
+
+  .cg-quotation-documents-head > div:first-child {
+    min-width: 0 !important;
+  }
+
+  .cg-quotation-documents-head > div:first-child > div:last-child {
+    overflow-wrap: anywhere !important;
+  }
+
+  .cg-quote-document-row {
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+    padding: 11px 12px !important;
+  }
+
+  .cg-quote-document-actions {
+    justify-content: flex-start !important;
+  }
+
+  .cg-quote-document-actions label {
+    min-height: 40px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+}

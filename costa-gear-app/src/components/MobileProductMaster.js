@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Plus, Images } from "lucide-react";
 import { supabase } from "../supabase";
+import {
+  buildProductFitmentMap,
+  modelYearOptions,
+  productMatchesStructuredFitment,
+  vehicleModelOptions,
+} from "../domain/structuredFitmentFilter";
 import "../mobile-product-master.css";
 
 const money = value => {
@@ -29,10 +35,14 @@ export default function MobileProductMaster({ active }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [images, setImages] = useState([]);
+  const [productFitments, setProductFitments] = useState([]);
+  const [vehicleFitments, setVehicleFitments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("cg-mobile-product-sort") || "sku-asc");
   const [category, setCategory] = useState("");
+  const [vehicleCode, setVehicleCode] = useState("");
+  const [modelYear, setModelYear] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
@@ -40,15 +50,25 @@ export default function MobileProductMaster({ active }) {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [{ data: productRows }, { data: quoteRows }, { data: imageRows }] = await Promise.all([
+      const [
+        { data: productRows },
+        { data: quoteRows },
+        { data: imageRows },
+        { data: productFitmentRows },
+        { data: vehicleFitmentRows },
+      ] = await Promise.all([
         supabase.from("products").select("id,sku_id,name,product_type,material,fitment,category,updated_at,product_folder_web_url").order("sku_id"),
         supabase.from("quotes").select("id,product_id,unit_price"),
         supabase.from("product_images").select("id,product_id,web_url,sort_order"),
+        supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
+        supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
       ]);
       if (!cancelled) {
         setProducts(productRows || []);
         setQuotes(quoteRows || []);
         setImages(imageRows || []);
+        setProductFitments(productFitmentRows || []);
+        setVehicleFitments(vehicleFitmentRows || []);
         setLoading(false);
       }
     };
@@ -97,13 +117,28 @@ export default function MobileProductMaster({ active }) {
   }), [products, quotes, images]);
 
   const categories = useMemo(() => [...new Set(products.map(p => p.category).filter(Boolean))].sort(), [products]);
+  const fitmentsByProduct = useMemo(
+    () => buildProductFitmentMap(productFitments, vehicleFitments),
+    [productFitments, vehicleFitments]
+  );
+  const vehicleOptions = useMemo(() => vehicleModelOptions(vehicleFitments), [vehicleFitments]);
+  const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
+
+  useEffect(() => {
+    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [modelYear, yearOptions]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = enriched.filter(p => {
       const matchesSearch = !q || [p.sku_id, p.name, p.product_type, p.material, p.fitment, p.category]
         .some(value => String(value || "").toLowerCase().includes(q));
-      return matchesSearch && (!category || p.category === category);
+      const fitmentMatch = productMatchesStructuredFitment(
+        fitmentsByProduct.get(p.id) || [],
+        vehicleCode,
+        modelYear
+      );
+      return matchesSearch && (!category || p.category === category) && fitmentMatch;
     });
     rows.sort((a, b) => {
       if (sort === "sku-desc") return String(b.sku_id || "").localeCompare(String(a.sku_id || ""), undefined, { numeric: true });
@@ -113,7 +148,9 @@ export default function MobileProductMaster({ active }) {
       return String(a.sku_id || "").localeCompare(String(b.sku_id || ""), undefined, { numeric: true });
     });
     return rows;
-  }, [enriched, search, category, sort]);
+  }, [enriched, search, category, vehicleCode, modelYear, fitmentsByProduct, sort]);
+
+  const filterCount = Number(Boolean(category)) + Number(Boolean(vehicleCode)) + Number(Boolean(modelYear));
 
   const setSortPersisted = value => {
     setSort(value);
@@ -162,8 +199,8 @@ export default function MobileProductMaster({ active }) {
         <option value="quotes-desc">Most quotes</option>
         <option value="updated-desc">Recently updated</option>
       </select>
-      <button type="button" className={filtersOpen || category ? "active" : ""} onClick={() => setFiltersOpen(v => !v)}>
-        <SlidersHorizontal size={17}/>Filter{category ? " · 1" : ""}
+      <button type="button" className={filtersOpen || filterCount ? "active" : ""} onClick={() => setFiltersOpen(v => !v)}>
+        <SlidersHorizontal size={17}/>Filter{filterCount ? ` · ${filterCount}` : ""}
       </button>
     </div>
 
@@ -174,7 +211,19 @@ export default function MobileProductMaster({ active }) {
           {categories.map(item => <option key={item} value={item}>{item}</option>)}
         </select>
       </label>
-      {category && <button type="button" onClick={() => setCategory("")}>Clear filter</button>}
+      <label>Vehicle Model
+        <select value={vehicleCode} onChange={e => setVehicleCode(e.target.value)}>
+          <option value="">All models</option>
+          {vehicleOptions.map(item => <option key={item.code} value={item.code}>{item.display_name}</option>)}
+        </select>
+      </label>
+      <label>Model Year
+        <select value={modelYear} onChange={e => setModelYear(e.target.value)}>
+          <option value="">All years</option>
+          {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
+        </select>
+      </label>
+      {filterCount > 0 && <button type="button" onClick={() => { setCategory(""); setVehicleCode(""); setModelYear(""); }}>Clear filters</button>}
     </div>}
 
     {loading ? <div className="cg-mobile-product-empty">Loading products...</div> : visible.length === 0 ?

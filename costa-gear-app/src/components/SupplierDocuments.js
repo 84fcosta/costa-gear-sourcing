@@ -7,6 +7,7 @@ import {
   supplierDocumentTypeLabel,
   uploadSupplierDocument,
 } from "../services/supplierDocumentService";
+import "../supplier-documents.css";
 
 const C = {
   ink: "#20251F",
@@ -117,6 +118,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
 
   return (
     <div
+      className="cg-supplier-doc-backdrop"
       style={{
         position: "fixed",
         inset: 0,
@@ -128,8 +130,8 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
       }}
       onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}
     >
-      <div style={{ width: "min(900px,96vw)", maxHeight: "92vh", overflow: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 26px 80px rgba(9,10,8,.28)" }}>
-        <div style={{ background: "#20251F", color: "#fff", padding: "16px 18px", display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div className="cg-supplier-doc-dialog" style={{ width: "min(900px,96vw)", maxHeight: "92vh", overflow: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 26px 80px rgba(9,10,8,.28)" }}>
+        <div className="cg-supplier-doc-dialog-head" style={{ background: "#20251F", color: "#fff", padding: "16px 18px", display: "flex", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 17, fontWeight: 900 }}>Supplier Documents</div>
             <div style={{ fontSize: 11, color: "#C9CFC4", marginTop: 3 }}>{supplier.supId || supplier.sup_id} · {supplier.name}</div>
@@ -137,7 +139,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
           <button type="button" disabled={busy} onClick={onClose} style={{ ...btn(), height: 34 }}>Close</button>
         </div>
 
-        <div style={{ padding: 18, display: "grid", gap: 14 }}>
+        <div className="cg-supplier-doc-dialog-body" style={{ padding: 18, display: "grid", gap: 14 }}>
           {error && <div style={{ background: "#FFF1EF", color: C.red, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{error}</div>}
           {message && <div style={{ background: "#EDF7EE", color: C.green, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{message}</div>}
 
@@ -156,7 +158,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
               <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>The app chooses the folder and generates the governed filename. Do not create folders manually for this upload.</div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
+            <div className="cg-supplier-doc-form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
               <label style={{ display: "grid", gap: 4, fontSize: 10.5, color: C.muted, fontWeight: 750 }}>
                 Document Type
                 <select style={input} value={documentType} onChange={e => setDocumentType(e.target.value)}>
@@ -173,7 +175,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
               </label>
             </div>
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="cg-supplier-doc-file-row" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input type="file" onChange={onChooseFile} />
               <button type="button" disabled={busy || !file} onClick={upload} style={{ ...btn(true), opacity: busy || !file ? .45 : 1 }}>
                 {busy ? "Uploading..." : "Upload"}
@@ -189,7 +191,7 @@ export function SupplierDocumentsDialog({ supplier, onClose }) {
             ) : (
               <div style={{ display: "grid" }}>
                 {documents.map(doc => (
-                  <div key={doc.id} style={{ display: "grid", gridTemplateColumns: "150px minmax(0,1fr) 115px", gap: 10, alignItems: "center", padding: "9px 12px", borderTop: `1px solid ${C.border}` }}>
+                  <div key={doc.id} className="cg-supplier-doc-record" style={{ display: "grid", gridTemplateColumns: "150px minmax(0,1fr) 115px", gap: 10, alignItems: "center", padding: "9px 12px", borderTop: `1px solid ${C.border}` }}>
                     <div style={{ fontSize: 10.5, fontWeight: 850, color: C.oliveDark }}>{supplierDocumentTypeLabel(doc.document_type)}</div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.file_name}</div>
@@ -245,7 +247,7 @@ function QuoteDocumentRow({ role, quotation, supplier, document, onChanged }) {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "160px minmax(0,1fr) auto", gap: 10, alignItems: "center", padding: "9px 10px", borderTop: `1px solid ${C.border}` }}>
+    <div className="cg-quote-document-row" style={{ display: "grid", gridTemplateColumns: "160px minmax(0,1fr) auto", gap: 10, alignItems: "center", padding: "9px 10px", borderTop: `1px solid ${C.border}` }}>
       <div>
         <div style={{ fontSize: 11, fontWeight: 850 }}>{supplierDocumentTypeLabel(role)}</div>
         <div style={{ fontSize: 9.5, color: C.muted, marginTop: 1 }}>{document ? "Stored in OneDrive" : "Missing"}</div>
@@ -259,7 +261,7 @@ function QuoteDocumentRow({ role, quotation, supplier, document, onChanged }) {
         ) : <div style={{ fontSize: 10.5, color: C.muted }}>No file registered.</div>}
         {error && <div style={{ fontSize: 9.5, color: C.red, marginTop: 2 }}>{error}</div>}
       </div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <div className="cg-quote-document-actions" style={{ display: "flex", gap: 6, alignItems: "center" }}>
         {document?.onedrive_web_url && <a href={document.onedrive_web_url} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: C.oliveDark, fontWeight: 800 }}>Open</a>}
         <label style={{ ...btn(), opacity: busy ? .5 : 1, cursor: busy ? "not-allowed" : "pointer" }}>
           {busy ? "Uploading..." : document ? "Replace" : "Upload"}
@@ -300,8 +302,8 @@ export function QuotationDocumentsPanel({ quotation, supplier }) {
   if (!quotation || !supplier) return null;
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 13, overflow: "hidden" }}>
-      <div style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+    <div className="cg-quotation-documents-panel" style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 13, overflow: "hidden" }}>
+      <div className="cg-quotation-documents-head" style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
         <div>
           <div style={{ fontWeight: 850, fontSize: 12.5 }}>Quotation Documents</div>
           <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
