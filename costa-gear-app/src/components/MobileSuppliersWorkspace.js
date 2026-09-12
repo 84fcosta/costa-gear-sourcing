@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import { SupplierDocumentsDialog } from "./SupplierDocuments";
 
 const PLATFORMS = ["Alibaba", "WeChat", "WhatsApp", "Email", "Direct", "Other"];
 const STATUSES = ["Active", "Inactive", "Blocked"];
@@ -50,6 +51,7 @@ export default function MobileSuppliersWorkspace({ active = false }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [documentSupplier, setDocumentSupplier] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -248,26 +250,43 @@ export default function MobileSuppliersWorkspace({ active = false }) {
                 <div style={{ marginTop: 3, fontSize: 19, fontWeight: 850, color: "#20251F" }}>{s.rating == null ? "- /5" : `${s.rating}/5`}</div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => openEdit(s)}
-              style={{
-                width: "100%",
-                minHeight: 44,
-                padding: "9px 14px",
-                borderRadius: 12,
-                border: "1px solid rgba(50,56,42,.14)",
-                background: "#fff",
-                color: "#20251F",
-                fontSize: 15,
-                fontWeight: 850,
-              }}
-            >Edit Supplier</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setDocumentSupplier(s)}
+                style={{
+                  minHeight: 44,
+                  padding: "9px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(50,56,42,.14)",
+                  background: "#F8FAF0",
+                  color: "#747B31",
+                  fontSize: 15,
+                  fontWeight: 850,
+                }}
+              >Documents</button>
+              <button
+                type="button"
+                onClick={() => openEdit(s)}
+                style={{
+                  minHeight: 44,
+                  padding: "9px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(50,56,42,.14)",
+                  background: "#fff",
+                  color: "#20251F",
+                  fontSize: 15,
+                  fontWeight: 850,
+                }}
+              >Edit Supplier</button>
+            </div>
           </div>
         </article>;
       })}
       {visible.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "#647062" }}>No suppliers match this search.</div>}
     </div>}
+
+    {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} />}
 
     {editing && <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(20,24,19,.48)", display: "flex", alignItems: "flex-end" }}>
       <div style={{ width: "100%", maxWidth: "100%", maxHeight: "88vh", overflowY: "auto", overflowX: "hidden", background: "#F7F8F3", borderRadius: "22px 22px 0 0", padding: "20px 18px 30px", boxSizing: "border-box" }}>

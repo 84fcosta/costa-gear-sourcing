@@ -436,6 +436,51 @@ export async function moveOneDriveItem({ itemId, folderPath, newName }) {
   };
 }
 
+export async function uploadFileToOneDriveFolder({ file, parentId, fileName, replace = false }) {
+  if (!file) throw new Error("Choose a document before uploading.");
+  if (!parentId) throw new Error("A OneDrive destination folder is required.");
+  if (!fileName) throw new Error("A governed filename is required.");
+
+  const existing = (await listOneDriveChildren(parentId)).find(
+    item => !item?.folder && String(item?.name || "").toLowerCase() === String(fileName).toLowerCase()
+  ) || null;
+
+  if (existing && !replace) {
+    const duplicateError = new Error(`A file named ${fileName} already exists in the supplier folder.`);
+    duplicateError.code = "ONEDRIVE_FILE_EXISTS";
+    duplicateError.existingItem = existing;
+    throw duplicateError;
+  }
+
+  const encodedName = encodeURIComponent(fileName);
+  const uploadPath = await driveItemPath(parentId, `:/${encodedName}:/content`);
+  const item = await graphRequest(uploadPath, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+
+  return {
+    itemId: item?.id || existing?.id || null,
+    webUrl: item?.webUrl || existing?.webUrl || null,
+    fileName: item?.name || fileName,
+    mimeType: item?.file?.mimeType || file.type || null,
+    sizeBytes: Number(item?.size ?? file.size ?? 0),
+    parentItemId: item?.parentReference?.id || parentId,
+    createdDateTime: item?.createdDateTime || null,
+    modifiedDateTime: item?.lastModifiedDateTime || null,
+    eTag: item?.eTag || null,
+  };
+}
+
+export async function deleteOneDriveItem(itemId) {
+  if (!itemId) return;
+  const path = await driveItemPath(itemId);
+  await graphRequest(path, { method: "DELETE" });
+}
+
 export async function uploadBusinessDocument({ file, ownerType, ownerId, year }) {
   if (!file) throw new Error("Choose a document before uploading.");
   if (!ownerId) throw new Error("Save the expense or asset before uploading its document.");

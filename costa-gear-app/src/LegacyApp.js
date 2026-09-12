@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
+import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
@@ -940,37 +941,43 @@ function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
 // SUPPLIERS TAB
 // ════════════════════════════════════════════════════════════════
 function Suppliers({ suppliers, quotes, onAdd, onEdit, onDelete }) {
+  const [documentSupplier, setDocumentSupplier] = useState(null);
+
   return (
-    <Section title="Suppliers" action={<Btn onClick={onAdd}>+ Add Supplier</Btn>}>
-      {suppliers.length === 0 ? (
-        <Empty msg="No suppliers yet." cta={<Btn onClick={onAdd}>+ Add First Supplier</Btn>} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {suppliers.map(s => {
-            const sq = quotes.filter(q => q.supplierId === s.id);
-            return (
-              <Card key={s.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
-                <div style={{ background: C.teal, color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{s.supId}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: C.dgray, marginTop: 2 }}>{s.platform} · {s.contact} · Response: {s.responseTime || "—"}</div>
-                  {s.notes && <div style={{ fontSize: 12, color: C.dgray, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.notes}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>{sq.length} {sq.length === 1 ? "quote" : "quotes"}</div>
-                    <div style={{ fontSize: 12, color: C.dgray }}>Rating: {s.rating || "—"}/5</div>
+    <>
+      <Section title="Suppliers" action={<Btn onClick={onAdd}>+ Add Supplier</Btn>}>
+        {suppliers.length === 0 ? (
+          <Empty msg="No suppliers yet." cta={<Btn onClick={onAdd}>+ Add First Supplier</Btn>} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {suppliers.map(s => {
+              const sq = quotes.filter(q => q.supplierId === s.id);
+              return (
+                <Card key={s.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
+                  <div style={{ background: C.teal, color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 800, fontFamily: "monospace", whiteSpace: "nowrap" }}>{s.supId}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                    <div style={{ fontSize: 12, color: C.dgray, marginTop: 2 }}>{s.platform} · {s.contact} · Response: {s.responseTime || "—"}</div>
+                    {s.notes && <div style={{ fontSize: 12, color: C.dgray, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.notes}</div>}
                   </div>
-                  <Badge label={s.status || "Active"} color={s.status === "Blocked" ? C.red : s.status === "Inactive" ? C.dgray : C.teal} />
-                  <Btn small variant="ghost"  onClick={() => onEdit(s)}>Edit</Btn>
-                  <Btn small variant="danger" onClick={() => onDelete(s.id)}>Del</Btn>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </Section>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>{sq.length} {sq.length === 1 ? "quote" : "quotes"}</div>
+                      <div style={{ fontSize: 12, color: C.dgray }}>Rating: {s.rating || "—"}/5</div>
+                    </div>
+                    <Badge label={s.status || "Active"} color={s.status === "Blocked" ? C.red : s.status === "Inactive" ? C.dgray : C.teal} />
+                    <Btn small variant="ghost" onClick={() => setDocumentSupplier(s)}>Docs</Btn>
+                    <Btn small variant="ghost" onClick={() => onEdit(s)}>Edit</Btn>
+                    <Btn small variant="danger" onClick={() => onDelete(s.id)}>Del</Btn>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+      {documentSupplier && <SupplierDocumentsDialog supplier={documentSupplier} onClose={() => setDocumentSupplier(null)} />}
+    </>
   );
 }
 
