@@ -12,6 +12,7 @@ import {
 } from "../services/supplierQuotationRepository";
 import { QuotationDocumentsPanel } from "./SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "../services/productTaxonomyService";
+import { buildProductName } from "../domain/productNaming";
 import "../supplier-quotation-mobile.css";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
@@ -208,7 +209,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const[finalizeForm,setFinalizeForm]=useState({usdCadRate:"",allocationMethod:"value",dutyRatePct:""});
   const[selectedLines,setSelectedLines]=useState([]);
   const[newProductLine,setNewProductLine]=useState(null);
-  const[newProductForm,setNewProductForm]=useState({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
+  const[newProductForm,setNewProductForm]=useState({productType:"",variantName:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
   const[addingMaterial,setAddingMaterial]=useState(false),[newMaterialName,setNewMaterialName]=useState(""),[materialError,setMaterialError]=useState("");
 
   const load=async()=>{setLoading(true);setError("");try{const[q,{data:s,error:se},{data:p,error:pe},{data:o,error:oe},{data:pt,error:pte},categoryRows,{data:pm,error:pme},{data:vf,error:vfe}]=await Promise.all([listSupplierQuotations(),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("products").select("*").order("sku_id"),supabase.from("purchase_orders").select("id,po_ref,status"),supabase.from("product_types").select("*").eq("active",true).order("name"),listProductCategories(),supabase.from("product_materials").select("*").eq("active",true).order("name"),supabase.from("vehicle_fitments").select("*").eq("active",true).order("sort_order")]);if(se||pe||oe||pte||pme||vfe)throw(se||pe||oe||pte||pme||vfe);setQuotations(q);setSuppliers(s||[]);setProducts(p||[]);setOrders(o||[]);setProductTypes(pt||[]);setCategories(categoryRows||[]);setMaterials(pm||[]);setVehicleFitments(vf||[]);}catch(e){setError(e.message||"Unable to load supplier quotations.");}finally{setLoading(false);}};
@@ -229,6 +230,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const canFinalize=selected&&selected.status!=="Cancelled"&&allResolved&&matched>0&&validationProblems===0&&Number(finalizeForm.usdCadRate)>0;
   const canBuy=selected?.status==="Finalized"&&selectedLines.length>0&&!selected.purchase_order_id;
   const categoryOptions=useMemo(()=>categories.map(c=>c.name),[categories]);
+  const newProductAutoName=buildProductName(newProductForm.productType,newProductForm.variantName,newProductForm.material);
 
   const mapLine=async(lineId,productId)=>{if(!productId)return;setBusy(true);setError("");try{await mapSupplierQuotationLine(lineId,productId);setLines(await listSupplierQuotationLines(selectedId));setMessage("Product match confirmed. Supplier SKU mapping saved for future quotations.");}catch(e){setError(e.message||"Unable to save product match.");}finally{setBusy(false);}};
   const setIgnored=async(line,ignoredState)=>{
@@ -241,11 +243,10 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
     }catch(e){setError(e.message||"Unable to update quotation line.");}
     finally{setBusy(false);}
   };
-  const openCreateProduct=line=>{setError("");setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductLine(line);setNewProductForm({...{name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""},name:line.supplier_description||line.supplier_sku||""});};
-  const closeCreateProduct=()=>{if(busy)return;setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});};
+  const openCreateProduct=line=>{setError("");setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductLine(line);setNewProductForm({productType:"",variantName:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});};
+  const closeCreateProduct=()=>{if(busy)return;setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({productType:"",variantName:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});};
   const createProduct=async()=>{
     if(!newProductLine)return;
-    if(!newProductForm.name.trim())return setError("Enter a product name before creating the Product Master record.");
     if(!newProductForm.productType)return setError("Select a Product Type before creating the Product Master record.");
     if(!newProductForm.category)return setError("Select a Product Category before creating the Product Master record.");
     if(!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0))return setError("Length, Width and Height are required.");
@@ -255,7 +256,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
       const result=await createProductFromQuotationLine({lineId:newProductLine.id,...newProductForm});
       const[{data:p,error:pe},rows]=await Promise.all([supabase.from("products").select("*").order("sku_id"),listSupplierQuotationLines(selectedId)]);
       if(pe)throw pe;
-      setProducts(p||[]);setLines(rows);setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({name:"",productType:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
+      setProducts(p||[]);setLines(rows);setNewProductLine(null);setAddingMaterial(false);setNewMaterialName("");setMaterialError("");setNewProductForm({productType:"",variantName:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
       setMessage(`${result?.product?.sku_id||"New CG product"} created and matched to ${newProductLine.supplier_sku||"this supplier line"}. Future quotations can reuse this mapping automatically.`);
     }catch(e){setError(e.message||"Unable to create and match the new product.");}
     finally{setBusy(false);}
@@ -374,14 +375,15 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
             <div style={{background:"#F8F9F5",padding:9,borderRadius:9}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>QUOTATION LINE</div><div style={{fontSize:12,fontWeight:850,marginTop:2}}>#{newProductLine.line_no}</div></div>
             <div style={{background:"#F8F9F5",padding:9,borderRadius:9}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>CG SKU</div><div style={{fontSize:12,fontWeight:850,marginTop:2,color:C.oliveDark}}>Generated automatically</div></div>
           </div>
-          <div style={{fontSize:11,color:C.muted,background:"#F8FAF0",border:"1px solid rgba(133,140,56,.22)",borderRadius:9,padding:9}}>Product Type is required and controls the SKU family. The final SKU is assigned automatically by the database, preventing duplicate or inconsistent IDs.</div>
+          <div style={{fontSize:11,color:C.muted,background:"#F8FAF0",border:"1px solid rgba(133,140,56,.22)",borderRadius:9,padding:9}}>Product Type controls the SKU family. Variant / Key Feature distinguishes physical versions when needed. Product Name and the final SKU are generated automatically.</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-            <Field label="Product Name *"><input autoFocus style={input} value={newProductForm.name} onChange={e=>setNewProductForm(f=>({...f,name:e.target.value}))} placeholder="Costa Gear product name"/></Field>
+            <Field label="Auto Name"><div style={{...input,background:"#F3F4EF",fontWeight:800,color:newProductAutoName?C.ink:C.muted}}>{newProductAutoName||"Filled automatically..."}</div></Field>
             <Field label="SKU ID"><div style={{...input,background:"#F3F4EF",fontFamily:"monospace",fontWeight:850,color:C.oliveDark}}>{newProductForm.productType?("CG-"+(productTypes.find(t=>t.name===newProductForm.productType)?.family_code||"??")+"-##"):"Generated automatically on Save"}</div></Field>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>
             <Field label="Product Type *"><select style={input} value={newProductForm.productType} onChange={e=>{if(e.target.value==="__ADD__"){addTypeFromQuotation();}else setNewProductForm(f=>({...f,productType:e.target.value}));}}><option value="">Select Product Type</option>{productTypes.map(t=><option key={t.id||t.name} value={t.name}>{t.name}</option>)}<option value="__ADD__">+ Add New Product Type...</option></select></Field>
             <Field label="Category *"><select style={input} value={newProductForm.category} onChange={e=>{if(e.target.value==="__ADD__"){addCategoryFromQuotation();}else setNewProductForm(f=>({...f,category:e.target.value}));}}><option value="">Select Product Category</option>{categoryOptions.map(category=><option key={category} value={category}>{category}</option>)}<option value="__ADD__">+ Add New Category...</option></select></Field>
+            <Field label="Variant / Key Feature (optional)"><input style={input} value={newProductForm.variantName} onChange={e=>setNewProductForm(f=>({...f,variantName:e.target.value}))} placeholder="e.g. OEM-Style 4-Door"/></Field>
             <Field label="Material (optional)">{!addingMaterial?<select style={input} value={newProductForm.material} onChange={e=>{if(e.target.value==="__ADD__"){setAddingMaterial(true);setNewMaterialName("");setMaterialError("");}else setNewProductForm(f=>({...f,material:e.target.value}));}}><option value="">Select Material</option>{materials.map(m=><option key={m.id||m.name} value={m.name}>{m.name}</option>)}<option value="__ADD__">+ Add New Material...</option></select>:<div style={{display:"grid",gap:5}}><div style={{display:"flex",gap:6}}><input autoFocus style={input} value={newMaterialName} onChange={e=>setNewMaterialName(e.target.value)} placeholder="New material"/><button type="button" disabled={busy||!newMaterialName.trim()} style={btn(true)} onClick={addMaterial}>{busy?"Adding...":"Add"}</button><button type="button" disabled={busy} style={btn()} onClick={()=>{setAddingMaterial(false);setNewMaterialName("");setMaterialError("");}}>Cancel</button></div>{materialError&&<div style={{fontSize:10.5,color:C.red}}>{materialError}</div>}</div>}</Field>
           </div>
 
@@ -404,7 +406,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
           />
 
           <Field label="Notes (optional)"><input style={input} value={newProductForm.notes} onChange={e=>setNewProductForm(f=>({...f,notes:e.target.value}))} placeholder="Anything useful for Product Master"/></Field>
-          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.name.trim()||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);})} style={{...btn(true),opacity:(busy||!newProductForm.name.trim()||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);}))?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);})} style={{...btn(true),opacity:(busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);}))?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
         </div>
       </div>
     </div>}

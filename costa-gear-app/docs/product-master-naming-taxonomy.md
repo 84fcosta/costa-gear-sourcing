@@ -16,6 +16,29 @@ Rules:
 - Use full words and stable descriptors. Avoid shorthand such as "W bracket", inconsistent casing, or mixed hyphen styles.
 - Use the en dash separator ` – ` consistently.
 
+## Structured variant and Auto Name
+
+Costa Gear stores the differentiating descriptor in `products.variant_name` as **Variant / Key Feature**.
+
+The Product Name is system-generated from:
+
+`Product Type – Variant / Key Feature – Material`
+
+Blank optional parts are skipped. Product Name is not free text in the operational UI. The database also enforces the same rule, so direct product updates cannot create a different naming pattern.
+
+Examples:
+- `Running Board` + `OEM-Style 4-Door` + `ABS` -> `Running Board – OEM-Style 4-Door – ABS`
+- `Roof Rack Platform` + `Bracket-Mounted 140 × 160 cm` + `Aluminum` -> `Roof Rack Platform – Bracket-Mounted 140 × 160 cm – Aluminum`
+- `Rear Cargo Rack` + blank variant + `Steel` -> `Rear Cargo Rack – Steel`
+
+The pre-governance product description is retained in `products.legacy_name` for traceability.
+
+Product Type refinements made to support a clean hierarchy:
+- `Roof Rack Cross Bars` replaces the old singular label.
+- `Door Sill Entry Guard Kit` replaces the old non-kit label.
+- `All-Weather Floor Mat Set` replaces the generic floor-mat label for the current family.
+- `Dashboard Storage Tray Phone Holder Kit` is a distinct Product Type for the dual-cradle kit SKUs.
+
 ## Category principles
 
 Category is mandatory and comes from the governed Product Category master.

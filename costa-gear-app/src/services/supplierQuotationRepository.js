@@ -50,8 +50,8 @@ export async function setSupplierQuotationLineIgnored(lineId, ignored) {
 
 export async function createProductFromQuotationLine({
   lineId,
-  name,
   productType,
+  variantName,
   category,
   material,
   fitments,
@@ -62,10 +62,10 @@ export async function createProductFromQuotationLine({
   weight,
   notes,
 }) {
-  const { data, error } = await supabase.rpc("create_product_from_quotation_line_v2", {
+  const { data, error } = await supabase.rpc("create_product_from_quotation_line_v3", {
     p_line_id: lineId,
-    p_name: name || null,
     p_product_type: productType || null,
+    p_variant_name: variantName || null,
     p_category: category || null,
     p_material: material || null,
     p_fitments: (fitments || []).map(x => ({

@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
 import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "./services/productTaxonomyService";
+import { buildProductName } from "./domain/productNaming";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
@@ -23,12 +24,6 @@ const C = {
   soft:  "#FAFBF8",
 };
 
-const CATEGORIES = [
-  "Exterior – Protection","Exterior – Lighting","Exterior – Storage & Cargo",
-  "Exterior – Access & Entry","Exterior – Recovery",
-  "Interior – Storage","Interior – Mounting & Tech","Interior – Comfort & Utility",
-  "Drivetrain & Suspension","Other",
-];
 const FITMENTS = [
   "Wrangler JL 2-Door","Wrangler JL 4-Door","Wrangler JL 2-Door & 4-Door",
   "Gladiator JT","Wrangler JK 2-Door","Wrangler JK 4-Door",
@@ -460,13 +455,13 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
       }));
 
       if (editing) {
-        const { error: updateError } = await supabase.rpc("update_costa_gear_product_v2", {
+        const { error: updateError } = await supabase.rpc("update_costa_gear_product_v3", {
           p_product_id: editing.id,
           p_product_type: f.productType,
+          p_variant_name: f.variantName || null,
           p_material: f.material || null,
           p_fitments: fitments,
           p_fitment_notes: f.fitmentNotes || null,
-          p_name: f.name || null,
           p_category: f.category || null,
           p_length_cm: f.length ? Number(f.length) : null,
           p_width_cm: f.width ? Number(f.width) : null,
@@ -482,12 +477,12 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
         });
         if (updateError) throw updateError;
       } else {
-        const { error: createError } = await supabase.rpc("create_costa_gear_product_v2", {
+        const { error: createError } = await supabase.rpc("create_costa_gear_product_v3", {
           p_product_type: f.productType,
+          p_variant_name: f.variantName || null,
           p_material: f.material || null,
           p_fitments: fitments,
           p_fitment_notes: f.fitmentNotes || null,
-          p_name: f.name || null,
           p_category: f.category || null,
           p_length_cm: f.length ? Number(f.length) : null,
           p_width_cm: f.width ? Number(f.width) : null,
@@ -585,6 +580,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
     id: p.id,
     skuId: p.sku_id,
     productType: p.product_type,
+    variantName: p.variant_name || "",
     material: p.material,
     fitment: p.fitment,
     fitmentNotes: p.fitment_notes || "",
@@ -685,7 +681,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
         {loading ? <Spinner /> : (
           <>
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
-            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
+            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} categories={categories} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
             {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} onOpenSupplierIntake={onOpenSupplierIntake} />}
             {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onOpenSupplierIntake={onOpenSupplierIntake} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
             {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
@@ -912,9 +908,10 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
 // ════════════════════════════════════════════════════════════════
 // PRODUCTS TAB
 // ════════════════════════════════════════════════════════════════
-function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
+function Products({ products, quotes, categories = [], onAdd, onEdit, onDelete, onDetail }) {
   const [filter, setFilter]       = useState("");
   const [catFilter, setCatFilter] = useState("");
+  const categoryOptions = categories.map(item => item.name).filter(Boolean);
 
   const filtered = products.filter(p => {
     const q   = filter.toLowerCase();
@@ -926,7 +923,7 @@ function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
     <Section title="Products" action={<Btn onClick={onAdd}>+ Add Product</Btn>}>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <Input placeholder="Search SKU or name…" value={filter} onChange={setFilter} />
-        <Input options={CATEGORIES} value={catFilter} onChange={setCatFilter} />
+        <Input options={categoryOptions} value={catFilter} onChange={setCatFilter} />
         {catFilter && <Btn variant="ghost" small onClick={() => setCatFilter("")}>Clear</Btn>}
       </div>
       {filtered.length === 0 ? (
@@ -1218,6 +1215,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onOpenSupplie
           {[
             ["Category",       product.category],
             ["Product Type",   product.productType || "—"],
+            ["Variant / Key Feature", product.variantName || "—"],
             ["Material",       product.material    || "—"],
             ["Fitment",        product.fitment     || "—"],
             ["Dimensions (cm)",(product.length || product.width || product.height) ? `${product.length||"—"} × ${product.width||"—"} × ${product.height||"—"}` : "—"],
@@ -1412,6 +1410,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
   const [form, setForm] = useState(editing || {
     skuId: "",
     productType: "",
+    variantName: "",
     material: "",
     fitments: [],
     fitmentNotes: "",
@@ -1446,14 +1445,14 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
   const set = (k) => (v) => {
     setForm(f => {
       const u = { ...f, [k]: v };
-      if (k === "productType" || k === "material") {
-        const parts = [k === "productType" ? v : f.productType, k === "material" ? v : f.material].filter(Boolean);
-        u.name = parts.join(" - ");
+      if (["productType", "variantName", "material"].includes(k)) {
+        u.name = buildProductName(u.productType, u.variantName, u.material);
       }
       return u;
     });
   };
 
+  const autoName = buildProductName(form.productType, form.variantName, form.material);
   const selectedType = productTypes.find(t => t.name === form.productType);
   const skuPreview = editing?.skuId || editing?.sku_id || (selectedType ? "CG-" + selectedType.family_code + "-##" : "Generated automatically on Save");
   const hasDimensions = Number(form.length) > 0 && Number(form.width) > 0 && Number(form.height) > 0;
@@ -1522,7 +1521,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 4 }}>Auto Name</label>
-            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box" }}>{form.name || "Filled automatically..."}</div>
+            <div style={{ border: "1px solid " + C.mgray, borderRadius: 12, padding: "11px 12px", fontSize: 14, color: form.name ? C.navy : C.dgray, background: C.lgray, minHeight: 42, boxSizing: "border-box" }}>{autoName || "Filled automatically..."}</div>
           </div>
         </div>
 
@@ -1575,6 +1574,13 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
             )}
           </div>
         </div>
+
+        <Input
+          label="Variant / Key Feature"
+          value={form.variantName || ""}
+          onChange={set("variantName")}
+          placeholder="e.g. OEM-Style 4-Door, Rounded Ends, Bracket-Mounted"
+        />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Category *</label>
@@ -1639,7 +1645,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn disabled={!valid} onClick={() => onSave(form)}>Save Product</Btn>
+          <Btn disabled={!valid} onClick={() => onSave({ ...form, name: autoName })}>Save Product</Btn>
         </div>
       </div>
     </Modal>
