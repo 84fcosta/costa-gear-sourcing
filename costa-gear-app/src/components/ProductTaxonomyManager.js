@@ -123,7 +123,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       setEditing(null);
       await load();
       onChanged?.();
-      setMessage(\`\${tabLabel[tab].slice(0, -1)} updated. Existing product records were synchronized automatically.\`);
+      setMessage(`${tabLabel[tab].slice(0, -1)} updated. Existing product records were synchronized automatically.`);
     } catch (e) {
       setError(e.message || "Unable to update master data.");
     } finally {
@@ -134,7 +134,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
   const toggleActive = async row => {
     const usage = usageFor(row);
     if (row.active && usage > 0) {
-      setError(\`This value is used by \${usage} product(s). Reassign those products before deactivating it.\`);
+      setError(`This value is used by ${usage} product(s). Reassign those products before deactivating it.`);
       return;
     }
     setBusy(true); setError(""); setMessage("");
@@ -148,7 +148,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       }
       await load();
       onChanged?.();
-      setMessage(\`\${row.name} \${row.active ? "deactivated" : "reactivated"}.\`);
+      setMessage(`${row.name} ${row.active ? "deactivated" : "reactivated"}.`);
     } catch (e) {
       setError(e.message || "Unable to change active status.");
     } finally {
@@ -173,7 +173,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       setDraft({ name: "", familyCode: "" });
       await load();
       onChanged?.();
-      setMessage(\`New \${tabLabel[tab].slice(0, -1)} added.\`);
+      setMessage(`New ${tabLabel[tab].slice(0, -1)} added.`);
     } catch (e) {
       setError(e.message || "Unable to add master-data value.");
     } finally {
@@ -218,7 +218,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
         </div>
 
         {adding && <div style={{...styles.row,gridTemplateColumns:tab==="types"?"minmax(0,1fr) 120px auto":"minmax(0,1fr) auto"}}>
-          <input autoFocus style={styles.input} value={draft.name} onChange={e=>setDraft(v=>({...v,name:e.target.value}))} placeholder={\`New \${tabLabel[tab].slice(0,-1)} name\`} />
+          <input autoFocus style={styles.input} value={draft.name} onChange={e=>setDraft(v=>({...v,name:e.target.value}))} placeholder={`New ${tabLabel[tab].slice(0,-1)} name`} />
           {tab==="types" && <input style={styles.input} value={draft.familyCode} maxLength={4} onChange={e=>setDraft(v=>({...v,familyCode:e.target.value.toUpperCase()}))} placeholder="Family Code" />}
           <div style={{display:"flex",gap:6}}>
             <button type="button" disabled={busy} style={{...styles.primary,opacity:busy?.55:1}} onClick={addNew}>{busy?"Saving...":"Save"}</button>
@@ -238,7 +238,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
                 </div> : <>
                   <div style={{fontSize:13,fontWeight:850,color:"#20251F",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{row.name}</div>
                   <div style={{fontSize:10.5,color:"#647062",marginTop:3}}>
-                    {tab==="types" ? \`Family \${row.family_code} · \` : ""}{usage} {usage===1?"product":"products"} · {row.active?"Active":"Inactive"}
+                    {tab==="types" ? `Family ${row.family_code} · ` : ""}{usage} {usage===1?"product":"products"} · {row.active?"Active":"Inactive"}
                   </div>
                 </>}
               </div>
