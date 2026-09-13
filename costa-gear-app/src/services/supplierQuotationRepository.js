@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { removeQuotationDocumentsForDraft } from "./supplierDocumentService";
 
 export async function listSupplierQuotations() {
   const { data, error } = await supabase
@@ -98,6 +99,19 @@ export async function createBuyingDraftFromQuotation(quotationId, lineIds) {
   const { data, error } = await supabase.rpc("create_buying_draft_from_quotation", {
     p_quotation_id: quotationId,
     p_line_ids: lineIds,
+  });
+  if (error) throw error;
+  return data;
+}
+
+
+export async function deleteSupplierQuotationDraft(quotationId) {
+  if (!quotationId) throw new Error("Select a quotation before deleting.");
+
+  await removeQuotationDocumentsForDraft(quotationId);
+
+  const { data, error } = await supabase.rpc("delete_supplier_quotation_draft", {
+    p_quotation_id: quotationId,
   });
   if (error) throw error;
   return data;
