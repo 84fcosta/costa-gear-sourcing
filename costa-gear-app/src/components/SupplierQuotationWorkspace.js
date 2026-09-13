@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import {
   createBuyingDraftFromQuotation,
   createProductFromQuotationLine,
+  deleteSupplierQuotationDraft,
   finalizeSupplierQuotation,
   listSupplierQuotationLines,
   listSupplierQuotations,
@@ -260,6 +261,27 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const addMaterial=async()=>{const name=newMaterialName.trim();if(!name)return;setBusy(true);setMaterialError("");try{const {data,error}=await supabase.rpc("add_product_material",{p_name:name});if(error)throw error;const row=Array.isArray(data)?data[0]:data;if(row){setMaterials(prev=>[...prev.filter(x=>x.id!==row.id),row].sort((a,b)=>a.name.localeCompare(b.name)));setNewProductForm(v=>({...v,material:row.name}));}setAddingMaterial(false);setNewMaterialName("");}catch(e){setMaterialError(e.message||"Unable to add material.");}finally{setBusy(false);}};
   const finalize=async()=>{if(!canFinalize)return;setBusy(true);setError("");try{await finalizeSupplierQuotation({quotationId:selectedId,...finalizeForm});await load();setLines(await listSupplierQuotationLines(selectedId));setMessage("Quotation finalized. Its matched lines are now available as comparable quotes in Decision Lab.");}catch(e){setError(e.message||"Unable to finalize quotation.");}finally{setBusy(false);}};
   const createPO=async()=>{if(!canBuy)return;setBusy(true);setError("");try{const po=await createBuyingDraftFromQuotation(selectedId,selectedLines);await load();setMessage(`${po.po_ref} created with ${selectedLines.length} selected quotation line(s).`);onNavigate?.("buying",{type:"buying-draft-created",purchaseOrderId:po.id,poRef:po.po_ref});}catch(e){setError(e.message||"Unable to create Buying Draft.");}finally{setBusy(false);}};
+  const deleteDraft=async()=>{
+    if(!selected||selected.status!=="Imported")return;
+    const confirmed=window.confirm(
+      `Delete draft ${selected.quote_ref}?\n\nThis removes the unfinished quotation, its quotation lines and any quotation documents stored in OneDrive. Product Master records are preserved. Finalized quotes and Buying records are not affected.\n\nThis cannot be undone.`
+    );
+    if(!confirmed)return;
+    const nextId=quotations.find(q=>q.id!==selected.id)?.id||"";
+    setBusy(true);setError("");setMessage("");
+    try{
+      const ref=await deleteSupplierQuotationDraft(selected.id);
+      setSelectedId(nextId);
+      setLines([]);
+      setSelectedLines([]);
+      await load();
+      setMessage(`${ref||selected.quote_ref} deleted. Product Master records were preserved.`);
+    }catch(e){
+      setError(e.message||"Unable to delete this quotation draft.");
+    }finally{
+      setBusy(false);
+    }
+  };
   const toggleLine=id=>setSelectedLines(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const selectAll=()=>setSelectedLines(lines.filter(l=>l.quote_id).map(l=>l.id));
 
@@ -279,7 +301,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
 
         <div className="cg-supplier-quotation-detail" style={{display:"grid",gap:14}}>{selected?<>
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}><div><div style={{fontWeight:900,fontSize:17}}>{selected.quote_ref}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{supplierById(selected.supplier_id)?.name} · {selected.quote_date||"No date"} · {selected.incoterm||"Incoterm TBD"}</div><div style={{fontSize:10.5,color:C.muted,marginTop:3}}>Supplier Quote Ref: <b style={{color:C.ink}}>{selected.supplier_quote_ref||"Not provided"}</b>{!selected.supplier_quote_ref&&<span style={{marginLeft:6,color:C.oliveDark,fontWeight:800}}>· Costa Gear generated the reference above</span>}</div></div><div style={{display:"flex",gap:5}}>{badge(selected.validation_status)}{badge(selected.status)}</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}><div><div style={{fontWeight:900,fontSize:17}}>{selected.quote_ref}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{supplierById(selected.supplier_id)?.name} · {selected.quote_date||"No date"} · {selected.incoterm||"Incoterm TBD"}</div><div style={{fontSize:10.5,color:C.muted,marginTop:3}}>Supplier Quote Ref: <b style={{color:C.ink}}>{selected.supplier_quote_ref||"Not provided"}</b>{!selected.supplier_quote_ref&&<span style={{marginLeft:6,color:C.oliveDark,fontWeight:800}}>· Costa Gear generated the reference above</span>}</div></div><div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>{badge(selected.validation_status)}{badge(selected.status)}{selected.status==="Imported"&&<button type="button" disabled={busy} onClick={deleteDraft} style={{...btn(),color:C.red,borderColor:"rgba(182,81,69,.35)",background:"#FFF8F7",opacity:busy?.55:1}}>Delete Draft</button>}</div></div>
             <div className="cg-supplier-quotation-metrics" style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:8,marginTop:11}}>{[['Lines',lines.length],['Resolved',`${resolved}/${lines.length}`],['Products',money(selected.product_subtotal,selected.currency)],['Shipping',money(selected.shipping_total,selected.shipping_currency)],['Grand Total',money(selected.grand_total,selected.currency)],['Linked PO',selected.purchase_order_id?orderById(selected.purchase_order_id)?.po_ref||'Created':'—']].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:8,padding:8}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>{l}</div><div style={{fontSize:12.5,fontWeight:850,marginTop:2}}>{v}</div></div>)}</div>
           </div>
 
