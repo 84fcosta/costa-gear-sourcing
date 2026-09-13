@@ -644,6 +644,54 @@ export async function adoptStagedSupplierDocument({
   return { document, duplicate: false, folder: folderStatus };
 }
 
+export async function removeQuotationDocumentsForDraft(quotationId) {
+  if (!quotationId) return { removedDocuments: 0, removedItems: 0 };
+
+  const [{ data: documents, error: documentError }, { data: indexedItems, error: indexError }] = await Promise.all([
+    supabase
+      .from("supplier_documents")
+      .select("id,onedrive_item_id")
+      .eq("quotation_id", quotationId),
+    supabase
+      .from("onedrive_items")
+      .select("item_id")
+      .eq("linked_entity_type", "supplier_quotation")
+      .eq("linked_entity_id", quotationId)
+      .eq("is_deleted", false),
+  ]);
+
+  if (documentError) throw documentError;
+  if (indexError) throw indexError;
+
+  const itemIds = new Set([
+    ...(documents || []).map(row => row.onedrive_item_id).filter(Boolean),
+    ...(indexedItems || []).map(row => row.item_id).filter(Boolean),
+  ]);
+
+  for (const itemId of itemIds) {
+    await deleteOneDriveItem(itemId);
+    const { error } = await supabase
+      .from("onedrive_items")
+      .update({
+        is_deleted: true,
+        indexed_at: new Date().toISOString(),
+      })
+      .eq("item_id", itemId);
+    if (error) throw error;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("supplier_documents")
+    .delete()
+    .eq("quotation_id", quotationId);
+  if (deleteError) throw deleteError;
+
+  return {
+    removedDocuments: (documents || []).length,
+    removedItems: itemIds.size,
+  };
+}
+
 export function supplierDocumentTypeLabel(value) {
   return [...SUPPLIER_DOCUMENT_TYPES, ...QUOTATION_DOCUMENT_TYPES].find(item => item.value === value)?.label || value;
 }
