@@ -48,48 +48,36 @@ function numberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function allowedDownloadUrl(value) {
-  try {
-    const url = new URL(String(value || ""));
-    if (url.protocol !== "https:") return false;
-    const host = url.hostname.toLowerCase();
-    return [
-      "1drv.com",
-      ".1drv.com",
-      "sharepoint.com",
-      ".sharepoint.com",
-      "onedrive.live.com",
-      ".onedrive.live.com",
-      "storage.live.com",
-      ".storage.live.com",
-      "officeapps.live.com",
-      ".officeapps.live.com",
-    ].some(suffix => host === suffix.replace(/^\./, "") || host.endsWith(suffix));
-  } catch {
-    return false;
-  }
-}
-
-async function authorize(req) {
-  const auth = String(req.headers.authorization || "");
-  if (!/^Bearer\s+\S+/i.test(auth)) return null;
-
+async function acquireOneDriveServerToken(req) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) throw new Error("Supabase server environment is not configured.");
+  const auth = String(req.headers.authorization || "");
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Supabase server environment is not configured.");
+  }
 
-  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const response = await fetch(`${supabaseUrl}/functions/v1/onedrive-auth`, {
+    method: "POST",
     headers: {
       apikey: anonKey,
       Authorization: auth,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ action: "token" }),
   });
-  if (!userResponse.ok) return null;
-  const user = await userResponse.json();
-  if (!user?.id) return null;
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body?.accessToken) {
+    throw new Error(body?.error || "Unable to authorize a secure OneDrive read.");
+  }
+  return body.accessToken;
+}
 
-  const memberResponse = await fetch(
-    `${supabaseUrl}/rest/v1/app_members?user_id=eq.${encodeURIComponent(user.id)}&select=user_id,role&limit=1`,
+async function loadOneDriveRepositoryDriveId(req) {
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+  const auth = String(req.headers.authorization || "");
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/onedrive_repository_config?repository_key=eq.costa_gear&select=drive_id&limit=1`,
     {
       headers: {
         apikey: anonKey,
@@ -98,19 +86,17 @@ async function authorize(req) {
       },
     }
   );
-  if (!memberResponse.ok) return null;
-  const members = await memberResponse.json();
-  if (!Array.isArray(members) || !members.length) return null;
-  return { user, member: members[0] };
+  if (!response.ok) {
+    throw new Error("Unable to resolve the Costa Gear OneDrive repository.");
+  }
+  const rows = await response.json().catch(() => []);
+  return Array.isArray(rows) && rows[0]?.drive_id ? String(rows[0].drive_id) : null;
 }
 
-async function fetchSourceFile(downloadUrl) {
-  if (!allowedDownloadUrl(downloadUrl)) {
-    throw new Error("The intake source URL is not an approved OneDrive download URL.");
+async function readBoundedResponse(response) {
+  if (!response.ok) {
+    throw new Error(`Unable to read staged OneDrive file (HTTP ${response.status}).`);
   }
-
-  const response = await fetch(downloadUrl, { redirect: "follow" });
-  if (!response.ok) throw new Error(`Unable to read staged OneDrive file (HTTP ${response.status}).`);
 
   const declaredLength = Number(response.headers.get("content-length") || 0);
   if (declaredLength > MAX_FILE_BYTES) {
@@ -118,11 +104,50 @@ async function fetchSourceFile(downloadUrl) {
   }
 
   const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer.byteLength) {
+    throw new Error("The staged OneDrive file is empty.");
+  }
   if (arrayBuffer.byteLength > MAX_FILE_BYTES) {
     throw new Error("This file is too large for automated intake analysis. Maximum automated analysis size is 30 MB.");
   }
-
   return Buffer.from(arrayBuffer);
+}
+
+async function fetchStagedOneDriveFile(req, itemId) {
+  const safeItemId = String(itemId || "").trim();
+  if (!safeItemId) throw new Error("A staged OneDrive item ID is required for intake analysis.");
+
+  const [microsoftToken, driveId] = await Promise.all([
+    acquireOneDriveServerToken(req),
+    loadOneDriveRepositoryDriveId(req),
+  ]);
+
+  const graphUrl = driveId
+    ? `https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(safeItemId)}/content`
+    : `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(safeItemId)}/content`;
+
+  const graphResponse = await fetch(graphUrl, {
+    headers: { Authorization: `Bearer ${microsoftToken}` },
+    redirect: "manual",
+  });
+
+  if (graphResponse.status >= 300 && graphResponse.status < 400) {
+    const location = graphResponse.headers.get("location");
+    if (!location) throw new Error("Microsoft Graph did not return a file download location.");
+    let redirected;
+    try {
+      redirected = new URL(location);
+    } catch {
+      throw new Error("Microsoft Graph returned an invalid file download location.");
+    }
+    if (redirected.protocol !== "https:") {
+      throw new Error("Microsoft Graph returned an insecure file download location.");
+    }
+    const fileResponse = await fetch(redirected.toString(), { redirect: "follow" });
+    return readBoundedResponse(fileResponse);
+  }
+
+  return readBoundedResponse(graphResponse);
 }
 
 function compactWorkbookSnapshot(buffer) {
@@ -444,15 +469,15 @@ module.exports = async function handler(req, res) {
     if (!access) return send(res, 401, { error: "Unauthorized." });
 
     const {
-      downloadUrl,
+      oneDriveItemId,
       fileBase64,
       fileName,
       mimeType,
       suppliers,
     } = req.body || {};
 
-    if (!fileName || (!downloadUrl && !fileBase64)) {
-      return send(res, 400, { error: "A supplier file is required for intake analysis." });
+    if (!fileName || (!oneDriveItemId && !fileBase64)) {
+      return send(res, 400, { error: "A staged supplier file is required for intake analysis." });
     }
 
     const apiKey = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
@@ -464,14 +489,14 @@ module.exports = async function handler(req, res) {
     }
 
     let buffer;
-    if (fileBase64) {
+    if (oneDriveItemId) {
+      buffer = await fetchStagedOneDriveFile(req, oneDriveItemId);
+    } else {
       buffer = Buffer.from(String(fileBase64), "base64");
       if (!buffer.length) throw new Error("The uploaded supplier file is empty.");
       if (buffer.length > MAX_FILE_BYTES) {
         throw new Error("This file is too large for automated intake analysis. Maximum automated analysis size is 30 MB.");
       }
-    } else {
-      buffer = await fetchSourceFile(downloadUrl);
     }
     const extension = String(fileName).split(".").pop()?.toLowerCase() || "";
     const effectiveMime = String(mimeType || "").toLowerCase();
