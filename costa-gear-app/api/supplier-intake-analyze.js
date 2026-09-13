@@ -1,7 +1,7 @@
 const XLSX = require("xlsx");
 
 const MAX_FILE_BYTES = 30 * 1024 * 1024;
-const AI_MODEL = process.env.SUPPLIER_INTAKE_AI_MODEL || "openai/gpt-5.6-sol";
+const AI_MODEL = process.env.SUPPLIER_INTAKE_AI_MODEL || "openai/gpt-5.6-terra";
 
 const ALLOWED_DOCUMENT_TYPES = new Set([
   "QUOTATION",
