@@ -159,7 +159,20 @@ AI is used for supplier-native PDF/Excel/image classification and extraction.
 
 Official Costa Gear quotation XLSX files remain locally parseable without AI and use the same Supplier Intake channel.
 
+Default extraction model: `openai/gpt-5.6-terra`.
+
+Rationale:
+- extraction quality is more important than minimum token cost
+- Terra materially reduces cost versus Sol for this repetitive structured workflow
+- Sol remains available through `SUPPLIER_INTAKE_AI_MODEL` if later testing shows a document class that needs it
+
+Production must provide one server-side AI Gateway authentication method:
+- `AI_GATEWAY_API_KEY`, or
+- Vercel OIDC where available
+
 The AI credential stays server-side in Vercel. It must never be exposed in the browser.
+
+The public readiness endpoint may report whether AI is configured, but never returns the credential itself.
 
 ## Non-negotiable rules
 
