@@ -6,7 +6,6 @@ import {
 } from "./oneDriveAppFolderService";
 import { adoptStagedSupplierDocument, uploadSupplierDocument } from "./supplierDocumentService";
 import { buildCostaGearSupplierQuotationFile } from "../domain/supplierQuotationWorkbook";
-import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
 import { importStandardizedSupplierQuotation } from "./supplierQuotationIntakeService";
 
 export const INTAKE_DOCUMENT_TYPES = [
@@ -310,23 +309,32 @@ export async function finalizeQuotationSupplierIntake({
     validationStatus: "AI EXTRACTED - USER REVIEWED",
   };
 
-  const lines = (quotation.lines || []).map((line, index) => ({
-    line: line.line || index + 1,
-    supplierSku: line.supplierSku || "",
-    description: line.description || "",
-    unit: line.unit || "",
-    quantity: line.quantity ?? "",
-    unitPrice: line.unitPrice ?? "",
-    supplierLineTotal: line.supplierLineTotal ?? "",
-    calculatedLineTotal:
-      line.quantity != null && line.unitPrice != null
-        ? Number(line.quantity) * Number(line.unitPrice)
-        : "",
-    lineValidation: "AI EXTRACTED - USER REVIEWED",
-    notes: line.notes || "",
-    cgSku: line.cgSku || "",
-    matchStatus: ["MATCHED","REVIEW","UNMATCHED","IGNORED"].includes(line.matchStatus) ? line.matchStatus : "UNMATCHED",
-  }));
+  const lines = (quotation.lines || []).map((line, index) => {
+    const normalizedLine = index + 1;
+    const sourceLine = Number(line.line);
+    const sourceLineNote =
+      Number.isFinite(sourceLine) && sourceLine !== normalizedLine
+        ? `Supplier source line: ${sourceLine}`
+        : "";
+
+    return {
+      line: normalizedLine,
+      supplierSku: line.supplierSku || "",
+      description: line.description || "",
+      unit: line.unit || "",
+      quantity: line.quantity ?? "",
+      unitPrice: line.unitPrice ?? "",
+      supplierLineTotal: line.supplierLineTotal ?? "",
+      calculatedLineTotal:
+        line.quantity != null && line.unitPrice != null
+          ? Number(line.quantity) * Number(line.unitPrice)
+          : "",
+      lineValidation: "AI EXTRACTED - USER REVIEWED",
+      notes: [line.notes || "", sourceLineNote].filter(Boolean).join(" | "),
+      cgSku: line.cgSku || "",
+      matchStatus: ["MATCHED","REVIEW","UNMATCHED","IGNORED"].includes(line.matchStatus) ? line.matchStatus : "UNMATCHED",
+    };
+  });
 
   const missing = lines.filter(line =>
     !line.description ||
