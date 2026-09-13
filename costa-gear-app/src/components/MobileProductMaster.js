@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Plus, Images } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, Images, ListTree } from "lucide-react";
+import ProductTaxonomyManager from "./ProductTaxonomyManager";
 import { supabase } from "../supabase";
 import {
   buildProductFitmentMap,
@@ -44,6 +45,8 @@ export default function MobileProductMaster({ active }) {
   const [vehicleCode, setVehicleCode] = useState("");
   const [modelYear, setModelYear] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [taxonomyOpen, setTaxonomyOpen] = useState(false);
+  const [taxonomyVersion, setTaxonomyVersion] = useState(0);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -74,7 +77,7 @@ export default function MobileProductMaster({ active }) {
     };
     load();
     return () => { cancelled = true; };
-  }, [active]);
+  }, [active, taxonomyVersion]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -183,7 +186,7 @@ export default function MobileProductMaster({ active }) {
         <h2>Products</h2>
         <p>{visible.length} of {products.length} products</p>
       </div>
-      <button type="button" className="cg-mobile-product-add" onClick={triggerAdd}><Plus size={18}/>Add</button>
+      <div style={{display:"flex",gap:6}}><button type="button" className="cg-mobile-product-add" onClick={() => setTaxonomyOpen(true)}><ListTree size={17}/>Lists</button><button type="button" className="cg-mobile-product-add" onClick={triggerAdd}><Plus size={18}/>Add</button></div>
     </div>
 
     <div className="cg-mobile-product-search">
@@ -275,5 +278,6 @@ export default function MobileProductMaster({ active }) {
           </article>;
         })}
       </div>}
+    <ProductTaxonomyManager open={taxonomyOpen} onClose={() => setTaxonomyOpen(false)} onChanged={() => setTaxonomyVersion(v => v + 1)} />
   </section>;
 }

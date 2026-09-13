@@ -5,6 +5,7 @@ import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, 
 import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "./services/productTaxonomyService";
 import { buildProductName } from "./domain/productNaming";
+import ProductTaxonomyManager from "./components/ProductTaxonomyManager";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
@@ -405,6 +406,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
   const [modal,    setModal]    = useState(null);
   const [editing,  setEditing]  = useState(null);
   const [detailId, setDetailId] = useState(null);
+  const [taxonomyOpen, setTaxonomyOpen] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
@@ -681,7 +683,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
         {loading ? <Spinner /> : (
           <>
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
-            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} categories={categories} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
+            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} categories={categories} onAdd={() => openAdd("product")} onManageTaxonomy={() => setTaxonomyOpen(true)} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
             {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} onOpenSupplierIntake={onOpenSupplierIntake} />}
             {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onOpenSupplierIntake={onOpenSupplierIntake} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
             {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
@@ -693,6 +695,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
       {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
       {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
       {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onOpenSupplierQuotations={onOpenSupplierQuotations} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
+      <ProductTaxonomyManager open={taxonomyOpen} onClose={() => setTaxonomyOpen(false)} onChanged={fetchAll} />
     </div>
   );
 }
@@ -908,7 +911,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
 // ════════════════════════════════════════════════════════════════
 // PRODUCTS TAB
 // ════════════════════════════════════════════════════════════════
-function Products({ products, quotes, categories = [], onAdd, onEdit, onDelete, onDetail }) {
+function Products({ products, quotes, categories = [], onAdd, onManageTaxonomy, onEdit, onDelete, onDetail }) {
   const [filter, setFilter]       = useState("");
   const [catFilter, setCatFilter] = useState("");
   const categoryOptions = categories.map(item => item.name).filter(Boolean);
@@ -920,7 +923,7 @@ function Products({ products, quotes, categories = [], onAdd, onEdit, onDelete, 
   });
 
   return (
-    <Section title="Products" action={<Btn onClick={onAdd}>+ Add Product</Btn>}>
+    <Section title="Products" action={<div style={{display:"flex",gap:8,alignItems:"center"}}><Btn variant="ghost" onClick={onManageTaxonomy}>Manage Lists</Btn><Btn onClick={onAdd}>+ Add Product</Btn></div>}>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <Input placeholder="Search SKU or name…" value={filter} onChange={setFilter} />
         <Input options={categoryOptions} value={catFilter} onChange={setCatFilter} />
