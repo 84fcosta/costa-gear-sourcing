@@ -24,12 +24,6 @@ const C = {
   soft:  "#FAFBF8",
 };
 
-const CATEGORIES = [
-  "Exterior – Protection","Exterior – Lighting","Exterior – Storage & Cargo",
-  "Exterior – Access & Entry","Exterior – Recovery",
-  "Interior – Storage","Interior – Mounting & Tech","Interior – Comfort & Utility",
-  "Drivetrain & Suspension","Other",
-];
 const FITMENTS = [
   "Wrangler JL 2-Door","Wrangler JL 4-Door","Wrangler JL 2-Door & 4-Door",
   "Gladiator JT","Wrangler JK 2-Door","Wrangler JK 4-Door",
@@ -687,7 +681,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
         {loading ? <Spinner /> : (
           <>
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
-            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
+            {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} categories={categories} onAdd={() => openAdd("product")} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}
             {tab === "suppliers" && <Suppliers suppliers={uiSuppliers} quotes={uiQuotes} onAdd={() => openAdd("supplier")} onEdit={s => openEdit("supplier", s)} onDelete={id => { if (window.confirm("Delete supplier and all their quotes?")) deleteSupplier(id); }} onOpenSupplierIntake={onOpenSupplierIntake} />}
             {tab === "quotes"    && <Quotes quotes={uiQuotes} products={uiProducts} suppliers={uiSuppliers} onOpenSupplierQuotations={onOpenSupplierQuotations} onOpenSupplierIntake={onOpenSupplierIntake} onEdit={q => openEdit("quote", q)} onDelete={id => { if (window.confirm("Delete legacy standalone quote?")) deleteQuote(id); }} />}
             {tab === "export"    && <ExportRFQ products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} />}
@@ -914,9 +908,10 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
 // ════════════════════════════════════════════════════════════════
 // PRODUCTS TAB
 // ════════════════════════════════════════════════════════════════
-function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
+function Products({ products, quotes, categories = [], onAdd, onEdit, onDelete, onDetail }) {
   const [filter, setFilter]       = useState("");
   const [catFilter, setCatFilter] = useState("");
+  const categoryOptions = categories.map(item => item.name).filter(Boolean);
 
   const filtered = products.filter(p => {
     const q   = filter.toLowerCase();
@@ -928,7 +923,7 @@ function Products({ products, quotes, onAdd, onEdit, onDelete, onDetail }) {
     <Section title="Products" action={<Btn onClick={onAdd}>+ Add Product</Btn>}>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <Input placeholder="Search SKU or name…" value={filter} onChange={setFilter} />
-        <Input options={CATEGORIES} value={catFilter} onChange={setCatFilter} />
+        <Input options={categoryOptions} value={catFilter} onChange={setCatFilter} />
         {catFilter && <Btn variant="ghost" small onClick={() => setCatFilter("")}>Clear</Btn>}
       </div>
       {filtered.length === 0 ? (
