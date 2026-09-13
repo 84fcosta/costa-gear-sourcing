@@ -1220,6 +1220,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onOpenSupplie
           {[
             ["Category",       product.category],
             ["Product Type",   product.productType || "—"],
+            ["Variant / Key Feature", product.variantName || "—"],
             ["Material",       product.material    || "—"],
             ["Fitment",        product.fitment     || "—"],
             ["Dimensions (cm)",(product.length || product.width || product.height) ? `${product.length||"—"} × ${product.width||"—"} × ${product.height||"—"}` : "—"],
