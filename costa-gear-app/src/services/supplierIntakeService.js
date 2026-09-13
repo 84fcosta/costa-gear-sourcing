@@ -4,7 +4,7 @@ import {
   getOneDriveItemDownloadUrl,
   uploadSupplierIntakeStagingFile,
 } from "./oneDriveAppFolderService";
-import { adoptStagedSupplierDocument } from "./supplierDocumentService";
+import { adoptStagedSupplierDocument, uploadSupplierDocument } from "./supplierDocumentService";
 import { buildCostaGearSupplierQuotationFile } from "../domain/supplierQuotationWorkbook";
 import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
 import { importStandardizedSupplierQuotation } from "./supplierQuotationIntakeService";
@@ -343,19 +343,47 @@ export async function finalizeQuotationSupplierIntake({
     );
   }
 
-  const workbookFile = buildCostaGearSupplierQuotationFile({
-    supplierName: supplier.name,
-    header,
-    lines,
-  });
-
-  const parsed = await parseCostaGearSupplierQuotation(workbookFile);
   const result = await importStandardizedSupplierQuotation({
     supplierId: supplier.id,
-    header: parsed.header,
-    lines: parsed.lines,
-    workbookFile,
+    header,
+    lines,
+    workbookFile: null,
   });
+
+  let workbookArchive = {
+    attempted: false,
+    archived: false,
+    duplicate: false,
+    error: null,
+  };
+
+  try {
+    const workbookFile = buildCostaGearSupplierQuotationFile({
+      supplierName: supplier.name,
+      header,
+      lines,
+    });
+    workbookArchive = { ...workbookArchive, attempted: true };
+    const storedWorkbook = await uploadSupplierDocument({
+      file: workbookFile,
+      supplierId: supplier.id,
+      quotationId: result.quotation.id,
+      documentType: "QUOTATION_IMPORT",
+    });
+    workbookArchive = {
+      attempted: true,
+      archived: true,
+      duplicate: Boolean(storedWorkbook.duplicate),
+      error: null,
+    };
+  } catch (error) {
+    workbookArchive = {
+      attempted: true,
+      archived: false,
+      duplicate: false,
+      error: error?.message || "Unable to archive Costa Gear import workbook.",
+    };
+  }
 
   let originalArchive = null;
   let originalArchiveError = null;
@@ -367,7 +395,7 @@ export async function finalizeQuotationSupplierIntake({
       supplierId: supplier.id,
       quotationId: result.quotation.id,
       documentType: "QUOTATION_SOURCE",
-      documentDate: parsed.header.quoteDate || null,
+      documentDate: header.quoteDate || null,
     });
   } catch (error) {
     originalArchiveError = error?.message || "Unable to archive supplier original.";
@@ -375,6 +403,7 @@ export async function finalizeQuotationSupplierIntake({
 
   return {
     ...result,
+    archive: workbookArchive,
     originalArchive,
     originalArchiveError,
   };
