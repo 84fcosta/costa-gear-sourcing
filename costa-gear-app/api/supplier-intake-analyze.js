@@ -445,13 +445,14 @@ module.exports = async function handler(req, res) {
 
     const {
       downloadUrl,
+      fileBase64,
       fileName,
       mimeType,
       suppliers,
     } = req.body || {};
 
-    if (!downloadUrl || !fileName) {
-      return send(res, 400, { error: "A staged OneDrive file is required for intake analysis." });
+    if (!fileName || (!downloadUrl && !fileBase64)) {
+      return send(res, 400, { error: "A supplier file is required for intake analysis." });
     }
 
     const apiKey = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
@@ -462,7 +463,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const buffer = await fetchSourceFile(downloadUrl);
+    let buffer;
+    if (fileBase64) {
+      buffer = Buffer.from(String(fileBase64), "base64");
+      if (!buffer.length) throw new Error("The uploaded supplier file is empty.");
+      if (buffer.length > MAX_FILE_BYTES) {
+        throw new Error("This file is too large for automated intake analysis. Maximum automated analysis size is 30 MB.");
+      }
+    } else {
+      buffer = await fetchSourceFile(downloadUrl);
+    }
     const extension = String(fileName).split(".").pop()?.toLowerCase() || "";
     const effectiveMime = String(mimeType || "").toLowerCase();
 
