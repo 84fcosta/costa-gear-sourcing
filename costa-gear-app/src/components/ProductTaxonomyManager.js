@@ -53,6 +53,12 @@ const tabLabel = {
   categories: "Categories",
 };
 
+const singularLabel = {
+  types: "Product Type",
+  materials: "Material",
+  categories: "Category",
+};
+
 export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
   const [tab, setTab] = useState("types");
   const [types, setTypes] = useState([]);
@@ -123,7 +129,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       setEditing(null);
       await load();
       onChanged?.();
-      setMessage(`${tabLabel[tab].slice(0, -1)} updated. Existing product records were synchronized automatically.`);
+      setMessage(`${singularLabel[tab]} updated. Existing product records were synchronized automatically.`);
     } catch (e) {
       setError(e.message || "Unable to update master data.");
     } finally {
@@ -173,7 +179,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       setDraft({ name: "", familyCode: "" });
       await load();
       onChanged?.();
-      setMessage(`New ${tabLabel[tab].slice(0, -1)} added.`);
+      setMessage(`New ${singularLabel[tab]} added.`);
     } catch (e) {
       setError(e.message || "Unable to add master-data value.");
     } finally {
@@ -218,7 +224,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
         </div>
 
         {adding && <div style={{...styles.row,gridTemplateColumns:tab==="types"?"minmax(0,1fr) 120px auto":"minmax(0,1fr) auto"}}>
-          <input autoFocus style={styles.input} value={draft.name} onChange={e=>setDraft(v=>({...v,name:e.target.value}))} placeholder={`New ${tabLabel[tab].slice(0,-1)} name`} />
+          <input autoFocus style={styles.input} value={draft.name} onChange={e=>setDraft(v=>({...v,name:e.target.value}))} placeholder={`New ${singularLabel[tab]} name`} />
           {tab==="types" && <input style={styles.input} value={draft.familyCode} maxLength={4} onChange={e=>setDraft(v=>({...v,familyCode:e.target.value.toUpperCase()}))} placeholder="Family Code" />}
           <div style={{display:"flex",gap:6}}>
             <button type="button" disabled={busy} style={{...styles.primary,opacity:busy?.55:1}} onClick={addNew}>{busy?"Saving...":"Save"}</button>
