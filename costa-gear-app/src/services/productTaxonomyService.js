@@ -19,6 +19,14 @@ export async function addProductCategory(name) {
   return Array.isArray(data) ? data[0] : data;
 }
 
+export async function addProductMaterial(name) {
+  const { data, error } = await supabase.rpc("add_product_material", {
+    p_name: String(name || "").trim(),
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 export async function addProductType({ name, familyCode }) {
   const { data, error } = await supabase.rpc("add_product_type", {
     p_name: String(name || "").trim(),
