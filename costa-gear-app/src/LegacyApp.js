@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
 import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
+import { addProductCategory, addProductType, listProductCategories } from "./services/productTaxonomyService";
 
 // ── Palette ─────────────────────────────────────────────────────
 const C = {
@@ -399,6 +400,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
   const [suppliers, setSuppliers] = useState([]);
   const [quotes,    setQuotes]    = useState([]);
   const [productTypes, setProductTypes] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [vehicleFitments, setVehicleFitments] = useState([]);
   const [productFitmentRows, setProductFitmentRows] = useState([]);
@@ -412,17 +414,18 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }, { data: pt, error: pte }, { data: pm, error: pme }, { data: vf, error: vfe }, { data: pf, error: pfe }] = await Promise.all([
+      const [{ data: s, error: se }, { data: p, error: pe }, { data: q, error: qe }, { data: pt, error: pte }, categoryRows, { data: pm, error: pme }, { data: vf, error: vfe }, { data: pf, error: pfe }] = await Promise.all([
         supabase.from("suppliers").select("*").order("sup_id"),
         supabase.from("products").select("*").order("sku_id"),
         supabase.from("quotes").select("*").order("created_at", { ascending: false }),
         supabase.from("product_types").select("*").eq("active", true).order("name"),
+        listProductCategories(),
         supabase.from("product_materials").select("*").eq("active", true).order("name"),
         supabase.from("vehicle_fitments").select("*").eq("active", true).order("sort_order"),
         supabase.from("product_fitments").select("*"),
       ]);
       if (se || pe || qe || pte || pme || vfe || pfe) throw new Error((se || pe || qe || pte || pme || vfe || pfe).message);
-      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setMaterials(pm || []); setVehicleFitments(vf || []); setProductFitmentRows(pf || []);
+      setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setCategories(categoryRows || []); setMaterials(pm || []); setVehicleFitments(vf || []); setProductFitmentRows(pf || []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -512,6 +515,18 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (row) setMaterials(prev => [...prev.filter(x => x.id !== row.id), row].sort((a,b)=>a.name.localeCompare(b.name)));
+    return row;
+  };
+
+  const addProductTypeOption = async ({ name, familyCode }) => {
+    const row = await addProductType({ name, familyCode });
+    if (row) setProductTypes(prev => [...prev.filter(x => x.id !== row.id), row].sort((a,b)=>a.name.localeCompare(b.name)));
+    return row;
+  };
+
+  const addProductCategoryOption = async (name) => {
+    const row = await addProductCategory(name);
+    if (row) setCategories(prev => [...prev.filter(x => x.id !== row.id), row].sort((a,b)=>(a.sort_order-b.sort_order)||a.name.localeCompare(b.name)));
     return row;
   };
 
@@ -678,7 +693,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
         )}
       </div>
 
-      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} materials={materials} vehicleFitments={vehicleFitments} onAddMaterial={addProductMaterial} />}
+      {modal === "product"        && <ProductModal  onSave={saveProduct}  onClose={closeModal} editing={editing} productTypes={productTypes} categories={categories} materials={materials} vehicleFitments={vehicleFitments} onAddProductType={addProductTypeOption} onAddCategory={addProductCategoryOption} onAddMaterial={addProductMaterial} />}
       {modal === "supplier"       && <SupplierModal onSave={saveSupplier} onClose={closeModal} editing={editing} />}
       {modal === "quote"          && <QuoteModal    onSave={saveQuote}    onClose={closeModal} editing={editing} products={uiProducts} suppliers={uiSuppliers} />}
       {modal === "product-detail" && <ProductDetail id={detailId} products={uiProducts} quotes={uiQuotes} suppliers={uiSuppliers} onClose={closeModal} onOpenSupplierQuotations={onOpenSupplierQuotations} onEditQuote={q => { closeModal(); setTimeout(() => openEdit("quote", q), 50); }} onDeleteQuote={id => { deleteQuote(id); closeModal(); }} />}
@@ -1393,7 +1408,7 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
   );
 }
 
-function ProductModal({ onSave, onClose, editing, productTypes = [], materials = [], vehicleFitments = [], onAddMaterial }) {
+function ProductModal({ onSave, onClose, editing, productTypes = [], categories = [], materials = [], vehicleFitments = [], onAddProductType, onAddCategory, onAddMaterial }) {
   const [form, setForm] = useState(editing || {
     skuId: "",
     productType: "",
@@ -1414,6 +1429,15 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
     competitorUrl: "",
     pricingNotes: "",
   });
+  const [addingType,setAddingType] = useState(false);
+  const [newType,setNewType] = useState("");
+  const [newFamilyCode,setNewFamilyCode] = useState("");
+  const [typeBusy,setTypeBusy] = useState(false);
+  const [typeError,setTypeError] = useState("");
+  const [addingCategory,setAddingCategory] = useState(false);
+  const [newCategory,setNewCategory] = useState("");
+  const [categoryBusy,setCategoryBusy] = useState(false);
+  const [categoryError,setCategoryError] = useState("");
   const [addingMaterial,setAddingMaterial] = useState(false);
   const [newMaterial,setNewMaterial] = useState("");
   const [materialBusy,setMaterialBusy] = useState(false);
@@ -1439,7 +1463,38 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
     if (meta.model_year_end && !x.yearTo) return false;
     return true;
   });
-  const valid = Boolean(form.productType) && hasDimensions && fitmentsValid;
+  const valid = Boolean(form.productType) && Boolean(form.category) && hasDimensions && fitmentsValid;
+
+  const addType = async () => {
+    const name = newType.trim();
+    const familyCode = newFamilyCode.trim().toUpperCase();
+    if (!name || !familyCode || !onAddProductType) return;
+    setTypeBusy(true); setTypeError("");
+    try {
+      const row = await onAddProductType({ name, familyCode });
+      if (row?.name) set("productType")(row.name);
+      setAddingType(false); setNewType(""); setNewFamilyCode("");
+    } catch (e) {
+      setTypeError(e.message || "Unable to add Product Type.");
+    } finally {
+      setTypeBusy(false);
+    }
+  };
+
+  const addCategory = async () => {
+    const name = newCategory.trim();
+    if (!name || !onAddCategory) return;
+    setCategoryBusy(true); setCategoryError("");
+    try {
+      const row = await onAddCategory(name);
+      if (row?.name) set("category")(row.name);
+      setAddingCategory(false); setNewCategory("");
+    } catch (e) {
+      setCategoryError(e.message || "Unable to add category.");
+    } finally {
+      setCategoryBusy(false);
+    }
+  };
 
   const addMaterial = async () => {
     const name = newMaterial.trim();
@@ -1472,7 +1527,31 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <Input label="Product Type" value={form.productType} onChange={set("productType")} options={productTypes.map(t => t.name)} required />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 140 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Product Type *</label>
+            {!addingType ? (
+              <select value={form.productType || ""} onChange={e => {
+                if (e.target.value === "__ADD__") { setAddingType(true); setNewType(""); setNewFamilyCode(""); setTypeError(""); }
+                else set("productType")(e.target.value);
+              }} style={inputStyle}>
+                <option value="">- select -</option>
+                {productTypes.map(t => <option key={t.id || t.name} value={t.name}>{t.name}</option>)}
+                <option value="__ADD__">+ Add New Product Type...</option>
+              </select>
+            ) : (
+              <div style={{ display: "grid", gap: 5 }}>
+                <input autoFocus value={newType} onChange={e => setNewType(e.target.value)} placeholder="New Product Type" style={inputStyle} />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={newFamilyCode} onChange={e => setNewFamilyCode(e.target.value.toUpperCase())} placeholder="Family code, e.g. RR" maxLength={4} style={{ ...inputStyle, minWidth: 0 }} />
+                  <Btn small disabled={typeBusy || !newType.trim() || newFamilyCode.trim().length < 2} onClick={addType}>{typeBusy ? "Adding..." : "Add"}</Btn>
+                  <Btn small variant="ghost" disabled={typeBusy} onClick={() => { setAddingType(false); setNewType(""); setNewFamilyCode(""); setTypeError(""); }}>Cancel</Btn>
+                </div>
+                <div style={{ fontSize: 10.5, color: C.dgray }}>Family Code controls the SKU prefix: CG-&lt;FAMILY&gt;-NN.</div>
+                {typeError && <div style={{ fontSize: 11, color: C.red }}>{typeError}</div>}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 140 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Material</label>
             {!addingMaterial ? (
@@ -1497,7 +1576,29 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], materials =
           </div>
         </div>
 
-        <Input label="Category" value={form.category} onChange={set("category")} options={CATEGORIES} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Category *</label>
+          {!addingCategory ? (
+            <select value={form.category || ""} onChange={e => {
+              if (e.target.value === "__ADD__") { setAddingCategory(true); setNewCategory(""); setCategoryError(""); }
+              else set("category")(e.target.value);
+            }} style={inputStyle}>
+              <option value="">- select -</option>
+              {categories.map(item => <option key={item.id || item.name} value={item.name}>{item.name}</option>)}
+              <option value="__ADD__">+ Add New Category...</option>
+            </select>
+          ) : (
+            <div style={{ display: "grid", gap: 5 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input autoFocus value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="New category" style={{ ...inputStyle, minWidth: 0 }} />
+                <Btn small disabled={categoryBusy || !newCategory.trim()} onClick={addCategory}>{categoryBusy ? "Adding..." : "Add"}</Btn>
+                <Btn small variant="ghost" disabled={categoryBusy} onClick={() => { setAddingCategory(false); setNewCategory(""); setCategoryError(""); }}>Cancel</Btn>
+              </div>
+              <div style={{ fontSize: 10.5, color: C.dgray }}>Use a stable hierarchy such as Exterior – Protection or Interior – Storage.</div>
+              {categoryError && <div style={{ fontSize: 11, color: C.red }}>{categoryError}</div>}
+            </div>
+          )}
+        </div>
 
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray, display: "block", marginBottom: 6 }}>Product Dimensions (cm) *</label>
