@@ -24,6 +24,20 @@ const GENERAL_DOCUMENT_TYPES = new Set([
   "OTHER_SOURCING",
 ]);
 
+const DIRECT_ANALYSIS_MAX_BYTES = 2.5 * 1024 * 1024;
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Unable to read the supplier file for analysis."));
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : value);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 const PLATFORM_VALUES = new Set([
   "Alibaba",
   "WeChat",
@@ -160,7 +174,10 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
       }
     }
 
-    const source = await getOneDriveItemDownloadUrl(staging.itemId);
+    const useDirectFile = Number(file.size || 0) <= DIRECT_ANALYSIS_MAX_BYTES;
+    const source = useDirectFile ? null : await getOneDriveItemDownloadUrl(staging.itemId);
+    const fileBase64 = useDirectFile ? await fileToBase64(file) : null;
+
     const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
     const token = sessionResult?.session?.access_token;
@@ -173,9 +190,10 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        downloadUrl: source.downloadUrl,
+        downloadUrl: source?.downloadUrl || null,
+        fileBase64,
         fileName: file.name,
-        mimeType: file.type || source.mimeType || "",
+        mimeType: file.type || source?.mimeType || "",
         suppliers: (suppliers || []).map(item => ({
           supId: item.sup_id,
           name: item.name,
