@@ -468,8 +468,9 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
             <>
               <QuoteHeaderEditor value={quotation} onChange={setQuotation} />
               <QuoteLinesEditor lines={quotation.lines || []} onChange={lines => setQuotation(v => ({ ...v, lines }))} />
+              {error && <div className="cg-intake-alert error"><AlertTriangle size={17}/><span>{error}</span></div>}
               <div className="cg-intake-final-card embedded">
-                <div><strong>Next</strong><span>Create formal Supplier Quotation, archive original + Costa Gear XLSX, then continue to Product Matching.</span></div>
+                <div><strong>{busy ? "Creating quotation…" : "Next"}</strong><span>{busy ? "Saving the formal quotation, then archiving the documents." : "Create formal Supplier Quotation, archive original + Costa Gear XLSX, then continue to Product Matching."}</span></div>
                 <button type="button" className="primary" disabled={busy} onClick={importQuotation}>{busy ? "Importing…" : "Confirm & Import Quotation"}</button>
               </div>
             </>
