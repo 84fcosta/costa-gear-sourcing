@@ -13,7 +13,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "prebuild": "node scripts/test-supplier-intake-api.js && node scripts/test-supplier-intake-confirmation.js && node scripts/test-supplier-intake-no-ai.js && node scripts/test-supplier-intake-large-files.js && node scripts/test-supplier-intake-quotation-archive.js && node scripts/test-supplier-intake-quotation-routing.js",
+    "prebuild": "node scripts/test-supplier-intake-api.js && node scripts/test-supplier-intake-confirmation.js && node scripts/test-supplier-intake-no-ai.js && node scripts/test-supplier-intake-large-files.js && node scripts/test-supplier-intake-quotation-archive.js && node scripts/test-supplier-intake-quotation-routing.js && node scripts/test-sourcing-mobile-navigation.js",
     "build": "react-scripts build"
   },
   "browserslist": {
