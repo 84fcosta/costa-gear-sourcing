@@ -13,6 +13,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "prebuild": "node scripts/test-supplier-intake-api.js",
     "build": "react-scripts build"
   },
   "browserslist": {
