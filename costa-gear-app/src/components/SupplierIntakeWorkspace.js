@@ -217,8 +217,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       intake: result,
       supplierId: supplier.id,
       documentType: a.documentType,
-      description: a.documentType === "CATALOG" ? "Supplier Catalog" : "",
-      documentDate: null,
+      description: a.documentLabel || "",
+      documentDate: a.documentDate || null,
     });
     setComplete({
       kind: "document",
@@ -243,6 +243,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       setIntake(result);
       setDocumentType(result.analysis.documentType);
       setQuotation(result.analysis.quotation ? { ...result.analysis.quotation, lines: [...(result.analysis.quotation.lines || [])] } : null);
+      setDescription(result.analysis.documentLabel || "");
+      setDocumentDate(result.analysis.documentDate || "");
       setNewSupplierDraft(supplierDraftFromAnalysis(result.analysis));
 
       const matched = supplierFromMatch(currentSuppliers, result.analysis?.supplier?.matchedSupId);
@@ -405,7 +407,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
             </label>
             {!isQuotation && (
               <div className="cg-intake-general-fields">
-                <label>Description<input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional short description" /></label>
+                <label>Document Label<input value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Jeep JT, Wrangler JL, Running Boards" /></label>
                 <label>Document Date<input type="date" value={documentDate} onChange={e => setDocumentDate(e.target.value)} /></label>
               </div>
             )}

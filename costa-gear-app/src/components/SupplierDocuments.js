@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteSupplierDocument,
   getSupplierSourcingFolderStatus,
   listSupplierDocuments,
   QUOTATION_DOCUMENT_TYPES,
@@ -41,6 +42,8 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
   const [documents, setDocuments] = useState([]);
   const [folderStatus, setFolderStatus] = useState(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const load = async () => {
     if (!supplier?.id) return;
@@ -58,6 +61,31 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
   };
 
   useEffect(() => { load(); }, [supplier?.id]);
+
+  const removeDocument = async doc => {
+    if (!doc?.id) return;
+    if (doc.quotation_id) {
+      setError("Quotation documents are controlled in Supplier Quotations. Delete the draft quotation or replace its document there.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${doc.file_name}?\n\nThis permanently removes the file from the Costa Gear OneDrive supplier folder and removes its document-register record. The original filename metadata will also be removed. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(doc.id);
+    setError("");
+    setMessage("");
+    try {
+      await deleteSupplierDocument(doc.id);
+      await load();
+      setMessage(`${doc.file_name} deleted from OneDrive and the Costa Gear document register.`);
+    } catch (e) {
+      setError(e.message || "Unable to delete supplier document safely.");
+    } finally {
+      setDeletingId("");
+    }
+  };
 
   if (!supplier) return null;
 
@@ -86,6 +114,7 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
 
         <div className="cg-supplier-doc-dialog-body" style={{ padding: 18, display: "grid", gap: 14 }}>
           {error && <div style={{ background: "#FFF1EF", color: C.red, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{error}</div>}
+          {message && <div style={{ background: "#EDF7EE", color: C.green, borderRadius: 9, padding: 10, fontSize: 11.5 }}>{message}</div>}
 
 
           <div style={{ background: "#F8F9F5", border: `1px solid ${C.border}`, borderRadius: 10, padding: 11 }}>
@@ -112,14 +141,26 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
             ) : (
               <div style={{ display: "grid" }}>
                 {documents.map(doc => (
-                  <div key={doc.id} className="cg-supplier-doc-record" style={{ display: "grid", gridTemplateColumns: "150px minmax(0,1fr) 115px", gap: 10, alignItems: "center", padding: "9px 12px", borderTop: `1px solid ${C.border}` }}>
+                  <div key={doc.id} className="cg-supplier-doc-record" style={{ display: "grid", gridTemplateColumns: "150px minmax(0,1fr) 190px", gap: 10, alignItems: "center", padding: "9px 12px", borderTop: `1px solid ${C.border}` }}>
                     <div style={{ fontSize: 10.5, fontWeight: 850, color: C.oliveDark }}>{supplierDocumentTypeLabel(doc.document_type)}</div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.file_name}</div>
-                      <div style={{ fontSize: 9.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Original: {doc.original_file_name}</div>
+                      <div style={{ fontSize: 9.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Source filename (metadata only): {doc.original_file_name}</div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       {doc.onedrive_web_url ? <a href={doc.onedrive_web_url} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: C.oliveDark, fontWeight: 800 }}>Open in OneDrive</a> : <span style={{ fontSize: 10.5, color: C.muted }}>No link</span>}
+                      {!doc.quotation_id ? (
+                        <button
+                          type="button"
+                          disabled={deletingId === doc.id}
+                          onClick={() => removeDocument(doc)}
+                          style={{ ...btn(), color: C.red, borderColor: "rgba(182,81,69,.30)", background: "#FFF8F7", opacity: deletingId === doc.id ? .5 : 1 }}
+                        >
+                          {deletingId === doc.id ? "Deleting..." : "Delete"}
+                        </button>
+                      ) : (
+                        <span title="Quotation documents are controlled from Supplier Quotations." style={{ fontSize: 9.5, color: C.muted }}>Quotation controlled</span>
+                      )}
                     </div>
                   </div>
                 ))}

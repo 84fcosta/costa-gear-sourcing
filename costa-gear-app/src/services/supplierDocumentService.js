@@ -29,11 +29,6 @@ function extensionFromName(name) {
   return match ? match[1].toLowerCase() : "";
 }
 
-function baseName(name) {
-  const extension = extensionFromName(name);
-  return extension ? String(name).slice(0, -(extension.length + 1)) : String(name || "");
-}
-
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -164,7 +159,18 @@ export async function resolveSupplierSourcingFolder(supplierId) {
   return { ...status, exists: true, willCreate: true, folder };
 }
 
-function documentTypeSuffix(documentType) {
+const GENERAL_DOCUMENT_TYPE_VALUES = new Set([
+  "CATALOG",
+  "PRICE_LIST",
+  "TECHNICAL",
+  "OTHER_SOURCING",
+]);
+
+function isQuotationDocumentType(documentType) {
+  return documentType === "QUOTATION_SOURCE" || documentType === "QUOTATION_IMPORT";
+}
+
+function documentTypeToken(documentType) {
   if (documentType === "CATALOG") return "Catalog";
   if (documentType === "PRICE_LIST") return "Price_List";
   if (documentType === "TECHNICAL") return "Technical";
@@ -172,10 +178,48 @@ function documentTypeSuffix(documentType) {
   return "Document";
 }
 
-function appendSuffixIfMissing(description, suffix) {
-  const normalized = String(description || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const normalizedSuffix = String(suffix || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  return normalized.includes(normalizedSuffix) ? description : `${description}_${suffix}`;
+function canonicalDescriptor(description, documentType) {
+  let value = String(description || "").trim();
+  if (!value) return "";
+
+  if (documentType === "CATALOG") {
+    value = value
+      .replace(/^supplier\s+catalog(?:ue)?\s*[-:]?\s*/i, "")
+      .replace(/^catalog(?:ue)?\s+(?:of\s+)?/i, "");
+  } else if (documentType === "PRICE_LIST") {
+    value = value
+      .replace(/^supplier\s+price\s*list\s*[-:]?\s*/i, "")
+      .replace(/^price\s*list\s+(?:for\s+)?/i, "");
+  } else if (documentType === "TECHNICAL") {
+    value = value.replace(/^technical(?:\s+document)?\s*[-:]?\s*/i, "");
+  } else if (documentType === "OTHER_SOURCING") {
+    value = value.replace(/^(?:supplier\s+)?sourcing(?:\s+document)?\s*[-:]?\s*/i, "");
+  }
+
+  return cleanOneDriveNamePart(value, "", 48);
+}
+
+function appendSequence(fileName, sequence) {
+  const extension = extensionFromName(fileName);
+  const ext = extension ? `.${extension}` : "";
+  const stem = ext ? fileName.slice(0, -ext.length) : fileName;
+  return `${stem}_${String(sequence).padStart(2, "0")}${ext}`;
+}
+
+async function availableGeneralDocumentName(folderId, desiredName) {
+  const children = await listOneDriveChildren(folderId);
+  const used = new Set(
+    children
+      .filter(item => !item?.folder)
+      .map(item => String(item.name || "").toLowerCase())
+  );
+  if (!used.has(desiredName.toLowerCase())) return desiredName;
+
+  for (let sequence = 2; sequence <= 99; sequence += 1) {
+    const candidate = appendSequence(desiredName, sequence);
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  throw new Error("Too many documents resolve to the same governed file name. Add a more specific Document Label.");
 }
 
 export function governedSupplierDocumentName({
@@ -196,7 +240,7 @@ export function governedSupplierDocumentName({
   );
   const supplierKey = cleanOneDriveNamePart(supplier.sup_id, "Supplier", 20);
 
-  if (documentType === "QUOTATION_SOURCE" || documentType === "QUOTATION_IMPORT") {
+  if (isQuotationDocumentType(documentType)) {
     if (!quotation?.quote_ref) throw new Error("The quotation must have a Costa Gear reference before documents can be stored.");
     const quoteKey = cleanOneDriveNamePart(quotation.quote_ref, "Quotation", 48);
     const role = documentType === "QUOTATION_SOURCE" ? "Supplier_Source" : "Costa_Gear_Import";
@@ -204,12 +248,14 @@ export function governedSupplierDocumentName({
     return `CG_QUO_${quoteKey}_${shortName}_${role}_${date}${ext}`;
   }
 
-  const rawDescription = String(description || baseName(fileName) || "Supplier_Document").trim();
-  const suffix = documentTypeSuffix(documentType);
-  const withSuffix = appendSuffixIfMissing(rawDescription, suffix);
-  const desc = cleanOneDriveNamePart(withSuffix, suffix, 72);
-  const datePart = documentDate ? `_${cleanOneDriveNamePart(documentDate, today(), 10)}` : "";
-  return `CG_SUP_${supplierKey}_${shortName}_${desc}${datePart}${ext}`;
+  const typeToken = documentTypeToken(documentType);
+  const descriptor = canonicalDescriptor(description, documentType);
+  const dateToken = documentDate
+    ? cleanOneDriveNamePart(documentDate, "Undated", 10)
+    : "Undated";
+  const descriptorPart = descriptor ? `_${descriptor}` : "";
+
+  return `CG_SUP_${supplierKey}_${shortName}_${typeToken}${descriptorPart}_${dateToken}${ext}`;
 }
 
 async function sha1Hex(file) {
@@ -224,6 +270,48 @@ async function sha1Hex(file) {
   } catch (_) {
     return null;
   }
+}
+
+export async function deleteSupplierDocument(documentId) {
+  if (!documentId) throw new Error("Select a registered supplier document to delete.");
+
+  const { data: document, error: loadError } = await supabase
+    .from("supplier_documents")
+    .select("*")
+    .eq("id", documentId)
+    .single();
+  if (loadError) throw loadError;
+
+  if (document.quotation_id || !GENERAL_DOCUMENT_TYPE_VALUES.has(document.document_type)) {
+    throw new Error("Quotation documents are controlled by the Supplier Quotations workflow and cannot be deleted from the supplier document register.");
+  }
+
+  if (document.onedrive_item_id) {
+    try {
+      await deleteOneDriveItem(document.onedrive_item_id);
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (!/not found|itemnotfound|does not exist/i.test(message)) throw error;
+    }
+
+    const { error: indexError } = await supabase
+      .from("onedrive_items")
+      .update({
+        is_deleted: true,
+        last_seen_at: new Date().toISOString(),
+        indexed_at: new Date().toISOString(),
+      })
+      .eq("item_id", document.onedrive_item_id);
+    if (indexError) throw indexError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("supplier_documents")
+    .delete()
+    .eq("id", document.id);
+  if (deleteError) throw deleteError;
+
+  return document;
 }
 
 export async function listSupplierDocuments({ supplierId, quotationId = null } = {}) {
@@ -370,7 +458,7 @@ export async function uploadSupplierDocument({
     throw error;
   }
 
-  const governedName = governedSupplierDocumentName({
+  const baseGovernedName = governedSupplierDocumentName({
     fileName: file.name,
     supplier,
     folderName: folder.name,
@@ -379,6 +467,9 @@ export async function uploadSupplierDocument({
     description,
     documentDate,
   });
+  const governedName = isQuotationDocumentType(documentType)
+    ? baseGovernedName
+    : await availableGeneralDocumentName(folder.id, baseGovernedName);
 
   const sameNameReplacement = Boolean(
     replace && existingRole && String(existingRole.file_name).toLowerCase() === governedName.toLowerCase()
@@ -543,7 +634,7 @@ export async function adoptStagedSupplierDocument({
     return { document: data, duplicate: true, folder: folderStatus };
   }
 
-  const governedName = governedSupplierDocumentName({
+  const baseGovernedName = governedSupplierDocumentName({
     fileName: originalFileName || "Supplier_Document",
     supplier,
     folderName: folder.name,
@@ -552,16 +643,21 @@ export async function adoptStagedSupplierDocument({
     description,
     documentDate,
   });
+  const governedName = isQuotationDocumentType(documentType)
+    ? baseGovernedName
+    : await availableGeneralDocumentName(folder.id, baseGovernedName);
 
-  const sameName = (await listOneDriveChildren(folder.id)).find(
-    item => !item?.folder && String(item.name || "").toLowerCase() === governedName.toLowerCase()
-  );
-  if (sameName && sameName.id !== existingRole?.onedrive_item_id) {
-    try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
-    const error = new Error(`A file named ${governedName} already exists in ${folder.name}.`);
-    error.code = "ONEDRIVE_FILE_EXISTS";
-    error.existingItem = sameName;
-    throw error;
+  if (isQuotationDocumentType(documentType)) {
+    const sameName = (await listOneDriveChildren(folder.id)).find(
+      item => !item?.folder && String(item.name || "").toLowerCase() === governedName.toLowerCase()
+    );
+    if (sameName && sameName.id !== existingRole?.onedrive_item_id) {
+      try { await deleteOneDriveItem(stagedItemId); } catch (_) {}
+      const error = new Error(`A file named ${governedName} already exists in ${folder.name}.`);
+      error.code = "ONEDRIVE_FILE_EXISTS";
+      error.existingItem = sameName;
+      throw error;
+    }
   }
 
   const moved = await moveOneDriveItem({
