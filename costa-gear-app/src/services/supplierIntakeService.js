@@ -2,6 +2,7 @@ import { supabase } from "../supabase";
 import { uploadSupplierDocument } from "./supplierDocumentService";
 import { importStandardizedSupplierQuotation } from "./supplierQuotationIntakeService";
 import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
+import * as XLSX from "xlsx";
 
 export const INTAKE_DOCUMENT_TYPES = [
   { value: "QUOTATION", label: "Quotation" },
@@ -83,6 +84,24 @@ async function collectLocalFileEvidence(file) {
   try {
     if (["txt", "csv"].includes(extension) || String(file.type || "").startsWith("text/")) {
       parts.push(await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).text());
+    } else if (["xlsx", "xls", "xlsm"].includes(extension)) {
+      const workbook = XLSX.read(await file.arrayBuffer(), {
+        type: "array",
+        sheetRows: 80,
+      });
+      for (const sheetName of (workbook.SheetNames || []).slice(0, 4)) {
+        parts.push(sheetName);
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          header: 1,
+          raw: false,
+          defval: "",
+          blankrows: false,
+        });
+        for (const row of rows.slice(0, 80)) {
+          parts.push((row || []).slice(0, 24).join(" "));
+        }
+      }
     } else if (extension === "pdf" || String(file.type || "").toLowerCase() === "application/pdf") {
       const head = await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).arrayBuffer();
       parts.push(new TextDecoder("latin1").decode(head));
@@ -151,14 +170,30 @@ function supplierSuggestionFromEvidence(evidence, suppliers) {
   return best && best.score >= 0.72 ? best : null;
 }
 
-function inferDocumentType(fileName) {
-  const name = String(fileName || "").toLowerCase();
-  if (/\b(catalog|catalogue)\b/.test(name)) return { value: "CATALOG", confidence: 0.98 };
-  if (/\b(price[\s_-]*list|pricelist)\b/.test(name)) return { value: "PRICE_LIST", confidence: 0.96 };
-  if (/\b(quotation|quote|proforma|pro[\s_-]*forma|invoice|commercial[\s_-]*invoice|\bpi\b)\b/.test(name)) {
-    return { value: "QUOTATION", confidence: 0.9 };
+function inferDocumentType(evidence, fileName = "") {
+  const text = `${String(fileName || "")} ${String(evidence || "")}`.toLowerCase();
+
+  const explicitQuotation =
+    /\b(quotation|quote|proforma|pro[\s_-]*forma|commercial[\s_-]*invoice|invoice|purchase[\s_-]*quote)\b/.test(text) ||
+    /\bpayment\s*terms?\b/.test(text) ||
+    /\bdeposit\b/.test(text) ||
+    /\bbalance\b/.test(text) ||
+    /\bvalid(?:ity)?\s+(?:for|until)\b/.test(text);
+
+  const hasQuantity = /\b(qty|quantity|pcs|sets?)\b/.test(text);
+  const hasUnitPrice =
+    /\bunit\s*price\b/.test(text) ||
+    /\bprice\s*\((?:usd|cad|cny|rmb)\)\b/.test(text) ||
+    /\b(exw|fob|ddp|dap|cif)\s*price\b/.test(text);
+  const hasTotal = /\b(grand\s*total|total\s*cost|line\s*total|amount|subtotal)\b/.test(text);
+  const hasIncoterm = /\b(exw|fob|ddp|dap|cif)\b/.test(text);
+
+  if (explicitQuotation || (hasQuantity && hasUnitPrice && (hasTotal || hasIncoterm))) {
+    return { value: "QUOTATION", confidence: explicitQuotation ? 0.98 : 0.9 };
   }
-  if (/\b(technical|specification|specs|manual|installation|drawing|datasheet|data[\s_-]*sheet)\b/.test(name)) {
+  if (/\b(catalog|catalogue)\b/.test(text)) return { value: "CATALOG", confidence: 0.98 };
+  if (/\b(price[\s_-]*list|pricelist)\b/.test(text)) return { value: "PRICE_LIST", confidence: 0.9 };
+  if (/\b(technical|specification|specs|manual|installation|drawing|datasheet|data[\s_-]*sheet)\b/.test(text)) {
     return { value: "TECHNICAL", confidence: 0.9 };
   }
   return { value: "OTHER_SOURCING", confidence: 0.35 };
@@ -276,7 +311,7 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
   }
 
   const evidence = await collectLocalFileEvidence(file);
-  const inferred = inferDocumentType(evidence);
+  const inferred = inferDocumentType(evidence, file.name);
   const match = supplierSuggestionFromEvidence(evidence, suppliers);
   const warnings = [
     "AI processing is suspended. Document type and supplier are deterministic suggestions only; review them before confirming.",
