@@ -281,14 +281,16 @@ Goals:
    - TECHNICAL: drawings, specs, installation/technical documentation.
    - OTHER_SOURCING: other supplier sourcing document.
 2. Identify the supplier. Match ONLY against the supplied Costa Gear supplier list when evidence supports it.
-3. If the document is a QUOTATION, extract the commercial header and every quoted line visible in the document.
-4. Never invent supplier quote references, SKUs, quantities, prices, dates, incoterms, shipping, dimensions, or totals. Use null/blank when absent.
-5. Preserve supplier wording in descriptions and notes.
-6. A quotation line must remain present even when some fields are missing.
-7. CG SKU must be blank and matchStatus must be UNMATCHED. Product matching happens later in Costa Gear.
-8. Distinguish a general price list from a quotation. A table of prices alone is not automatically a quotation.
-9. Supplier match confidence should reflect actual evidence such as company name, email domain, contact name, branding, address, or known aliases.
-10. If the supplier is not confidently one of the existing suppliers, matchedSupId must be null and populate detected supplier fields for review.
+3. For every document, extract documentLabel as a short semantic scope/title based on document content, not the uploaded filename. Exclude the supplier name, document type words (Catalog, Price List, Technical), and date. Examples: "Jeep JT", "Wrangler JL", "Running Boards". Use null when no useful scope is present.
+4. For every document, extract documentDate only when a clear date is printed in the document itself. Do not infer it from the uploaded filename.
+5. If the document is a QUOTATION, extract the commercial header and every quoted line visible in the document.
+6. Never invent supplier quote references, SKUs, quantities, prices, dates, incoterms, shipping, dimensions, or totals. Use null/blank when absent.
+7. Preserve supplier wording in descriptions and notes.
+8. A quotation line must remain present even when some fields are missing.
+9. CG SKU must be blank and matchStatus must be UNMATCHED. Product matching happens later in Costa Gear.
+10. Distinguish a general price list from a quotation. A table of prices alone is not automatically a quotation.
+11. Supplier match confidence should reflect actual evidence such as company name, email domain, contact name, branding, address, or known aliases.
+12. If the supplier is not confidently one of the existing suppliers, matchedSupId must be null and populate detected supplier fields for review.
 
 File: ${fileName || "unknown"}
 MIME type: ${mimeType || "unknown"}
@@ -302,13 +304,15 @@ ${sourceData}
 const responseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["documentType", "documentTypeConfidence", "supplier", "quotation", "warnings"],
+  required: ["documentType", "documentTypeConfidence", "documentLabel", "documentDate", "supplier", "quotation", "warnings"],
   properties: {
     documentType: {
       type: "string",
       enum: ["QUOTATION", "CATALOG", "PRICE_LIST", "TECHNICAL", "OTHER_SOURCING"],
     },
     documentTypeConfidence: { type: "number", minimum: 0, maximum: 1 },
+    documentLabel: { anyOf: [{ type: "string" }, { type: "null" }] },
+    documentDate: { anyOf: [{ type: "string" }, { type: "null" }] },
     supplier: {
       type: "object",
       additionalProperties: false,
@@ -470,6 +474,8 @@ function normalizeAnalysis(raw, suppliers) {
   return {
     documentType: docType,
     documentTypeConfidence: clampConfidence(raw?.documentTypeConfidence),
+    documentLabel: cleanText(raw?.documentLabel),
+    documentDate: dateOrNull(raw?.documentDate),
     supplier: {
       matchedSupId: safeMatchedSupId,
       matchedSupplierName: safeMatchedSupId ? cleanText(raw?.supplier?.matchedSupplierName) : null,
