@@ -515,8 +515,9 @@ async function readUploadSessionBody(response) {
 
 function nextUploadOffset(body, fallback) {
   const range = Array.isArray(body?.nextExpectedRanges) ? body.nextExpectedRanges[0] : null;
-  const match = String(range || "").match(/^(\\d+)(?:-|$)/);
-  return match ? Number(match[1]) : fallback;
+  const start = String(range || "").split("-")[0];
+  const offset = Number(start);
+  return Number.isFinite(offset) && offset >= 0 ? offset : fallback;
 }
 
 async function uploadFileWithSession({ file, parentId, fileName, replace }) {
