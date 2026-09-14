@@ -3,6 +3,10 @@ import { supabase } from "../supabase";
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 const REPOSITORY_KEY = "costa_gear";
 
+const LARGE_UPLOAD_SESSION_THRESHOLD_BYTES = 10 * 1024 * 1024;
+const LARGE_UPLOAD_CHUNK_BYTES = 10 * 1024 * 1024;
+const UPLOAD_SESSION_MAX_RETRIES = 3;
+
 export const ONE_DRIVE_FILES_SCOPE = "Files.ReadWrite.AppFolder";
 // Backward-compatible export used by existing UI modules.
 export const ONE_DRIVE_APP_FOLDER_SCOPE = ONE_DRIVE_FILES_SCOPE;
@@ -500,6 +504,112 @@ export async function uploadSupplierIntakeStagingFile(file) {
   };
 }
 
+async function readUploadSessionBody(response) {
+  if (response.status === 204) return null;
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try { return await response.json(); } catch (_) { return null; }
+  }
+  try { return await response.text(); } catch (_) { return null; }
+}
+
+function nextUploadOffset(body, fallback) {
+  const range = Array.isArray(body?.nextExpectedRanges) ? body.nextExpectedRanges[0] : null;
+  const match = String(range || "").match(/^(\\d+)(?:-|$)/);
+  return match ? Number(match[1]) : fallback;
+}
+
+async function uploadFileWithSession({ file, parentId, fileName, replace }) {
+  const encodedName = encodeURIComponent(fileName);
+  const sessionPath = await driveItemPath(parentId, `:/${encodedName}:/createUploadSession`);
+  const session = await graphRequest(sessionPath, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      item: {
+        "@microsoft.graph.conflictBehavior": replace ? "replace" : "fail",
+        name: fileName,
+      },
+    }),
+  });
+
+  if (!session?.uploadUrl) {
+    throw new Error("OneDrive did not return an upload session URL.");
+  }
+
+  let offset = 0;
+  let finalItem = null;
+
+  while (offset < file.size) {
+    const start = offset;
+    const endExclusive = Math.min(start + LARGE_UPLOAD_CHUNK_BYTES, file.size);
+    const chunk = file.slice(start, endExclusive);
+    let completedChunk = false;
+
+    for (let attempt = 0; attempt < UPLOAD_SESSION_MAX_RETRIES && !completedChunk; attempt += 1) {
+      let response;
+      try {
+        response = await fetch(session.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Range": `bytes ${start}-${endExclusive - 1}/${file.size}`,
+          },
+          body: chunk,
+        });
+      } catch (error) {
+        if (attempt + 1 >= UPLOAD_SESSION_MAX_RETRIES) throw error;
+        await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+
+      const body = await readUploadSessionBody(response);
+
+      if (response.status === 202) {
+        offset = nextUploadOffset(body, endExclusive);
+        completedChunk = true;
+        continue;
+      }
+
+      if (response.ok) {
+        finalItem = body;
+        offset = file.size;
+        completedChunk = true;
+        continue;
+      }
+
+      if (response.status === 416) {
+        const statusResponse = await fetch(session.uploadUrl, { method: "GET" });
+        const statusBody = await readUploadSessionBody(statusResponse);
+        if (statusResponse.ok) {
+          offset = nextUploadOffset(statusBody, start);
+          if (offset > start) {
+            completedChunk = true;
+            continue;
+          }
+        }
+      }
+
+      if ((response.status === 429 || response.status >= 500) && attempt + 1 < UPLOAD_SESSION_MAX_RETRIES) {
+        const retryAfter = Number(response.headers.get("retry-after"));
+        const delayMs = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 500 * (attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      const message = body?.error?.message || (typeof body === "string" ? body : "");
+      throw new Error(message || `OneDrive upload session failed with status ${response.status}.`);
+    }
+
+    if (!completedChunk) {
+      throw new Error("OneDrive upload session could not advance after multiple attempts.");
+    }
+  }
+
+  return finalItem;
+}
+
 export async function uploadFileToOneDriveFolder({ file, parentId, fileName, replace = false }) {
   if (!file) throw new Error("Choose a document before uploading.");
   if (!parentId) throw new Error("A OneDrive destination folder is required.");
@@ -516,15 +626,20 @@ export async function uploadFileToOneDriveFolder({ file, parentId, fileName, rep
     throw duplicateError;
   }
 
-  const encodedName = encodeURIComponent(fileName);
-  const uploadPath = await driveItemPath(parentId, `:/${encodedName}:/content`);
-  const item = await graphRequest(uploadPath, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-  });
+  let item;
+  if (Number(file.size || 0) > LARGE_UPLOAD_SESSION_THRESHOLD_BYTES) {
+    item = await uploadFileWithSession({ file, parentId, fileName, replace });
+  } else {
+    const encodedName = encodeURIComponent(fileName);
+    const uploadPath = await driveItemPath(parentId, `:/${encodedName}:/content`);
+    item = await graphRequest(uploadPath, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    });
+  }
 
   return {
     itemId: item?.id || existing?.id || null,
