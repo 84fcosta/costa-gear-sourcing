@@ -75,6 +75,29 @@ function significantTokens(value) {
     .filter(token => token.length >= 4);
 }
 
+async function collectLocalFileEvidence(file) {
+  const parts = [String(file?.name || "")];
+  if (!file?.slice || !file?.arrayBuffer) return parts.join(" ");
+
+  const extension = String(file.name || "").split(".").pop()?.toLowerCase() || "";
+  try {
+    if (["txt", "csv"].includes(extension) || String(file.type || "").startsWith("text/")) {
+      parts.push(await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).text());
+    } else if (extension === "pdf" || String(file.type || "").toLowerCase() === "application/pdf") {
+      const head = await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).arrayBuffer();
+      parts.push(new TextDecoder("latin1").decode(head));
+      if (file.size > 2 * 1024 * 1024) {
+        const tailStart = Math.max(0, file.size - 512 * 1024);
+        const tail = await file.slice(tailStart, file.size).arrayBuffer();
+        parts.push(new TextDecoder("latin1").decode(tail));
+      }
+    }
+  } catch (_) {
+    // Filename-only review remains available if local metadata/text scanning is not possible.
+  }
+  return parts.join(" ");
+}
+
 function supplierSuggestionFromEvidence(evidence, suppliers) {
   const rawEvidence = String(evidence || "");
   const normalizedEvidence = normalizedSupplierName(rawEvidence);
@@ -252,8 +275,9 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
     }
   }
 
-  const inferred = inferDocumentType(file.name);
-  const match = supplierSuggestionFromEvidence(file.name, suppliers);
+  const evidence = await collectLocalFileEvidence(file);
+  const inferred = inferDocumentType(evidence);
+  const match = supplierSuggestionFromEvidence(evidence, suppliers);
   const warnings = [
     "AI processing is suspended. Document type and supplier are deterministic suggestions only; review them before confirming.",
   ];
