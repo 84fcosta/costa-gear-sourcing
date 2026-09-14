@@ -48,6 +48,45 @@ function numberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+async function authorize(req) {
+  const auth = String(req.headers.authorization || "");
+  if (!/^Bearer\s+\S+/i.test(auth)) return null;
+
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Supabase server environment is not configured.");
+  }
+
+  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: auth,
+    },
+  });
+  if (!userResponse.ok) return null;
+
+  const user = await userResponse.json();
+  if (!user?.id) return null;
+
+  const memberResponse = await fetch(
+    `${supabaseUrl}/rest/v1/app_members?user_id=eq.${encodeURIComponent(user.id)}&select=user_id,role&limit=1`,
+    {
+      headers: {
+        apikey: anonKey,
+        Authorization: auth,
+        Accept: "application/json",
+      },
+    }
+  );
+  if (!memberResponse.ok) return null;
+
+  const members = await memberResponse.json();
+  if (!Array.isArray(members) || !members.length) return null;
+
+  return { user, member: members[0] };
+}
+
 async function acquireOneDriveServerToken(req) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
