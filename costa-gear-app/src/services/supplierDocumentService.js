@@ -282,10 +282,6 @@ export async function deleteSupplierDocument(documentId) {
     .single();
   if (loadError) throw loadError;
 
-  if (document.quotation_id || !GENERAL_DOCUMENT_TYPE_VALUES.has(document.document_type)) {
-    throw new Error("Quotation documents are controlled by the Supplier Quotations workflow and cannot be deleted from the supplier document register.");
-  }
-
   if (document.onedrive_item_id) {
     try {
       await deleteOneDriveItem(document.onedrive_item_id);
