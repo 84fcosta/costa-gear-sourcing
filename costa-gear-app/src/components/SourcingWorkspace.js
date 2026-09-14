@@ -28,7 +28,7 @@ const legacyTabLabels = {
   export: "Export / RFQ",
 };
 
-export default function SourcingWorkspace({ onNavigate, initialView = "intake" }) {
+export default function SourcingWorkspace({ onNavigate, initialView = "master" }) {
   const [view, setView] = useState(initialView === "images" ? "master" : initialView);
   const [handoffError, setHandoffError] = useState("");
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -113,23 +113,23 @@ export default function SourcingWorkspace({ onNavigate, initialView = "intake" }
     finally { setHandoffBusy(false); }
   };
 
-  const mobileMoreActive = !["intake", "master"].includes(view) || ["suppliers", "quotes", "export"].includes(mobileLegacyTab);
+  const mobileMoreActive = ["intake", "quotations", "analysis"].includes(view) || (view === "master" && ["quotes", "export"].includes(mobileLegacyTab));
   const showLegacyMaster = mobileLegacyTab !== "suppliers";
 
   return <div className={`cg-sourcing-workspace cg-sourcing-mobile-${mobileLegacyTab}`}>
     {handoffError && <div style={{background:"#FFF1EF",color:"#B65145",padding:10,textAlign:"center",fontSize:12,marginBottom:12}}>{handoffError}</div>}
 
     <div className="cg-sourcing-mobile-nav" aria-label="Sourcing mobile navigation">
-      <button type="button" className={view === "intake" ? "active" : ""} onClick={() => selectSourcingView("intake")}>Intake</button>
       <button type="button" className={view === "master" && mobileLegacyTab === "dashboard" ? "active" : ""} onClick={() => selectLegacyTab("dashboard")}>Overview</button>
       <button type="button" className={view === "master" && mobileLegacyTab === "products" ? "active" : ""} onClick={() => selectLegacyTab("products")}>Products</button>
+      <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}>Supplier</button>
       <div className="cg-sourcing-mobile-more-wrap">
         <button type="button" className={mobileMoreActive || mobileMoreOpen ? "active" : ""} aria-expanded={mobileMoreOpen} onClick={() => setMobileMoreOpen(open => !open)}>More</button>
         {mobileMoreOpen && <div className="cg-sourcing-mobile-more-menu">
+          <button type="button" className={view === "intake" ? "active" : ""} onClick={() => selectSourcingView("intake")}><strong>Intake</strong><span>Upload and process supplier documents</span></button>
+          <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}><strong>Quote Register</strong><span>Historical and comparable quote records</span></button>
           <button type="button" className={view === "quotations" ? "active" : ""} onClick={() => selectSourcingView("quotations")}><strong>Supplier Quotations</strong><span>Review, match and finalize formal quotations</span></button>
           <button type="button" className={view === "analysis" ? "active" : ""} onClick={() => selectSourcingView("analysis")}><strong>Decision Lab</strong><span>Compare quotes and sourcing decisions</span></button>
-          <button type="button" className={view === "master" && mobileLegacyTab === "suppliers" ? "active" : ""} onClick={() => selectLegacyTab("suppliers")}><strong>Suppliers</strong><span>Supplier directory and sourcing history</span></button>
-          <button type="button" className={view === "master" && mobileLegacyTab === "quotes" ? "active" : ""} onClick={() => selectLegacyTab("quotes")}><strong>Quote Register</strong><span>Historical and comparable quote records</span></button>
           <button type="button" className={view === "master" && mobileLegacyTab === "export" ? "active" : ""} onClick={() => selectLegacyTab("export")}><strong>Export / RFQ</strong><span>Exports and RFQ builder</span></button>
         </div>}
       </div>
