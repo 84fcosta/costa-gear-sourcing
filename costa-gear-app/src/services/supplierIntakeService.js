@@ -303,10 +303,6 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
   };
 }
 
-export async function discardSupplierIntakeStaging() {
-  // AI-era staging is intentionally disabled. Nothing is uploaded before user confirmation.
-}
-
 export async function createSupplierFromIntake(supplierAnalysis, overrides = {}) {
   const name = String(overrides.name || supplierAnalysis?.detectedName || "").trim();
   if (!name) throw new Error("Supplier name is required before creating a new supplier.");
