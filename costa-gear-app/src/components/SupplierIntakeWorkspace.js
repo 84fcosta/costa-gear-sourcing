@@ -12,7 +12,6 @@ import {
 import {
   analyzeSupplierIntakeFile,
   createSupplierFromIntake,
-  discardSupplierIntakeStaging,
   finalizeQuotationSupplierIntake,
   INTAKE_DOCUMENT_TYPES,
   parseQuotationWorkbookFile,
@@ -167,8 +166,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   const isQuotation = documentType === "QUOTATION";
   const analysis = intake?.analysis || null;
 
-  const reset = async () => {
-    if (intake?.staging?.itemId && !complete) await discardSupplierIntakeStaging(intake.staging);
+  const reset = () => {
     setFile(null);
     setIntake(null);
     setDocumentType("");
@@ -186,9 +184,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const chooseFile = async event => {
+  const chooseFile = event => {
     const next = event.target.files?.[0] || null;
-    if (intake?.staging?.itemId && !complete) await discardSupplierIntakeStaging(intake.staging);
     setFile(next);
     setIntake(null);
     setComplete(null);
