@@ -316,16 +316,22 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         workbookFile: quotationWorkbookFile,
         originalFile: quotationOriginalFile,
       });
+      const archiveNote = result.originalArchiveError
+        ? ` Quotation imported, but original archive needs attention: ${result.originalArchiveError}`
+        : " Original and Costa Gear workbook archived in OneDrive.";
+      setMessage(`Quotation ${result.quotation.quote_ref} created.${archiveNote}`);
+
+      if (onCompleteQuotation) {
+        onCompleteQuotation(result.quotation.id);
+        return;
+      }
+
       setComplete({
         kind: "quotation",
         supplier: selectedSupplier,
         quotation: result.quotation,
         result,
       });
-      const archiveNote = result.originalArchiveError
-        ? ` Quotation imported, but original archive needs attention: ${result.originalArchiveError}`
-        : " Original and Costa Gear workbook archived in OneDrive.";
-      setMessage(`Quotation ${result.quotation.quote_ref} created.${archiveNote}`);
     } catch (err) {
       setError(err.message || "Unable to import quotation.");
     } finally {
