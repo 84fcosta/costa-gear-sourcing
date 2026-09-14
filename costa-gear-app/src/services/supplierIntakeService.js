@@ -1,11 +1,7 @@
 import { supabase } from "../supabase";
-import {
-  deleteOneDriveItem,
-  uploadSupplierIntakeStagingFile,
-} from "./oneDriveAppFolderService";
-import { adoptStagedSupplierDocument, uploadSupplierDocument } from "./supplierDocumentService";
-import { buildCostaGearSupplierQuotationFile } from "../domain/supplierQuotationWorkbook";
+import { uploadSupplierDocument } from "./supplierDocumentService";
 import { importStandardizedSupplierQuotation } from "./supplierQuotationIntakeService";
+import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
 
 export const INTAKE_DOCUMENT_TYPES = [
   { value: "QUOTATION", label: "Quotation" },
@@ -53,57 +49,146 @@ function supplierNotesFromAnalysis(supplier = {}) {
 }
 
 export async function getSupplierIntakeReadiness() {
-  try {
-    const response = await fetch("/api/supplier-intake-analyze", {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-    const body = await response.json().catch(() => ({}));
-    return {
-      reachable: response.ok,
-      aiConfigured: Boolean(body?.aiConfigured),
-      supabaseConfigured: Boolean(body?.supabaseConfigured),
-      model: body?.model || null,
-    };
-  } catch (_) {
-    return { reachable: false, aiConfigured: false, supabaseConfigured: false, model: null };
-  }
+  return {
+    reachable: true,
+    aiConfigured: false,
+    aiEnabled: false,
+    mode: "deterministic",
+    model: null,
+  };
 }
 
 function normalizedSupplierName(value) {
   return String(value || "")
     .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(co|company|ltd|limited|inc|incorporated|corp|corporation)\b/g, " ")
+    .replace(/\b(co|company|ltd|limited|inc|incorporated|corp|corporation|factory|technology|automotive|auto|parts|accessories)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function analysisFromCostaGearWorkbook(parsed, suppliers) {
+function significantTokens(value) {
+  return normalizedSupplierName(value)
+    .split(" ")
+    .filter(token => token.length >= 4);
+}
+
+function supplierSuggestionFromEvidence(evidence, suppliers) {
+  const rawEvidence = String(evidence || "");
+  const normalizedEvidence = normalizedSupplierName(rawEvidence);
+  const compactEvidence = rawEvidence.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+  let best = null;
+  for (const supplier of suppliers || []) {
+    const supIdCompact = String(supplier.sup_id || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const supplierName = normalizedSupplierName(supplier.name);
+    const supplierTokens = significantTokens(supplier.name);
+    const aliases = [
+      supplier.name,
+      supplier.contact,
+      supplier.notes,
+    ].filter(Boolean);
+
+    let score = 0;
+    let reason = "";
+
+    if (supIdCompact && compactEvidence.includes(supIdCompact)) {
+      score = 1;
+      reason = "Supplier ID found in the selected file metadata.";
+    } else if (supplierName && normalizedEvidence.includes(supplierName)) {
+      score = 0.98;
+      reason = "Supplier name found in the selected file metadata.";
+    } else {
+      for (const alias of aliases) {
+        const aliasNormalized = normalizedSupplierName(alias);
+        if (aliasNormalized && aliasNormalized.length >= 5 && normalizedEvidence.includes(aliasNormalized)) {
+          score = Math.max(score, 0.94);
+          reason = "Known supplier name or alias found in the selected file metadata.";
+        }
+      }
+
+      if (supplierTokens.length) {
+        const evidenceTokens = new Set(significantTokens(rawEvidence));
+        const overlap = supplierTokens.filter(token => evidenceTokens.has(token)).length;
+        if (overlap >= 2) {
+          const tokenScore = Math.min(0.9, 0.72 + overlap * 0.06);
+          if (tokenScore > score) {
+            score = tokenScore;
+            reason = "Multiple supplier-name tokens matched the selected file metadata.";
+          }
+        }
+      }
+    }
+
+    if (!best || score > best.score) best = { supplier, score, reason };
+  }
+
+  return best && best.score >= 0.72 ? best : null;
+}
+
+function inferDocumentType(fileName) {
+  const name = String(fileName || "").toLowerCase();
+  if (/\b(catalog|catalogue)\b/.test(name)) return { value: "CATALOG", confidence: 0.98 };
+  if (/\b(price[\s_-]*list|pricelist)\b/.test(name)) return { value: "PRICE_LIST", confidence: 0.96 };
+  if (/\b(quotation|quote|proforma|pro[\s_-]*forma|invoice|commercial[\s_-]*invoice|\bpi\b)\b/.test(name)) {
+    return { value: "QUOTATION", confidence: 0.9 };
+  }
+  if (/\b(technical|specification|specs|manual|installation|drawing|datasheet|data[\s_-]*sheet)\b/.test(name)) {
+    return { value: "TECHNICAL", confidence: 0.9 };
+  }
+  return { value: "OTHER_SOURCING", confidence: 0.35 };
+}
+
+function deterministicDocumentLabel(fileName) {
+  const name = String(fileName || "").replace(/\.[^.]+$/, " ");
+  const patterns = [
+    [/\bjeep[\s_-]*jt\b/i, "Jeep JT"],
+    [/\bgladiator[\s_-]*jt\b/i, "Gladiator JT"],
+    [/\bwrangler[\s_-]*jlu\b/i, "Wrangler JLU"],
+    [/\bwrangler[\s_-]*jl\b/i, "Wrangler JL"],
+    [/\bwrangler[\s_-]*jku\b/i, "Wrangler JKU"],
+    [/\bwrangler[\s_-]*jk\b/i, "Wrangler JK"],
+    [/\bjeep[\s_-]*jl\b/i, "Jeep JL"],
+    [/\bjeep[\s_-]*jk\b/i, "Jeep JK"],
+  ];
+  const matches = patterns.filter(([pattern]) => pattern.test(name)).map(([, label]) => label);
+  return [...new Set(matches)].join(" + ");
+}
+
+function supplierAnalysis(match, detectedName = "") {
+  return {
+    matchedSupId: match?.supplier?.sup_id || null,
+    matchedSupplierName: match?.supplier?.name || null,
+    matchConfidence: match?.score || 0,
+    detectedName: detectedName || match?.supplier?.name || null,
+    contact: null,
+    email: null,
+    phone: null,
+    platformHint: match?.supplier?.platform || null,
+    address: null,
+    notes: null,
+    matchReason: match?.reason || "No deterministic supplier match. Select the supplier before saving.",
+  };
+}
+
+function analysisFromCostaGearWorkbook(parsed, suppliers, fileName = "") {
   const supplierName = parsed?.header?.supplierName || "";
-  const normalized = normalizedSupplierName(supplierName);
-  const match = (suppliers || []).find(item =>
-    normalized && normalizedSupplierName(item.name) === normalized
-  ) || null;
+  const exact = (suppliers || []).find(item =>
+    normalizedSupplierName(item.name) &&
+    normalizedSupplierName(item.name) === normalizedSupplierName(supplierName)
+  );
+  const match = exact
+    ? { supplier: exact, score: 1, reason: "Exact supplier name match from the Costa Gear quotation workbook." }
+    : supplierSuggestionFromEvidence(`${supplierName} ${fileName}`, suppliers);
 
   return {
     documentType: "QUOTATION",
     documentTypeConfidence: 1,
     documentLabel: null,
     documentDate: parsed?.header?.quoteDate || null,
-    supplier: {
-      matchedSupId: match?.sup_id || null,
-      matchedSupplierName: match?.name || null,
-      matchConfidence: match ? 1 : 0,
-      detectedName: supplierName || null,
-      contact: null,
-      email: null,
-      phone: null,
-      platformHint: null,
-      address: null,
-      notes: null,
-      matchReason: match ? "Exact supplier name match from Costa Gear quotation workbook." : "Supplier name read from Costa Gear quotation workbook.",
-    },
+    supplier: supplierAnalysis(match, supplierName),
     quotation: {
       quoteRef: parsed.header.quoteRef || null,
       quoteDate: parsed.header.quoteDate || null,
@@ -131,6 +216,14 @@ function analysisFromCostaGearWorkbook(parsed, suppliers) {
   };
 }
 
+export async function parseQuotationWorkbookFile(file, suppliers) {
+  if (!file || !/\.xlsx?$/i.test(file.name || "")) {
+    throw new Error("Select the converted Costa Gear quotation XLSX file.");
+  }
+  const parsed = await parseCostaGearSupplierQuotation(file);
+  return analysisFromCostaGearWorkbook(parsed, suppliers, file.name);
+}
+
 export async function listSupplierIntakeSuppliers() {
   const { data, error } = await supabase
     .from("suppliers")
@@ -143,71 +236,51 @@ export async function listSupplierIntakeSuppliers() {
 export async function analyzeSupplierIntakeFile(file, suppliers) {
   if (!file) throw new Error("Choose a supplier document first.");
 
-  const staging = await uploadSupplierIntakeStagingFile(file);
-  try {
-    if (/\.xlsx?$/i.test(file.name || "")) {
-      try {
-        const parsed = await parseCostaGearSupplierQuotation(file);
-        return {
-          file,
-          staging,
-          analysis: analysisFromCostaGearWorkbook(parsed, suppliers),
-          model: "local-costa-gear-template",
-          usage: null,
-        };
-      } catch (_) {
-        // Supplier-native Excel files continue to AI analysis below.
-      }
+  if (/\.xlsx?$/i.test(file.name || "")) {
+    try {
+      const analysis = await parseQuotationWorkbookFile(file, suppliers);
+      return {
+        file,
+        staging: null,
+        isCostaGearQuotationWorkbook: true,
+        analysis,
+        model: "deterministic-costa-gear-template",
+        usage: null,
+      };
+    } catch (_) {
+      // A supplier-native Excel file is treated as an original/source document.
     }
-
-    const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) throw sessionError;
-    const token = sessionResult?.session?.access_token;
-    if (!token) throw new Error("Your Costa Gear session has expired. Sign in again.");
-
-    const response = await fetch("/api/supplier-intake-analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        oneDriveItemId: staging.itemId,
-        fileName: file.name,
-        mimeType: file.type || staging.mimeType || "",
-        suppliers: (suppliers || []).map(item => ({
-          supId: item.sup_id,
-          name: item.name,
-          platform: item.platform,
-          contact: item.contact,
-          notes: item.notes,
-        })),
-      }),
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(body?.error || "Unable to analyze supplier document.");
-      error.code = body?.code || "SUPPLIER_INTAKE_ANALYSIS_FAILED";
-      throw error;
-    }
-
-    return {
-      file,
-      staging,
-      analysis: body.analysis,
-      model: body.model || null,
-      usage: body.usage || null,
-    };
-  } catch (error) {
-    try { await deleteOneDriveItem(staging.itemId); } catch (_) {}
-    throw error;
   }
+
+  const inferred = inferDocumentType(file.name);
+  const match = supplierSuggestionFromEvidence(file.name, suppliers);
+  const warnings = [
+    "AI processing is suspended. Document type and supplier are deterministic suggestions only; review them before confirming.",
+  ];
+  if (inferred.value === "QUOTATION") {
+    warnings.push("Quotation data is not extracted from supplier-native files. Add the converted Costa Gear XLSX before importing and matching.");
+  }
+
+  return {
+    file,
+    staging: null,
+    isCostaGearQuotationWorkbook: false,
+    analysis: {
+      documentType: inferred.value,
+      documentTypeConfidence: inferred.confidence,
+      documentLabel: deterministicDocumentLabel(file.name),
+      documentDate: null,
+      supplier: supplierAnalysis(match),
+      quotation: null,
+      warnings,
+    },
+    model: "deterministic-local",
+    usage: null,
+  };
 }
 
-export async function discardSupplierIntakeStaging(staging) {
-  if (!staging?.itemId) return;
-  try { await deleteOneDriveItem(staging.itemId); } catch (_) {}
+export async function discardSupplierIntakeStaging() {
+  // AI-era staging is intentionally disabled. Nothing is uploaded before user confirmation.
 }
 
 export async function createSupplierFromIntake(supplierAnalysis, overrides = {}) {
@@ -253,9 +326,10 @@ export async function saveGeneralSupplierIntake({
   const storedType = generalDocumentTypeForIntake(documentType);
   if (!storedType) throw new Error("This document must be processed as a quotation.");
 
-  return adoptStagedSupplierDocument({
-    stagedItemId: intake?.staging?.itemId,
-    originalFileName: intake?.file?.name || intake?.staging?.originalFileName,
+  if (!intake?.file) throw new Error("Choose the supplier document before saving.");
+
+  return uploadSupplierDocument({
+    file: intake.file,
     supplierId,
     documentType: storedType,
     description,
@@ -267,10 +341,18 @@ export async function finalizeQuotationSupplierIntake({
   intake,
   supplier,
   quotation,
+  workbookFile = null,
+  originalFile = null,
 }) {
-  if (!intake?.staging?.itemId) throw new Error("The original supplier quotation is not staged.");
   if (!supplier?.id) throw new Error("Confirm the supplier before importing this quotation.");
   if (!quotation) throw new Error("Quotation data is missing.");
+
+  const costaGearWorkbook = workbookFile || (intake?.isCostaGearQuotationWorkbook ? intake.file : null);
+  const supplierOriginal = originalFile || (!intake?.isCostaGearQuotationWorkbook ? intake?.file : null);
+
+  if (!costaGearWorkbook) {
+    throw new Error("Add the converted Costa Gear quotation XLSX before importing and continuing to Product Matching.");
+  }
 
   const header = {
     supplierName: supplier.name,
@@ -288,7 +370,7 @@ export async function finalizeQuotationSupplierIntake({
     packaging: quotation.packaging || "",
     paymentTerms: quotation.paymentTerms || "",
     notes: quotation.notes || "",
-    validationStatus: "AI EXTRACTED - USER REVIEWED",
+    validationStatus: "USER REVIEWED",
   };
 
   const lines = (quotation.lines || []).map((line, index) => {
@@ -311,10 +393,12 @@ export async function finalizeQuotationSupplierIntake({
         line.quantity != null && line.unitPrice != null
           ? Number(line.quantity) * Number(line.unitPrice)
           : "",
-      lineValidation: "AI EXTRACTED - USER REVIEWED",
+      lineValidation: "USER REVIEWED",
       notes: [line.notes || "", sourceLineNote].filter(Boolean).join(" | "),
       cgSku: line.cgSku || "",
-      matchStatus: ["MATCHED","REVIEW","UNMATCHED","IGNORED"].includes(line.matchStatus) ? line.matchStatus : "UNMATCHED",
+      matchStatus: ["MATCHED","REVIEW","UNMATCHED","IGNORED"].includes(line.matchStatus)
+        ? line.matchStatus
+        : "UNMATCHED",
     };
   });
 
@@ -329,7 +413,7 @@ export async function finalizeQuotationSupplierIntake({
   );
   if (missing.length) {
     throw new Error(
-      `${missing.length} quotation line(s) still have missing Description, Qty or Unit Price. Review them before importing.`
+      `${missing.length} quotation line(s) still have missing Description, Qty or Unit Price. Review the converted workbook before importing.`
     );
   }
 
@@ -337,63 +421,29 @@ export async function finalizeQuotationSupplierIntake({
     supplierId: supplier.id,
     header,
     lines,
-    workbookFile: null,
+    workbookFile: costaGearWorkbook,
   });
-
-  let workbookArchive = {
-    attempted: false,
-    archived: false,
-    duplicate: false,
-    error: null,
-  };
-
-  try {
-    const workbookFile = buildCostaGearSupplierQuotationFile({
-      supplierName: supplier.name,
-      header,
-      lines,
-    });
-    workbookArchive = { ...workbookArchive, attempted: true };
-    const storedWorkbook = await uploadSupplierDocument({
-      file: workbookFile,
-      supplierId: supplier.id,
-      quotationId: result.quotation.id,
-      documentType: "QUOTATION_IMPORT",
-    });
-    workbookArchive = {
-      attempted: true,
-      archived: true,
-      duplicate: Boolean(storedWorkbook.duplicate),
-      error: null,
-    };
-  } catch (error) {
-    workbookArchive = {
-      attempted: true,
-      archived: false,
-      duplicate: false,
-      error: error?.message || "Unable to archive Costa Gear import workbook.",
-    };
-  }
 
   let originalArchive = null;
   let originalArchiveError = null;
 
-  try {
-    originalArchive = await adoptStagedSupplierDocument({
-      stagedItemId: intake.staging.itemId,
-      originalFileName: intake.file?.name || intake.staging.originalFileName,
-      supplierId: supplier.id,
-      quotationId: result.quotation.id,
-      documentType: "QUOTATION_SOURCE",
-      documentDate: header.quoteDate || null,
-    });
-  } catch (error) {
-    originalArchiveError = error?.message || "Unable to archive supplier original.";
+  if (supplierOriginal) {
+    try {
+      const stored = await uploadSupplierDocument({
+        file: supplierOriginal,
+        supplierId: supplier.id,
+        quotationId: result.quotation.id,
+        documentType: "QUOTATION_SOURCE",
+        documentDate: header.quoteDate || null,
+      });
+      originalArchive = stored;
+    } catch (error) {
+      originalArchiveError = error?.message || "Unable to archive supplier original.";
+    }
   }
 
   return {
     ...result,
-    archive: workbookArchive,
     originalArchive,
     originalArchiveError,
   };
