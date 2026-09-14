@@ -38,12 +38,16 @@ async function run() {
     const req = { method: "POST", headers: {}, body: {} };
     const res = mockResponse();
     await handler(req, res);
-    if (res.statusCode !== 401) {
-      throw new Error(`Unauthorized POST expected 401, received ${res.statusCode}: ${res.body}`);
+    if (res.statusCode !== 410) {
+      throw new Error(`Suspended AI POST expected 410, received ${res.statusCode}: ${res.body}`);
+    }
+    const body = JSON.parse(res.body || "{}");
+    if (body.code !== "SUPPLIER_INTAKE_AI_SUSPENDED") {
+      throw new Error("Suspended AI POST did not return the expected code.");
     }
   }
 
-  process.stdout.write("Supplier Intake API smoke test passed.\n");
+  process.stdout.write("Supplier Intake deterministic API guard smoke test passed.\n");
 }
 
 run().catch(error => {

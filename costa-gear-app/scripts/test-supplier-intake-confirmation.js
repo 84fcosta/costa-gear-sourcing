@@ -8,7 +8,7 @@ const required = [
   "documentConfirmed",
   "Confirm & Save to OneDrive",
   "Review & confirm",
-  "Nothing is stored as an official supplier document until you review and confirm the details.",
+  "Nothing is stored in OneDrive until you confirm the supplier, document type and required details.",
 ];
 
 for (const token of required) {
