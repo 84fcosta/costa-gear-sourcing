@@ -138,6 +138,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   const [quotation, setQuotation] = useState(null);
   const [description, setDescription] = useState("");
   const [documentDate, setDocumentDate] = useState("");
+  const [documentConfirmed, setDocumentConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -182,6 +183,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     setQuotation(null);
     setDescription("");
     setDocumentDate("");
+    setDocumentConfirmed(false);
     setError("");
     setMessage("");
     setComplete(null);
@@ -197,38 +199,11 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     setDocumentType("");
     setSelectedSupplierId("");
     setQuotation(null);
+    setDescription("");
+    setDocumentDate("");
+    setDocumentConfirmed(false);
     setError("");
     setMessage("");
-  };
-
-  const autoSaveGeneralIfSafe = async (result, currentSuppliers) => {
-    const a = result.analysis;
-    if (
-      a.documentType === "QUOTATION" ||
-      !a.supplier?.matchedSupId ||
-      Number(a.supplier.matchConfidence || 0) < 0.98 ||
-      Number(a.documentTypeConfidence || 0) < 0.95
-    ) return false;
-
-    const supplier = supplierFromMatch(currentSuppliers, a.supplier.matchedSupId);
-    if (!supplier) return false;
-
-    const stored = await saveGeneralSupplierIntake({
-      intake: result,
-      supplierId: supplier.id,
-      documentType: a.documentType,
-      description: a.documentLabel || "",
-      documentDate: a.documentDate || null,
-    });
-    setComplete({
-      kind: "document",
-      supplier,
-      documentType: a.documentType,
-      stored,
-      automatic: true,
-    });
-    setMessage(`${a.documentType.replaceAll("_", " ")} saved automatically to ${supplier.sup_id}.`);
-    return true;
   };
 
   const analyze = async () => {
@@ -249,9 +224,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
 
       const matched = supplierFromMatch(currentSuppliers, result.analysis?.supplier?.matchedSupId);
       setSelectedSupplierId(matched?.id || "");
-
-      const autoSaved = await autoSaveGeneralIfSafe(result, currentSuppliers);
-      if (!autoSaved) setMessage("Analysis complete. Review the detected supplier and document data below.");
+      setDocumentConfirmed(false);
+      setMessage("Analysis complete. Review the document type, supplier, label and date, then confirm before saving.");
     } catch (err) {
       setError(err.message || "Unable to analyze this document.");
     } finally {
@@ -268,19 +242,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       const refreshed = await listSupplierIntakeSuppliers();
       setSuppliers(refreshed);
       setSelectedSupplierId(created.id);
-      setMessage(`${created.sup_id} created. Continue with this document.`);
-
-      if (documentType !== "QUOTATION") {
-        const stored = await saveGeneralSupplierIntake({
-          intake,
-          supplierId: created.id,
-          documentType,
-          description,
-          documentDate: documentDate || null,
-        });
-        setComplete({ kind: "document", supplier: created, documentType, stored, automatic: false });
-        setMessage(`${created.sup_id} created and document saved to its OneDrive folder.`);
-      }
+      setDocumentConfirmed(false);
+      setMessage(`${created.sup_id} created. Review the document details below, then confirm before saving.`);
     } catch (err) {
       setError(err.message || "Unable to create supplier.");
     } finally {
@@ -290,6 +253,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
 
   const saveGeneral = async () => {
     if (!selectedSupplier) return setError("Confirm the supplier first.");
+    if (!documentConfirmed) return setError("Confirm the reviewed document details before saving to OneDrive.");
     setBusy(true);
     setError("");
     try {
@@ -401,14 +365,14 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
           <div className="cg-intake-card">
             <div className="cg-intake-card-title"><FileText size={18}/><div><strong>Document classification</strong><span>{confidenceLabel(analysis.documentTypeConfidence)}</span></div></div>
             <label className="cg-intake-field">Document Type
-              <select value={documentType} onChange={e => setDocumentType(e.target.value)}>
+              <select value={documentType} onChange={e => { setDocumentType(e.target.value); setDocumentConfirmed(false); }}>
                 {INTAKE_DOCUMENT_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
             {!isQuotation && (
               <div className="cg-intake-general-fields">
-                <label>Document Label<input value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Jeep JT, Wrangler JL, Running Boards" /></label>
-                <label>Document Date<input type="date" value={documentDate} onChange={e => setDocumentDate(e.target.value)} /></label>
+                <label>Document Label<input value={description} onChange={e => { setDescription(e.target.value); setDocumentConfirmed(false); }} placeholder="e.g. Jeep JT, Wrangler JL, Running Boards" /></label>
+                <label>Document Date<input type="date" value={documentDate} onChange={e => { setDocumentDate(e.target.value); setDocumentConfirmed(false); }} /><span style={{fontSize:9.5,color:"#647062"}}>Leave blank only when the source document is genuinely undated.</span></label>
               </div>
             )}
           </div>
@@ -425,7 +389,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
             )}
 
             <label className="cg-intake-field">Existing Supplier
-              <select value={selectedSupplierId} onChange={e => setSelectedSupplierId(e.target.value)}>
+              <select value={selectedSupplierId} onChange={e => { setSelectedSupplierId(e.target.value); setDocumentConfirmed(false); }}>
                 <option value="">New / not confirmed</option>
                 {suppliers.map(item => <option key={item.id} value={item.id}>{item.sup_id} · {item.name}</option>)}
               </select>
@@ -438,7 +402,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
                 <label>Platform<select value={newSupplierDraft.platform} onChange={e => setNewSupplierDraft(v => ({ ...v, platform: e.target.value }))}><option>Alibaba</option><option>WeChat</option><option>WhatsApp</option><option>Email</option><option>Direct</option><option>Other</option></select></label>
                 <label>Contact<input value={newSupplierDraft.contact} onChange={e => setNewSupplierDraft(v => ({ ...v, contact: e.target.value }))} /></label>
                 <label className="wide">Notes<textarea rows={3} value={newSupplierDraft.notes} onChange={e => setNewSupplierDraft(v => ({ ...v, notes: e.target.value }))} /></label>
-                <button type="button" className="primary" disabled={busy || !newSupplierDraft.name.trim()} onClick={createSupplier}>Create Supplier & Continue</button>
+                <button type="button" className="primary" disabled={busy || !newSupplierDraft.name.trim()} onClick={createSupplier}>Create Supplier</button>
               </div>
             )}
           </div>
@@ -453,9 +417,22 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       )}
 
       {analysis && selectedSupplier && !isQuotation && (
-        <div className="cg-intake-final-card">
-          <div><strong>Ready to store</strong><span>{selectedSupplier.sup_id} · {selectedSupplier.name}</span></div>
-          <button type="button" className="primary" disabled={busy} onClick={saveGeneral}>{busy ? "Saving…" : "Save to OneDrive"}</button>
+        <div className="cg-intake-final-card" style={{alignItems:"flex-start"}}>
+          <div style={{display:"grid",gap:7}}>
+            <div><strong>Review & confirm</strong><span>{selectedSupplier.sup_id} · {selectedSupplier.name}</span></div>
+            <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:11,color:"#4E584C",cursor:"pointer"}}>
+              <input
+                type="checkbox"
+                checked={documentConfirmed}
+                onChange={e => setDocumentConfirmed(e.target.checked)}
+                style={{marginTop:2}}
+              />
+              <span>I confirm the supplier, document type, document label and document date above. Save this file as the official supplier document in OneDrive.</span>
+            </label>
+          </div>
+          <button type="button" className="primary" disabled={busy || !documentConfirmed} onClick={saveGeneral}>
+            {busy ? "Saving…" : "Confirm & Save to OneDrive"}
+          </button>
         </div>
       )}
 
