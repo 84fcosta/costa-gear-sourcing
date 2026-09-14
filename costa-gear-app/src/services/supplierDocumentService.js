@@ -29,11 +29,6 @@ function extensionFromName(name) {
   return match ? match[1].toLowerCase() : "";
 }
 
-function baseName(name) {
-  const extension = extensionFromName(name);
-  return extension ? String(name).slice(0, -(extension.length + 1)) : String(name || "");
-}
-
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
