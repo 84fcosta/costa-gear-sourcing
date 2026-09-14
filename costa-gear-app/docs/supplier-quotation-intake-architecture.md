@@ -6,9 +6,9 @@ Costa Gear Operations has one operational entry point for every new supplier doc
 
 **Supplier Intake**
 
-The user uploads a supplier file once. Costa Gear classifies it, identifies the supplier, stores the original in the governed OneDrive supplier folder, and, when the document is a quotation, prepares the structured quotation data for Product Matching.
+The user selects a supplier file once. Costa Gear reviews it locally using deterministic rules, suggests the supplier/document type where evidence is available, and waits for explicit user confirmation before storing anything in OneDrive.
 
-ChatGPT is no longer an operational step in the day-to-day intake workflow.
+AI is suspended from the operational Supplier Intake workflow. Supplier quotation data comes from the standardized Costa Gear XLSX, which is parsed locally in the browser.
 
 ## Canonical workflow
 
@@ -23,11 +23,13 @@ If the file is a catalog, price list, technical document or other sourcing docum
 -> complete
 
 If the file is a quotation:
--> extract quotation header and every line
--> user reviews financial data
--> generate the canonical Costa Gear XLSX internally
+-> keep the supplier original local until confirmation
+-> require/load the converted Costa Gear quotation XLSX
+-> parse quotation header and every line locally from that workbook
+-> user reviews supplier and financial data
 -> create supplier_quotations + supplier_quotation_lines
--> archive supplier original + Costa Gear XLSX
+-> archive the confirmed Costa Gear XLSX
+-> archive the supplier original when provided
 -> Product Matching
 -> Finalize
 -> Buying Draft
@@ -45,15 +47,15 @@ Accepted intake formats include:
 - common images
 
 Responsibilities:
-1. Stage the original file temporarily in the governed OneDrive repository.
-2. Analyze document type and supplier identity.
-3. Reuse an existing supplier when confidence is sufficient.
-4. Present a pre-filled supplier review when no reliable match exists.
-5. Create the next SUP-ID only after user confirmation.
-6. Move the original from staging into the supplier folder using governed naming.
-7. For quotations, present extracted commercial values and lines for review.
-8. Generate the canonical Costa Gear quotation workbook internally.
-9. Create the formal quotation and archive both document roles.
+1. Keep the selected file local until explicit user confirmation.
+2. Suggest document type from deterministic filename/local metadata rules.
+3. Suggest an existing supplier from Supplier ID/name/alias evidence when available.
+4. Require user confirmation of supplier, document type, document label and document date before storage.
+5. Create the next SUP-ID only after user confirmation when a supplier is genuinely new.
+6. Store the confirmed file directly in the governed supplier folder using the naming convention.
+7. For quotations, require the converted Costa Gear quotation XLSX as the structured source.
+8. Parse the Costa Gear XLSX locally and present quotation header/lines for review.
+9. Create the formal quotation and archive the confirmed XLSX plus supplier original when provided.
 10. Route the user directly to Product Matching.
 
 ### Suppliers
@@ -94,12 +96,12 @@ Downstream consumers of comparable quote records only.
 ### supplierIntakeService.js
 
 Orchestrates the single intake workflow:
-- staging
-- AI analysis request
+- deterministic local document review
+- deterministic supplier suggestion
 - reviewed supplier creation
-- general document save
-- quotation workbook generation/import
-- original quotation archive
+- general document save after confirmation
+- local Costa Gear XLSX parsing/import
+- supplier original archive after confirmation
 
 ### supplierDocumentService.js
 
@@ -124,18 +126,9 @@ Owns supplier quotation database operations and lifecycle RPCs.
 
 ### supplier-intake-analyze Vercel API
 
-AI extraction only.
+AI processing is suspended.
 
-It:
-- requires an authenticated Costa Gear app member for POST
-- reads a temporary signed OneDrive source URL
-- treats document content as untrusted
-- classifies the document
-- identifies the supplier from the supplied Supplier Master
-- extracts quotation data when applicable
-- returns structured data only
-
-It does not write suppliers, documents or quotations directly.
+GET returns the current deterministic-mode status. POST returns `SUPPLIER_INTAKE_AI_SUSPENDED` and never calls AI Gateway. This guard prevents stale clients from creating AI spend.
 
 ## OneDrive structure
 
@@ -145,34 +138,22 @@ No document-type subfolders are introduced.
 02_PRODUCTS/
 ├── Product_Files/
 └── Suppliers_Sourcing/
-    ├── _INTAKE/                 temporary staging only
     ├── SUP-001_<ShortName>/
     ├── SUP-002_<ShortName>/
     └── ...
 ```
 
-_INTAKE staging files are moved to their final supplier folder during successful intake. Abandoned CG_INTAKE files older than 48 hours are cleaned opportunistically.
+The current intake flow does not use OneDrive staging. A file is stored only after confirmation. The historical `_INTAKE` folder may remain temporarily for cleanup/backward compatibility but is not part of the active workflow.
 
-## AI dependency and fallback
+## AI dependency
 
-AI is used for supplier-native PDF/Excel/image classification and extraction.
+Supplier Intake has no active AI dependency.
 
-Official Costa Gear quotation XLSX files remain locally parseable without AI and use the same Supplier Intake channel.
+For catalogs and other supplier documents, supplier/document suggestions are deterministic and must be confirmed by the user.
 
-Default extraction model: `openai/gpt-5.6-terra`.
+For quotations, supplier-native PDF/Excel/image files are preserved as originals. The converted Costa Gear XLSX is the structured source for quotation fields and lines. If the supplier original is selected first, the app asks for the converted XLSX before import. If the converted XLSX is selected first, the supplier original can be attached before confirmation.
 
-Rationale:
-- extraction quality is more important than minimum token cost
-- Terra materially reduces cost versus Sol for this repetitive structured workflow
-- Sol remains available through `SUPPLIER_INTAKE_AI_MODEL` if later testing shows a document class that needs it
-
-Production must provide one server-side AI Gateway authentication method:
-- `AI_GATEWAY_API_KEY`, or
-- Vercel OIDC where available
-
-The AI credential stays server-side in Vercel. It must never be exposed in the browser.
-
-The public readiness endpoint may report whether AI is configured, but never returns the credential itself.
+The previous Vercel AI Gateway endpoint is intentionally suspended so accidental requests cannot incur AI usage.
 
 ## Non-negotiable rules
 
