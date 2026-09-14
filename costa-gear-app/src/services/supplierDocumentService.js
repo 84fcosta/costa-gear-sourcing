@@ -159,13 +159,6 @@ export async function resolveSupplierSourcingFolder(supplierId) {
   return { ...status, exists: true, willCreate: true, folder };
 }
 
-const GENERAL_DOCUMENT_TYPE_VALUES = new Set([
-  "CATALOG",
-  "PRICE_LIST",
-  "TECHNICAL",
-  "OTHER_SOURCING",
-]);
-
 function isQuotationDocumentType(documentType) {
   return documentType === "QUOTATION_SOURCE" || documentType === "QUOTATION_IMPORT";
 }
