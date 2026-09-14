@@ -14,8 +14,8 @@ import {
   createSupplierFromIntake,
   discardSupplierIntakeStaging,
   finalizeQuotationSupplierIntake,
-  getSupplierIntakeReadiness,
   INTAKE_DOCUMENT_TYPES,
+  parseQuotationWorkbookFile,
   listSupplierIntakeSuppliers,
   saveGeneralSupplierIntake,
 } from "../services/supplierIntakeService";
@@ -129,13 +129,14 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   const inputRef = useRef(null);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
-  const [readiness, setReadiness] = useState(null);
   const [file, setFile] = useState(null);
   const [intake, setIntake] = useState(null);
   const [documentType, setDocumentType] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [newSupplierDraft, setNewSupplierDraft] = useState({ name: "", platform: "Other", contact: "", notes: "" });
   const [quotation, setQuotation] = useState(null);
+  const [quotationWorkbookFile, setQuotationWorkbookFile] = useState(null);
+  const [quotationOriginalFile, setQuotationOriginalFile] = useState(null);
   const [description, setDescription] = useState("");
   const [documentDate, setDocumentDate] = useState("");
   const [documentConfirmed, setDocumentConfirmed] = useState(false);
@@ -147,15 +148,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   useEffect(() => {
     let mounted = true;
     setLoadingSuppliers(true);
-    Promise.all([
-      listSupplierIntakeSuppliers(),
-      getSupplierIntakeReadiness(),
-    ])
-      .then(([rows, ready]) => {
-        if (!mounted) return;
-        setSuppliers(rows);
-        setReadiness(ready);
-      })
+    listSupplierIntakeSuppliers()
+      .then(rows => { if (mounted) setSuppliers(rows); })
       .catch(err => { if (mounted) setError(err.message || "Unable to load supplier intake."); })
       .finally(() => { if (mounted) setLoadingSuppliers(false); });
     return () => { mounted = false; };
@@ -181,6 +175,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     setSelectedSupplierId("");
     setNewSupplierDraft({ name: "", platform: "Other", contact: "", notes: "" });
     setQuotation(null);
+    setQuotationWorkbookFile(null);
+    setQuotationOriginalFile(null);
     setDescription("");
     setDocumentDate("");
     setDocumentConfirmed(false);
@@ -199,6 +195,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     setDocumentType("");
     setSelectedSupplierId("");
     setQuotation(null);
+    setQuotationWorkbookFile(null);
+    setQuotationOriginalFile(null);
     setDescription("");
     setDocumentDate("");
     setDocumentConfirmed(false);
@@ -218,6 +216,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       setIntake(result);
       setDocumentType(result.analysis.documentType);
       setQuotation(result.analysis.quotation ? { ...result.analysis.quotation, lines: [...(result.analysis.quotation.lines || [])] } : null);
+      setQuotationWorkbookFile(result.isCostaGearQuotationWorkbook ? file : null);
+      setQuotationOriginalFile(result.isCostaGearQuotationWorkbook ? null : (result.analysis.documentType === "QUOTATION" ? file : null));
       setDescription(result.analysis.documentLabel || "");
       setDocumentDate(result.analysis.documentDate || "");
       setNewSupplierDraft(supplierDraftFromAnalysis(result.analysis));
@@ -225,12 +225,43 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
       const matched = supplierFromMatch(currentSuppliers, result.analysis?.supplier?.matchedSupId);
       setSelectedSupplierId(matched?.id || "");
       setDocumentConfirmed(false);
-      setMessage("Analysis complete. Review the document type, supplier, label and date, then confirm before saving.");
+      setMessage(result.isCostaGearQuotationWorkbook
+        ? "Costa Gear quotation workbook recognized locally. Review the supplier and quotation values before importing."
+        : "Local review prepared. Confirm the supplier, document type, label and date before anything is stored.");
     } catch (err) {
       setError(err.message || "Unable to analyze this document.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const loadQuotationWorkbook = async event => {
+    const next = event.target.files?.[0] || null;
+    if (!next) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const analysis = await parseQuotationWorkbookFile(next, suppliers);
+      setQuotationWorkbookFile(next);
+      setQuotation({ ...analysis.quotation, lines: [...(analysis.quotation?.lines || [])] });
+      setDocumentDate(analysis.documentDate || analysis.quotation?.quoteDate || documentDate);
+      const matched = supplierFromMatch(suppliers, analysis.supplier?.matchedSupId);
+      if (matched) setSelectedSupplierId(matched.id);
+      setDocumentConfirmed(false);
+      setMessage("Converted Costa Gear XLSX loaded locally. Review the quotation and confirm before importing.");
+    } catch (err) {
+      setQuotationWorkbookFile(null);
+      setError(err.message || "This workbook is not a valid Costa Gear quotation XLSX.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseQuotationOriginal = event => {
+    const next = event.target.files?.[0] || null;
+    setQuotationOriginalFile(next);
+    setDocumentConfirmed(false);
   };
 
   const createSupplier = async () => {
@@ -275,7 +306,9 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
 
   const importQuotation = async () => {
     if (!selectedSupplier) return setError("Confirm the supplier first.");
-    if (!quotation) return setError("No quotation data was extracted. Review the document type or re-run intake.");
+    if (!quotationWorkbookFile) return setError("Add the converted Costa Gear quotation XLSX before importing.");
+    if (!quotation) return setError("No quotation data is available from the converted Costa Gear XLSX.");
+    if (!documentConfirmed) return setError("Confirm the reviewed supplier and quotation details before importing.");
     setBusy(true);
     setError("");
     try {
@@ -283,6 +316,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         intake,
         supplier: selectedSupplier,
         quotation,
+        workbookFile: quotationWorkbookFile,
+        originalFile: quotationOriginalFile,
       });
       setComplete({
         kind: "quotation",
@@ -334,17 +369,11 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         <div>
           <div className="cg-intake-eyebrow">Single supplier document channel</div>
           <h1>Supplier Intake</h1>
-          <p>Select the file once. Costa Gear analyzes it first. Nothing is stored as an official supplier document until you review and confirm the details.</p>
+          <p>Select the file once. Costa Gear reviews it locally using deterministic rules. Nothing is stored in OneDrive until you confirm the supplier, document type and required details.</p>
         </div>
-        <div className="cg-intake-flow">Select → Analyze → Review → Confirm → Store</div>
+        <div className="cg-intake-flow">Select → Review → Confirm → Store</div>
       </div>
 
-      {readiness && !readiness.aiConfigured && (
-        <div className="cg-intake-alert warning">
-          <AlertTriangle size={17}/>
-          <span>AI reading is not configured on Vercel yet. Official Costa Gear quotation XLSX files still import locally; supplier-native PDF/Excel automatic extraction will activate as soon as AI Gateway authentication is configured.</span>
-        </div>
-      )}
       {error && <div className="cg-intake-alert error"><AlertTriangle size={17}/><span>{error}</span></div>}
       {message && <div className="cg-intake-alert info"><CheckCircle2 size={17}/><span>{message}</span></div>}
 
@@ -356,16 +385,21 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         </div>
         <input ref={inputRef} type="file" accept={ACCEPT} onChange={chooseFile} />
         <button type="button" className="primary" disabled={!file || busy || loadingSuppliers} onClick={analyze}>
-          <FileSearch size={16}/>{busy ? "Analyzing…" : "Analyze & route"}
+          <FileSearch size={16}/>{busy ? "Reviewing…" : "Review file"}
         </button>
       </div>
 
       {analysis && (
         <div className="cg-intake-review">
           <div className="cg-intake-card">
-            <div className="cg-intake-card-title"><FileText size={18}/><div><strong>Document classification</strong><span>{confidenceLabel(analysis.documentTypeConfidence)}</span></div></div>
+            <div className="cg-intake-card-title"><FileText size={18}/><div><strong>Document review</strong><span>{confidenceLabel(analysis.documentTypeConfidence)} suggestion</span></div></div>
             <label className="cg-intake-field">Document Type
-              <select value={documentType} onChange={e => { setDocumentType(e.target.value); setDocumentConfirmed(false); }}>
+              <select value={documentType} onChange={e => {
+                const nextType = e.target.value;
+                setDocumentType(nextType);
+                setDocumentConfirmed(false);
+                if (nextType === "QUOTATION" && !quotationWorkbookFile) setQuotationOriginalFile(file);
+              }}>
                 {INTAKE_DOCUMENT_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
@@ -443,18 +477,40 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
             <div className="cg-intake-pill">{selectedSupplier.sup_id}</div>
           </div>
 
+          <div className="cg-intake-card" style={{marginBottom:12}}>
+            <div className="cg-intake-section-head">
+              <div><strong>Quotation files</strong><span>No AI extraction. The Costa Gear XLSX is the structured source for matching.</span></div>
+            </div>
+            <div className="cg-intake-general-fields">
+              <label>Converted Costa Gear XLSX *
+                <input type="file" accept=".xlsx,.xls" onChange={loadQuotationWorkbook} />
+                <span style={{fontSize:9.5,color:"#647062"}}>{quotationWorkbookFile ? quotationWorkbookFile.name : "Required to pre-fill quotation fields and continue to Product Matching."}</span>
+              </label>
+              <label>Supplier Original
+                <input type="file" accept=".pdf,.xlsx,.xls,.xlsm,.csv,.txt,.png,.jpg,.jpeg,.webp" onChange={chooseQuotationOriginal} />
+                <span style={{fontSize:9.5,color:"#647062"}}>{quotationOriginalFile ? quotationOriginalFile.name : "Optional when the selected file is already the converted Costa Gear XLSX."}</span>
+              </label>
+            </div>
+          </div>
+
           {quotation ? (
             <>
-              <QuoteHeaderEditor value={quotation} onChange={setQuotation} />
-              <QuoteLinesEditor lines={quotation.lines || []} onChange={lines => setQuotation(v => ({ ...v, lines }))} />
+              <QuoteHeaderEditor value={quotation} onChange={value => { setQuotation(value); setDocumentConfirmed(false); }} />
+              <QuoteLinesEditor lines={quotation.lines || []} onChange={lines => { setQuotation(v => ({ ...v, lines })); setDocumentConfirmed(false); }} />
               {error && <div className="cg-intake-alert error"><AlertTriangle size={17}/><span>{error}</span></div>}
-              <div className="cg-intake-final-card embedded">
-                <div><strong>{busy ? "Creating quotation…" : "Next"}</strong><span>{busy ? "Saving the formal quotation, then archiving the documents." : "Create formal Supplier Quotation, archive original + Costa Gear XLSX, then continue to Product Matching."}</span></div>
-                <button type="button" className="primary" disabled={busy} onClick={importQuotation}>{busy ? "Importing…" : "Confirm & Import Quotation"}</button>
+              <div className="cg-intake-final-card embedded" style={{alignItems:"flex-start"}}>
+                <div style={{display:"grid",gap:7}}>
+                  <div><strong>{busy ? "Creating quotation…" : "Review & confirm"}</strong><span>{busy ? "Creating the formal quotation and archiving the confirmed files." : "The converted XLSX supplies the structured quotation data. Nothing is uploaded until you confirm."}</span></div>
+                  <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:11,color:"#4E584C",cursor:"pointer"}}>
+                    <input type="checkbox" checked={documentConfirmed} onChange={e => setDocumentConfirmed(e.target.checked)} style={{marginTop:2}} />
+                    <span>I confirm the supplier, quotation details, converted XLSX and supplier original shown above. Create the quotation, store the confirmed files in OneDrive, then continue to Product Matching.</span>
+                  </label>
+                </div>
+                <button type="button" className="primary" disabled={busy || !documentConfirmed || !quotationWorkbookFile} onClick={importQuotation}>{busy ? "Importing…" : "Confirm & Import Quotation"}</button>
               </div>
             </>
           ) : (
-            <div className="cg-intake-alert warning"><AlertTriangle size={17}/><span>This file was not extracted as a quotation. Re-run intake or select the correct document type.</span></div>
+            <div className="cg-intake-alert warning"><AlertTriangle size={17}/><span>Add the converted Costa Gear quotation XLSX. Supplier-native PDF/Excel files are archived as originals but are not parsed automatically while AI is suspended.</span></div>
           )}
         </div>
       )}
