@@ -89,6 +89,8 @@ function analysisFromCostaGearWorkbook(parsed, suppliers) {
   return {
     documentType: "QUOTATION",
     documentTypeConfidence: 1,
+    documentLabel: null,
+    documentDate: parsed?.header?.quoteDate || null,
     supplier: {
       matchedSupId: match?.sup_id || null,
       matchedSupplierName: match?.name || null,
