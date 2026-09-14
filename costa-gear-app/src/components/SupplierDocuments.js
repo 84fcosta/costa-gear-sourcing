@@ -208,6 +208,25 @@ function QuoteDocumentRow({ role, quotation, supplier, document, onChanged }) {
     }
   };
 
+  const remove = async () => {
+    if (!document?.id) return;
+    const confirmed = window.confirm(
+      `Delete ${document.file_name}?\n\nThis removes the file from OneDrive and the quotation document register. The Supplier Quotation data itself will remain unchanged. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      await deleteSupplierDocument(document.id);
+      await onChanged();
+    } catch (e) {
+      setError(e.message || "Unable to delete quotation document safely.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="cg-quote-document-row" style={{ display: "grid", gridTemplateColumns: "160px minmax(0,1fr) auto", gap: 10, alignItems: "center", padding: "9px 10px", borderTop: `1px solid ${C.border}` }}>
       <div>
@@ -226,9 +245,19 @@ function QuoteDocumentRow({ role, quotation, supplier, document, onChanged }) {
       <div className="cg-quote-document-actions" style={{ display: "flex", gap: 6, alignItems: "center" }}>
         {document?.onedrive_web_url && <a href={document.onedrive_web_url} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: C.oliveDark, fontWeight: 800 }}>Open</a>}
         <label style={{ ...btn(), opacity: busy ? .5 : 1, cursor: busy ? "not-allowed" : "pointer" }}>
-          {busy ? "Uploading..." : document ? "Replace" : "Upload"}
+          {busy ? "Working..." : document ? "Replace" : "Upload"}
           <input type="file" disabled={busy} onChange={choose} accept={role === "QUOTATION_IMPORT" ? ".xlsx" : undefined} style={{ display: "none" }} />
         </label>
+        {document && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={remove}
+            style={{ ...btn(), color: C.red, borderColor: "rgba(182,81,69,.30)", background: "#FFF8F7", opacity: busy ? .5 : 1 }}
+          >
+            Delete
+          </button>
+        )}
       </div>
     </div>
   );
