@@ -334,9 +334,9 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         <div>
           <div className="cg-intake-eyebrow">Single supplier document channel</div>
           <h1>Supplier Intake</h1>
-          <p>Upload the file once. Costa Gear identifies the document and supplier, stores it in OneDrive, and prepares quotations for Product Matching.</p>
+          <p>Select the file once. Costa Gear analyzes it first. Nothing is stored as an official supplier document until you review and confirm the details.</p>
         </div>
-        <div className="cg-intake-flow">Upload → Identify → Store → Extract → Review</div>
+        <div className="cg-intake-flow">Select → Analyze → Review → Confirm → Store</div>
       </div>
 
       {readiness && !readiness.aiConfigured && (
