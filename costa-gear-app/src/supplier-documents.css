@@ -45,6 +45,7 @@
 
   .cg-supplier-doc-record > div:last-child {
     text-align: left !important;
+    justify-content: flex-start !important;
   }
 
   .cg-quotation-documents-head {
