@@ -145,7 +145,7 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
                     <div style={{ fontSize: 10.5, fontWeight: 850, color: C.oliveDark }}>{supplierDocumentTypeLabel(doc.document_type)}</div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.file_name}</div>
-                      <div style={{ fontSize: 9.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Original: {doc.original_file_name}</div>
+                      <div style={{ fontSize: 9.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Source filename (metadata only): {doc.original_file_name}</div>
                     </div>
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       {doc.onedrive_web_url ? <a href={doc.onedrive_web_url} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: C.oliveDark, fontWeight: 800 }}>Open in OneDrive</a> : <span style={{ fontSize: 10.5, color: C.muted }}>No link</span>}
