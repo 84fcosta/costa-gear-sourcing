@@ -16,7 +16,6 @@ import { buildProductName } from "../domain/productNaming";
 import {
   dimensionWarning,
   formatDimensions,
-  productDimensions,
   supplierDimensionReference,
   supplierPackagingReference,
   quotationTotalReview,
