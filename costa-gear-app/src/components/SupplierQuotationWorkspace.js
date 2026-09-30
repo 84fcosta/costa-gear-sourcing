@@ -13,6 +13,13 @@ import {
 import { QuotationDocumentsPanel } from "./SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "../services/productTaxonomyService";
 import { buildProductName } from "../domain/productNaming";
+import {
+  dimensionWarning,
+  formatDimensions,
+  supplierDimensionReference,
+  supplierPackagingReference,
+  quotationTotalReview,
+} from "../domain/quotationReview";
 import "../supplier-quotation-mobile.css";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)",soft:"#F3F4EF"};
@@ -23,32 +30,11 @@ const Field=({label,children})=><label style={{display:"grid",gap:5,fontSize:11,
 const badge=(status)=>{const map={PASS:[C.green,"#EDF7EE"],MATCHED:[C.green,"#EDF7EE"],RESOLVED:[C.green,"#EDF7EE"],IGNORED:[C.muted,"#EEF0EC"],REVIEW:[C.amber,"#FFF7E5"],Finalized:[C.green,"#EDF7EE"],Converted:[C.oliveDark,"#F1F4DD"],Imported:[C.amber,"#FFF7E5"],"REVIEW REQUIRED":[C.red,"#FFF1EF"],UNMATCHED:[C.red,"#FFF1EF"]};const [color,bg]=map[status]||[C.muted,"#F3F4EF"];return <span style={{display:"inline-flex",padding:"3px 7px",borderRadius:999,fontSize:10.5,fontWeight:850,color,background:bg}}>{status||"—"}</span>};
 
 const cleanNumber=value=>{const n=Number(value);return Number.isFinite(n)&&n>0?n:null;};
-const productDimensions=product=>{
-  if(!product)return null;
-  const values=[cleanNumber(product.length_cm),cleanNumber(product.width_cm),cleanNumber(product.height_cm)].filter(v=>v!==null);
-  return values.length?values:null;
-};
-const formatDimensions=product=>{
-  const values=productDimensions(product);
-  return values?values.map(v=>Number(v.toFixed(1))).join(" x ")+" cm":"Not recorded";
-};
-const supplierDimensionReference=text=>{
-  const match=String(text||"").replace(/,/g,".").match(/(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)(?:\s*[x×*]\s*(\d+(?:\.\d+)?))?\s*(mm|cm)\b/i);
-  if(!match)return null;
-  const factor=match[4].toLowerCase()==="mm"?0.1:1;
-  return {raw:match[0],valuesCm:[match[1],match[2],match[3]].filter(Boolean).map(v=>Number(v)*factor)};
-};
-const dimensionWarning=(line,product)=>{
-  const source=supplierDimensionReference(line&&line.supplier_description);
-  const target=productDimensions(product);
-  if(!source||!target||target.length<2)return null;
-  const mismatch=source.valuesCm.some(s=>!target.some(t=>Math.abs(t-s)/Math.max(t,s)<=0.15));
-  return mismatch?"Supplier description mentions "+source.raw+"; Costa Gear record shows "+formatDimensions(product)+". Confirm that both measurements refer to the same basis (product vs packaging).":null;
-};
 const productOptionLabel=product=>[product.sku_id,product.product_type||product.name,product.material||"Material TBD",product.fitment||"Fitment TBD"].filter(Boolean).join(" · ");
 const ProductComparison=({line,product,currency})=>{
   if(!product)return null;
   const sourceDim=supplierDimensionReference(line&&line.supplier_description);
+  const packagingDim=supplierPackagingReference(line?.original_notes);
   const warning=dimensionWarning(line,product);
   const weight=cleanNumber(product.weight_kg);
   return <div style={{marginTop:7,border:"1px solid "+C.border,borderRadius:9,overflow:"hidden",background:"#FAFBF8"}}>
@@ -57,7 +43,8 @@ const ProductComparison=({line,product,currency})=>{
         <div style={{fontSize:9.5,fontWeight:850,color:C.muted,textTransform:"uppercase",letterSpacing:".03em"}}>Supplier item</div>
         <div style={{fontSize:11.5,fontWeight:800,marginTop:3}}>{line.supplier_description||"No description"}</div>
         <div style={{fontSize:10.5,color:C.muted,marginTop:3}}>SKU: {line.supplier_sku||"Not provided"} · Qty: {line.quantity} {line.unit||""} · {money(line.unit_price,currency)}</div>
-        {sourceDim&&<div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Dimension reference: <b style={{color:C.ink}}>{sourceDim.raw}</b></div>}
+        {sourceDim&&<div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{packagingDim?"Open size":"Dimension reference"}: <b style={{color:C.ink}}>{sourceDim.raw}</b></div>}
+        {packagingDim&&<div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Packaging size: <b style={{color:C.ink}}>{packagingDim.raw}</b></div>}
       </div>
       <div style={{padding:8}}>
         <div style={{fontSize:9.5,fontWeight:850,color:C.muted,textTransform:"uppercase",letterSpacing:".03em"}}>Costa Gear product</div>
@@ -226,6 +213,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const ignored=lines.filter(l=>l.match_status==="IGNORED").length;
   const resolved=matched+ignored;
   const validationProblems=lines.filter(l=>l.line_validation==="REVIEW REQUIRED").length+(selected?.validation_status==="REVIEW REQUIRED"?1:0);
+  const totalReview=quotationTotalReview(selected,lines);
   const allResolved=lines.length>0&&resolved===lines.length;
   const canFinalize=selected&&selected.status!=="Cancelled"&&allResolved&&matched>0&&validationProblems===0&&Number(finalizeForm.usdCadRate)>0;
   const canBuy=selected?.status==="Finalized"&&selectedLines.length>0&&!selected.purchase_order_id;
@@ -336,6 +324,10 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
             <div className="cg-supplier-quotation-metrics" style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:8,marginTop:11}}>{[['Lines',lines.length],['Resolved',`${resolved}/${lines.length}`],['Products',money(selected.product_subtotal,selected.currency)],['Shipping',money(selected.shipping_total,selected.shipping_currency)],['Grand Total',money(selected.grand_total,selected.currency)],['Linked PO',selected.purchase_order_id?orderById(selected.purchase_order_id)?.po_ref||'Created':'—']].map(([l,v])=><div key={l} style={{background:"#F8F9F5",borderRadius:8,padding:8}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800}}>{l}</div><div style={{fontSize:12.5,fontWeight:850,marginTop:2}}>{v}</div></div>)}</div>
           </div>
 
+          {validationProblems>0&&totalReview?.subtotalMismatch&&<div role="alert" style={{background:"#FFF7E5",color:"#805812",border:"1px solid rgba(168,120,24,.24)",borderRadius:11,padding:12,fontSize:11.5,lineHeight:1.5}}>
+            <strong>Quotation totals do not reconcile.</strong> The imported lines add up to <b>{money(totalReview.lineSum,selected.currency)}</b>, but Product Subtotal is <b>{money(totalReview.subtotal,selected.currency)}</b> (difference: <b>{money(Math.abs(totalReview.subtotalDifference),selected.currency)}</b>). Product Matching is saved, but finalization remains blocked until the quoted figures are verified and corrected.
+          </div>}
+
           <QuotationDocumentsPanel quotation={selected} supplier={supplierById(selected.supplier_id)} />
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14,overflowX:"auto"}}>
@@ -354,7 +346,14 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
             {!allResolved&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Resolve all {lines.length-resolved} remaining item(s) by matching, creating or ignoring them before finalizing.</div>}
             {allResolved&&matched===0&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>At least one item must be matched to a Costa Gear product before finalizing.</div>}
             {ignored>0&&<div style={{fontSize:10.5,color:C.muted,marginTop:7}}>{ignored} ignored item(s) will remain in the quotation history and validation, but will not create comparable quotes or Buying Draft lines.</div>}
-            {validationProblems>0&&<div style={{fontSize:10.5,color:C.red,marginTop:7}}>This quotation contains validation exceptions. Correct the standardized workbook and re-import it rather than overriding the discrepancy.</div>}
+            {validationProblems>0&&<div role="alert" style={{fontSize:10.5,color:C.red,marginTop:8,padding:"9px 10px",border:"1px solid rgba(182,81,69,.24)",background:"#FFF8F7",borderRadius:8,lineHeight:1.5}}>
+               <strong>Finalization blocked by quotation validation.</strong>
+               {totalReview?.subtotalMismatch&&<div>Imported line totals: <b>{money(totalReview.lineSum,selected.currency)}</b>. Product Subtotal in the header: <b>{money(totalReview.subtotal,selected.currency)}</b>. Difference: <b>{money(Math.abs(totalReview.subtotalDifference),selected.currency)}</b>. Confirm the quantities, unit prices and subtotal against the original quotation.</div>}
+               {totalReview?.grandTotalMismatch&&<div>Grand Total also differs from Product Subtotal + Shipping. Verify the header totals and currencies.</div>}
+               {lines.some(l=>l.line_validation==="REVIEW REQUIRED")&&<div>At least one supplier line total differs from Qty × Unit Price. Verify the affected line(s) in the workbook.</div>}
+               <div>Open the Costa Gear Import File above and retain a corrected copy. Then delete this Imported draft and re-import the corrected workbook through Supplier Intake. Editing the OneDrive file alone does not update the imported quotation. Do not bypass the financial validation.</div>
+             </div>}
+             {allResolved&&matched>0&&!(Number(finalizeForm.usdCadRate)>0)&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Enter the actual USD/CAD rate. This is also required before finalizing.</div>}
           </div>
 
           {(selected.status==="Finalized"||selected.status==="Converted")&&<div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
