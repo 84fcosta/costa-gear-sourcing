@@ -13,7 +13,7 @@ export const SUPPLIER_DOCUMENT_TYPES = [
   { value: "CATALOG", label: "Catalog" },
   { value: "PRICE_LIST", label: "Price List" },
   { value: "TECHNICAL", label: "Technical Document" },
-  { value: "OTHER_SOURCING", label: "Other Sourcing Document" },
+  { value: "OTHER_SOURCING", label: "Other Pre-Purchase Document" },
 ];
 
 export const QUOTATION_DOCUMENT_TYPES = [
@@ -238,11 +238,11 @@ export function governedSupplierDocumentName({
     "Supplier",
     36
   );
-  const supplierKey = cleanOneDriveNamePart(supplier.sup_id, "Supplier", 20);
+  const supplierKey = cleanOneDriveNamePart(String(supplier.sup_id || "").replace(/^SUP-?/i, ""), "Supplier", 20);
 
   if (isQuotationDocumentType(documentType)) {
     if (!quotation?.quote_ref) throw new Error("The quotation must have a Costa Gear reference before documents can be stored.");
-    const quoteKey = cleanOneDriveNamePart(quotation.quote_ref, "Quotation", 48);
+    const quoteKey = cleanOneDriveNamePart(String(quotation.quote_ref || "").replace(/^CGQ-?/i, ""), "Quotation", 48);
     const role = documentType === "QUOTATION_SOURCE" ? "Supplier_Source" : "Costa_Gear_Import";
     const date = cleanOneDriveNamePart(documentDate || quotation.quote_date || today(), today(), 10);
     return `CG_QUO_${quoteKey}_${shortName}_${role}_${date}${ext}`;

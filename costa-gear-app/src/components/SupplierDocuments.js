@@ -129,7 +129,7 @@ export function SupplierDocumentsDialog({ supplier, onClose, onOpenIntake }) {
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 13, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <div>
               <div style={{ fontWeight: 850, fontSize: 13 }}>Single document intake channel</div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>New catalogs, price lists, technical files and quotations are uploaded through Supplier Intake. This screen is now the supplier document register.</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>Pre-purchase catalogs, price lists, technical files and quotations are uploaded through Supplier Intake. Purchase contracts, receipts and invoices belong to Buying → PO Documents.</div>
             </div>
             {onOpenIntake && <button type="button" onClick={() => { onClose(); onOpenIntake(); }} style={btn(true)}>Open Supplier Intake</button>}
           </div>

@@ -12,9 +12,29 @@ export const EXPENSE_CATEGORIES = [
   "Communication (Internet/Phone)",
   "Home Office",
   "Travel & Meals",
-  "Inventory / Product Samples",
+  "Samples & Prototypes",
   "Other",
 ];
+
+export const EXPENSE_CATEGORY_DESCRIPTIONS = {
+  "Software & Subscriptions": "Software, online services and recurring digital tools used to operate the business.",
+  "Website & Hosting": "Website, domain, hosting and related online infrastructure costs.",
+  "Office Supplies": "Consumable office and administrative supplies.",
+  "Equipment (CCA)": "Capital equipment tracked as a business asset rather than a regular operating expense.",
+  "Advertising & Marketing": "Paid promotion, advertising and marketing services or materials.",
+  "Business Registration & Fees": "Government registrations, licences and business filing fees.",
+  "Professional Services": "Accounting, legal, consulting and other professional services.",
+  "Banking & Financial Fees": "Bank, card, payment-processing and other financial service fees not already included in inventory landed cost.",
+  "Communication (Internet/Phone)": "Business-use phone, internet and communication services.",
+  "Home Office": "Eligible home-office operating costs.",
+  "Travel & Meals": "Business travel and meal costs recorded under the applicable business-use rules.",
+  "Samples & Prototypes": "Non-resale items bought for evaluation, testing or prototyping; they are not sellable inventory and are not expected to generate revenue directly.",
+  "Other": "Other operating or administrative expense that does not fit a listed category.",
+};
+
+export function expenseCategoryDescription(category) {
+  return EXPENSE_CATEGORY_DESCRIPTIONS[category] || "";
+}
 
 export const PAYMENT_METHODS = [
   "Credit Card",

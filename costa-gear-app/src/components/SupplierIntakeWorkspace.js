@@ -165,6 +165,8 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   const requiresNewSupplier = Boolean(intake && !selectedSupplierId);
   const isQuotation = documentType === "QUOTATION";
   const analysis = intake?.analysis || null;
+  const selectedDocumentType = INTAKE_DOCUMENT_TYPES.find(item => item.value === documentType) || null;
+  const routedToBuying = analysis?.routingTarget === "BUYING_PO_DOCUMENTS";
 
   const reset = () => {
     setFile(null);
@@ -370,9 +372,9 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
     <section className="cg-intake-shell">
       <div className="cg-intake-heading">
         <div>
-          <div className="cg-intake-eyebrow">Single supplier document channel</div>
+          <div className="cg-intake-eyebrow">Pre-purchase supplier document channel</div>
           <h1>Supplier Intake</h1>
-          <p>Select the file once. Costa Gear reviews it locally using deterministic rules. Nothing is stored in OneDrive until you confirm the supplier, document type and required details.</p>
+          <p>Use Supplier Intake for pre-purchase sourcing documents only. Contracts, receipts and invoices for an existing purchase order belong in Buying → PO Documents.</p>
         </div>
         <div className="cg-intake-flow">Select → Review → Confirm → Store</div>
       </div>
@@ -397,7 +399,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
           <div className="cg-intake-card">
             <div className="cg-intake-card-title"><FileText size={18}/><div><strong>Document review</strong><span>{confidenceLabel(analysis.documentTypeConfidence)} suggestion</span></div></div>
             <label className="cg-intake-field">Document Type
-              <select value={documentType} onChange={e => {
+              <select disabled={routedToBuying} value={documentType} onChange={e => {
                 const nextType = e.target.value;
                 setDocumentType(nextType);
                 setDocumentConfirmed(false);
@@ -405,7 +407,19 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
               }}>
                 {INTAKE_DOCUMENT_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
+              {!routedToBuying && selectedDocumentType?.description && (
+                <span style={{fontSize:10,color:"#647062",fontWeight:500}}>{selectedDocumentType.description}</span>
+              )}
             </label>
+            {routedToBuying && (
+              <div className="cg-intake-alert warning" style={{marginTop:10}}>
+                <AlertTriangle size={17}/>
+                <div>
+                  <strong>Use Buying → PO Documents</strong>
+                  <div>This appears to be a post-purchase document. Select the purchase order there and upload it as Contract, Receipt, Invoice, Credit / Refund or Other.</div>
+                </div>
+              </div>
+            )}
             {!isQuotation && (
               <div className="cg-intake-general-fields">
                 <label>Document Label<input value={description} onChange={e => { setDescription(e.target.value); setDocumentConfirmed(false); }} placeholder="e.g. Jeep JT, Wrangler JL, Running Boards" /></label>
@@ -453,7 +467,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         </div>
       )}
 
-      {analysis && selectedSupplier && !isQuotation && (
+      {analysis && selectedSupplier && !isQuotation && !routedToBuying && (
         <div className="cg-intake-final-card" style={{alignItems:"flex-start"}}>
           <div style={{display:"grid",gap:7}}>
             <div><strong>Review & confirm</strong><span>{selectedSupplier.sup_id} · {selectedSupplier.name}</span></div>
@@ -473,7 +487,7 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
         </div>
       )}
 
-      {analysis && selectedSupplier && isQuotation && (
+      {analysis && selectedSupplier && isQuotation && !routedToBuying && (
         <div className="cg-intake-quotation-card">
           <div className="cg-intake-quotation-title">
             <div><strong>Quotation review</strong><span>Confirm the commercial values before Costa Gear creates the formal quotation.</span></div>

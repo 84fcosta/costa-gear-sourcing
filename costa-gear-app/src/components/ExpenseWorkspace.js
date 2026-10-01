@@ -27,6 +27,7 @@ import {
   exportAssets,
   exportExpenses,
   exportTaxReport,
+  expenseCategoryDescription,
   makeEmptyAsset,
   makeEmptyExpense,
   money,
@@ -102,7 +103,7 @@ function RecordDocuments({ documents, onDelete }) {
 function DocumentPicker({ driveReady, value, onChange }) {
   return (
     <div className="cg-expense-file-field">
-      <label>Receipt / Document</label>
+      <label>Receipt / Invoice</label>
       <input
         type="file"
         accept="application/pdf,image/*"
@@ -111,7 +112,12 @@ function DocumentPicker({ driveReady, value, onChange }) {
       />
       <div className="cg-expense-help">
         {driveReady
-          ? value?.name || "The file will be stored in the Costa Gear OneDrive App Folder."
+          ? (
+            <>
+              <div>{value?.name || "The file will be stored in the Costa Gear OneDrive App Folder."}</div>
+              <div>Operating and administrative expenses only. Inventory purchase documents belong to Buying → PO Documents.</div>
+            </>
+          )
           : `Upload disabled until Microsoft authentication is connected with ${ONE_DRIVE_APP_FOLDER_SCOPE}.`}
       </div>
     </div>
@@ -147,6 +153,9 @@ function ExpenseForm({ initial, assets, documents, driveReady, onSubmit, onCance
           <select value={form.category || ""} onChange={(event) => set("category", event.target.value)}>
             {EXPENSE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
           </select>
+          {expenseCategoryDescription(form.category) ? (
+            <div className="cg-expense-help">{expenseCategoryDescription(form.category)}</div>
+          ) : null}
         </div>
         <div>
           <label>Total CAD</label>
