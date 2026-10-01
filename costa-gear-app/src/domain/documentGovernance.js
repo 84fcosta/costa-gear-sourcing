@@ -53,7 +53,7 @@ export function governedPurchaseOrderDocumentName({ fileName, poNumber, supplier
 }
 
 export function detectPostPurchaseDocument({ fileName = "", evidence = "" } = {}) {
-  const name = String(fileName || "").toLowerCase();
+  const name = String(fileName || "").toLowerCase().replace(/[_-]+/g, " ");
   const text = String(evidence || "").toLowerCase();
   if (/pro[\s_-]*forma/.test(name)) return null;
   if (/\b(credit[\s_-]*note|refund)\b/.test(name)) return "CREDIT_REFUND";
