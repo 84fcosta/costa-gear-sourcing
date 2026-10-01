@@ -8,7 +8,8 @@ const required = [
   "documentConfirmed",
   "Confirm & Save to OneDrive",
   "Review & confirm",
-  "Nothing is stored in OneDrive until you confirm the supplier, document type and required details.",
+  "Use Supplier Intake for pre-purchase sourcing documents only.",
+  "Contracts, receipts and invoices for an existing purchase order belong in Buying → PO Documents.",
 ];
 
 for (const token of required) {
