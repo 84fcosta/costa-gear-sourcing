@@ -164,9 +164,9 @@ export default function SupplierIntakeWorkspace({ onCompleteQuotation }) {
   );
   const requiresNewSupplier = Boolean(intake && !selectedSupplierId);
   const isQuotation = documentType === "QUOTATION";
+  const analysis = intake?.analysis || null;
   const selectedDocumentType = INTAKE_DOCUMENT_TYPES.find(item => item.value === documentType) || null;
   const routedToBuying = analysis?.routingTarget === "BUYING_PO_DOCUMENTS";
-  const analysis = intake?.analysis || null;
 
   const reset = () => {
     setFile(null);
