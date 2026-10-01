@@ -1,3 +1,5 @@
+import { parseAppDate } from "./appDate";
+
 const DAY_MS = 86400000;
 
 export const ACTIVE_SALE_STATUSES = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
@@ -16,9 +18,7 @@ const number = value => Number(value || 0);
 const finite = value => Number.isFinite(Number(value));
 
 function dateValue(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseAppDate(value);
 }
 
 function daysBetween(asOf, value) {
