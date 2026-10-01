@@ -79,7 +79,6 @@ export default function PurchaseOrderDocumentsPanel({ purchaseOrder, supplier })
     setMessage("");
     if (fileRef.current) fileRef.current.value = "";
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseOrder?.id]);
 
   const previewName = useMemo(() => {
