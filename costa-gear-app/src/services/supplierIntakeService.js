@@ -2,14 +2,15 @@ import { supabase } from "../supabase";
 import { uploadSupplierDocument } from "./supplierDocumentService";
 import { importStandardizedSupplierQuotation } from "./supplierQuotationIntakeService";
 import { parseCostaGearSupplierQuotation } from "../domain/supplierQuotationImport";
+import { detectPostPurchaseDocument, purchaseOrderDocumentType } from "../domain/documentGovernance";
 import * as XLSX from "xlsx";
 
 export const INTAKE_DOCUMENT_TYPES = [
-  { value: "QUOTATION", label: "Quotation" },
-  { value: "CATALOG", label: "Catalog" },
-  { value: "PRICE_LIST", label: "Price List" },
-  { value: "TECHNICAL", label: "Technical Document" },
-  { value: "OTHER_SOURCING", label: "Other Sourcing Document" },
+  { value: "QUOTATION", label: "Quotation", description: "Supplier offer with product pricing and commercial terms before purchase." },
+  { value: "CATALOG", label: "Catalog", description: "Supplier product range and reference material." },
+  { value: "PRICE_LIST", label: "Price List", description: "General supplier pricing not tied to a specific purchase." },
+  { value: "TECHNICAL", label: "Technical Document", description: "Specifications, dimensions, drawings, installation or packaging information." },
+  { value: "OTHER_SOURCING", label: "Other Pre-Purchase Document", description: "Other supplier material used to evaluate a potential purchase." },
 ];
 
 const GENERAL_DOCUMENT_TYPES = new Set([
@@ -311,11 +312,16 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
   }
 
   const evidence = await collectLocalFileEvidence(file);
+  const postPurchaseType = detectPostPurchaseDocument({ fileName: file.name, evidence });
   const inferred = inferDocumentType(evidence, file.name);
   const match = supplierSuggestionFromEvidence(evidence, suppliers);
   const warnings = [
     "AI processing is suspended. Document type and supplier are deterministic suggestions only; review them before confirming.",
   ];
+  if (postPurchaseType) {
+    const purchaseType = purchaseOrderDocumentType(postPurchaseType);
+    warnings.push(`This appears to be a ${purchaseType?.label || "purchase"} document. Upload it in Buying → PO Documents, not Supplier Intake.`);
+  }
   if (inferred.value === "QUOTATION") {
     warnings.push("Quotation data is not extracted from supplier-native files. Add the converted Costa Gear XLSX before importing and matching.");
   }
@@ -332,6 +338,8 @@ export async function analyzeSupplierIntakeFile(file, suppliers) {
       supplier: supplierAnalysis(match),
       quotation: null,
       warnings,
+      routingTarget: postPurchaseType ? "BUYING_PO_DOCUMENTS" : null,
+      suggestedPurchaseDocumentType: postPurchaseType || null,
     },
     model: "deterministic-local",
     usage: null,
@@ -378,6 +386,9 @@ export async function saveGeneralSupplierIntake({
   description = "",
   documentDate = null,
 }) {
+  if (intake?.analysis?.routingTarget === "BUYING_PO_DOCUMENTS") {
+    throw new Error("Purchase contracts, receipts and invoices belong in Buying → PO Documents.");
+  }
   const storedType = generalDocumentTypeForIntake(documentType);
   if (!storedType) throw new Error("This document must be processed as a quotation.");
 
