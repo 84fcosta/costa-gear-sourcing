@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateQuoteLandedCost } from "../domain/sourcingIntelligence";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
+import { parseAppDate } from "../domain/appDate";
 import { loadOperationalDashboardData, updateProductReorderPoint } from "../services/dashboardRepository";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",oliveLight:"#A4AA55",green:"#4D7D57",red:"#B65145",amber:"#A87818",blue:"#4E6A8E",muted:"#647062",line:"#E0E3DB",soft:"#F4F5F1"};
@@ -11,9 +12,9 @@ const money=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).
 const money2=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2});
 const number=v=>Number(v||0).toLocaleString("en-CA");
 const pct=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":`${Number(v).toFixed(1)}%`;
-const dateLabel=v=>{if(!v)return "";const d=new Date(v);return Number.isNaN(d.getTime())?"":d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});};
-const daysOld=value=>{if(!value)return Infinity;const t=new Date(value).getTime();return Number.isFinite(t)?Math.floor((Date.now()-t)/86400000):Infinity;};
-const latestByProduct=quotes=>{const map=new Map();for(const q of quotes){const current=map.get(q.product_id);if(!current||new Date(q.quote_date||q.created_at)>new Date(current.quote_date||current.created_at))map.set(q.product_id,q);}return map;};
+const dateLabel=v=>{const d=parseAppDate(v);return d?d.toLocaleDateString("en-CA",{month:"short",day:"numeric"}):"";};
+const daysOld=value=>{const d=parseAppDate(value);return d?Math.floor((Date.now()-d.getTime())/86400000):Infinity;};
+const latestByProduct=quotes=>{const map=new Map();for(const q of quotes){const current=map.get(q.product_id);const qDate=parseAppDate(q.quote_date||q.created_at);const currentDate=current?parseAppDate(current.quote_date||current.created_at):null;if(!current||(qDate&&(!currentDate||qDate>currentDate)))map.set(q.product_id,q);}return map;};
 const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 const monthLabel=d=>d.toLocaleDateString("en-CA",{month:"short"});
 const orderDate=o=>o.sold_date||o.created_at;
@@ -217,8 +218,8 @@ export default function OperationalDashboard({onNavigate}){
       let revenue=0,cogs=0,orderCosts=0,units=0,sales=0;
       for(const order of data.salesOrders){
         if(order.status!=="Completed")continue;
-        const d=new Date(orderDate(order));
-        if(Number.isNaN(d.getTime())||d<start||d>=end)continue;
+        const d=parseAppDate(orderDate(order));
+        if(!d||d<start||d>=end)continue;
         const lines=salesItemsByOrder.get(order.id)||[];
         if(!lines.length)continue;
         sales+=1;
@@ -274,7 +275,7 @@ export default function OperationalDashboard({onNavigate}){
     for(const receipt of data.receipts){if(!receipt.created_at)continue;activities.push({date:receipt.created_at,title:`Receipt ${receipt.status.toLowerCase()}`,detail:`${receipt.receipt_ref}${receipt.location?` · ${receipt.location}`:""}`,action:"receiving"});}
     for(const shipment of data.shipments){if(!shipment.created_at)continue;activities.push({date:shipment.created_at,title:`Shipment ${String(shipment.status||"").toLowerCase()}`,detail:`${shipment.shipment_ref}${shipment.shipping_method?` · ${shipment.shipping_method}`:""}`,action:"shipments"});}
     for(const po of data.purchaseOrders){if(!po.created_at)continue;activities.push({date:po.created_at,title:`PO ${String(po.status||"").toLowerCase()}`,detail:po.po_ref,action:"buying"});}
-    activities.sort((a,b)=>new Date(b.date)-new Date(a.date));
+    activities.sort((a,b)=>(parseAppDate(b.date)?.getTime()||0)-(parseAppDate(a.date)?.getTime()||0));
 
     return {
       mtd,previous,selectedSales,trend,inTransitUnits,openCommittedUnits,damagedUnits,actions:actions.slice(0,5),activities:activities.slice(0,5),
