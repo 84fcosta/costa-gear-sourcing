@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ArchiveRestore,
   Boxes,
   Cloud,
   DollarSign,
@@ -8,6 +7,7 @@ import {
   Menu,
   PackageSearch,
   ReceiptText,
+  ShieldCheck,
   ShoppingCart,
   Truck,
 } from "lucide-react";
@@ -18,7 +18,7 @@ import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
 import ExpenseWorkspace from "./components/ExpenseWorkspace";
-import LegacyMigrationWorkspace from "./components/LegacyMigrationWorkspace";
+import DocumentGovernanceWorkspace from "./components/DocumentGovernanceWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import {
   connectMicrosoftOneDrive,
@@ -49,7 +49,7 @@ const pageMeta = {
   receiving: ["Receiving & Inventory", "Step 4 · Receive goods, confirm exceptions and make sellable stock available."],
   sales: ["Sales", "Step 5 · Record sales and measure realized revenue, profit and margin."],
   expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
-  migration: ["Legacy Migration", "Review staged documents before moving them into the governed Costa Gear repository."],
+  governance: ["Document Governance", "Monitor active document compliance and repository health."],
 };
 
 function readSessionValue(key, fallback, allowedValues = null) {
@@ -73,7 +73,8 @@ function initialWorkspace() {
       return "expenses";
     }
   } catch (_) {}
-  return readSessionValue("cg:workspace", "dashboard", Object.keys(pageMeta));
+  const stored = readSessionValue("cg:workspace", "dashboard", [...Object.keys(pageMeta), "migration"]);
+  return stored === "migration" ? "governance" : stored;
 }
 
 export default function App() {
@@ -193,6 +194,8 @@ export default function App() {
     } else if (destination === "sales") {
       setSalesView("orders");
       setWorkspace("sales");
+    } else if (destination === "migration") {
+      setWorkspace("governance");
     } else {
       setWorkspace(destination);
     }
@@ -217,8 +220,8 @@ export default function App() {
   };
 
   const [title, subtitle] = pageMeta[workspace];
-  const showOneDriveControl = workspace === "expenses" || workspace === "migration";
-  const mobileMoreActive = ["buying", "logistics", "expenses", "migration"].includes(workspace);
+  const showOneDriveControl = workspace === "expenses" || workspace === "governance";
+  const mobileMoreActive = ["buying", "logistics", "expenses", "governance"].includes(workspace);
 
   return <div className="cg-app-shell">
     <header className="cg-topbar" style={{ height: 96 }}>
@@ -233,7 +236,7 @@ export default function App() {
             <span className="cg-nav-label">{step && <b className="cg-nav-step">{step}</b>}<span>{label}</span></span>
           </button>)}
           <span className="cg-nav-divider" aria-hidden="true" />
-          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" || workspace === "migration" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" || workspace === "governance" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
             <ReceiptText size={18} strokeWidth={1.9} />
             <span className="cg-nav-label"><span>Expenses</span></span>
           </button>
@@ -271,8 +274,8 @@ export default function App() {
                         : "Connect OneDrive"}
               </button>
               {workspace === "expenses" ? (
-                <button type="button" className="cg-text-button" onClick={() => navigate("migration")} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  <ArchiveRestore size={14} />Legacy migration
+                <button type="button" className="cg-text-button" onClick={() => navigate("governance")} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <ShieldCheck size={14} />Document governance
                 </button>
               ) : null}
               {oneDriveMessage ? <span className="cg-page-header-action-message" style={{ fontSize: 10.5, color: "#687166", maxWidth: 360, textAlign: "right" }}>{oneDriveMessage}</span> : null}
@@ -290,7 +293,7 @@ export default function App() {
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
           : workspace === "expenses" ? <ExpenseWorkspace key={oneDriveVersion} />
-          : workspace === "migration" ? <LegacyMigrationWorkspace onBack={() => navigate("expenses")} />
+          : workspace === "governance" ? <DocumentGovernanceWorkspace onBack={() => navigate("expenses")} />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
@@ -310,7 +313,7 @@ export default function App() {
         <div className="cg-mobile-sheet-links">
           <button className={workspace === "buying" ? "active" : ""} onClick={() => navigate("buying")}><ShoppingCart size={22}/><span><strong>Buying</strong><small>Purchase decisions and POs</small></span></button>
           <button className={workspace === "logistics" ? "active" : ""} onClick={() => navigate("logistics")}><Truck size={22}/><span><strong>Logistics</strong><small>Shipments and landed cost</small></span></button>
-          <button className={workspace === "expenses" || workspace === "migration" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
+          <button className={workspace === "expenses" || workspace === "governance" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
         </div>
       </section>
     </div> : null}
