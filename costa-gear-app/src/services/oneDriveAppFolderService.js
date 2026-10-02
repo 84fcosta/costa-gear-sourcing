@@ -193,11 +193,6 @@ export function cleanOneDriveNamePart(value, fallback = "Document", maxLength = 
   return cleaned || fallback;
 }
 
-function paddedNumber(value, width = 4) {
-  const normalized = String(Number(value));
-  return /^\d+$/.test(normalized) ? normalized.padStart(width, "0") : cleanOneDriveNamePart(value, "Record", 20);
-}
-
 async function loadDocumentOwner(ownerType, ownerId) {
   if (ownerType === "expense") {
     const { data, error } = await supabase
