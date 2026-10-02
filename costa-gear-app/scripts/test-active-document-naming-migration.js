@@ -16,6 +16,8 @@ assert.match(service, /migrateAllReadyActiveDocumentNames/);
 assert.match(service, /deleteOrphanActivePurchaseDocument/);
 assert.match(service, /assertOrphanDocumentStillSafe/);
 assert.match(service, /Deleted as unlinked legacy purchase-order document/);
+assert.match(service, /LEGACY_SUPPLIER_CATALOG_APPROVED_DATE = "2026-06-15"/);
+assert.match(service, /Legacy catalog migration date approved/);
 
 const ui = read("src/components/LegacyMigrationWorkspace.js");
 assert.match(ui, /namingMigration: true/);
