@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { assetRecordKey, expenseRecordKey } from "../domain/documentNaming";
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 const REPOSITORY_KEY = "costa_gear";
@@ -226,18 +227,18 @@ export function governedBusinessDocumentName({ fileName, ownerType, record }) {
   const extension = extensionMatch ? `.${extensionMatch[1].toLowerCase()}` : "";
 
   if (ownerType === "expense") {
-    const key = paddedNumber(record.expense_number);
+    const key = expenseRecordKey(record.expense_number);
     const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
     const description = cleanOneDriveNamePart(record.description, "Expense", 60);
     const date = cleanOneDriveNamePart(record.expense_date, "Date", 10);
-    return `CG_EXP_${key}_${vendor}_${description}_${date}${extension}`;
+    return `CG_${key}_${vendor}_${description}_${date}${extension}`;
   }
 
-  const key = cleanOneDriveNamePart(record.asset_code || String(record.id).slice(0, 8), "Asset", 24);
+  const key = assetRecordKey(record.asset_code || String(record.id).slice(0, 8));
   const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
   const description = cleanOneDriveNamePart(record.asset_name, "Asset", 60);
   const date = cleanOneDriveNamePart(record.purchase_date, "Date", 10);
-  return `CG_AST_${key}_${vendor}_${description}_${date}${extension}`;
+  return `CG_${key}_${vendor}_${description}_${date}${extension}`;
 }
 
 function governedDocumentName({ file, ownerType, record }) {
