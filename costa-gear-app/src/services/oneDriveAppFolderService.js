@@ -226,14 +226,14 @@ export function governedBusinessDocumentName({ fileName, ownerType, record }) {
     const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
     const description = cleanOneDriveNamePart(record.description, "Expense", 60);
     const date = cleanOneDriveNamePart(record.expense_date, "Date", 10);
-    return `CG_${key}_${vendor}_${description}_${date}${extension}`;
+    return `${key}_${vendor}_${description}_${date}${extension}`;
   }
 
   const key = assetRecordKey(record.asset_code || String(record.id).slice(0, 8));
   const vendor = cleanOneDriveNamePart(record.vendor, "Vendor", 36);
   const description = cleanOneDriveNamePart(record.asset_name, "Asset", 60);
   const date = cleanOneDriveNamePart(record.purchase_date, "Date", 10);
-  return `CG_${key}_${vendor}_${description}_${date}${extension}`;
+  return `${key}_${vendor}_${description}_${date}${extension}`;
 }
 
 function governedDocumentName({ file, ownerType, record }) {
@@ -461,7 +461,7 @@ export async function cleanupSupplierIntakeStaging({ olderThanHours = 48 } = {})
 
   for (const item of children) {
     if (item?.folder) continue;
-    if (!String(item?.name || "").startsWith("CG_INTAKE_")) continue;
+    if (!/^(?:CG_)?INTAKE_/i.test(String(item?.name || ""))) continue;
     const modified = new Date(item?.lastModifiedDateTime || item?.createdDateTime || 0).getTime();
     if (!Number.isFinite(modified) || modified >= threshold) continue;
     try {
@@ -485,7 +485,7 @@ export async function uploadSupplierIntakeStagingFile(file) {
   );
   const extensionMatch = String(file.name || "").match(/\.([A-Za-z0-9]{1,12})$/);
   const extension = extensionMatch ? "." + extensionMatch[1].toLowerCase() : "";
-  const stagingName = "CG_INTAKE_" + stamp + "_" + safeOriginal + extension;
+  const stagingName = "INTAKE_" + stamp + "_" + safeOriginal + extension;
   const uploaded = await uploadFileToOneDriveFolder({
     file,
     parentId: stagingFolder.id,
