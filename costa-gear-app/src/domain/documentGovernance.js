@@ -1,4 +1,4 @@
-import { extensionFromFileName, purchaseOrderRecordKey } from "./documentNaming";
+import { extensionFromFileName, purchaseOrderRecordKey, supplierShortName } from "./documentNaming";
 
 export const PURCHASE_ORDER_DOCUMENT_TYPES = [
   { value: "CONTRACT", label: "Contract", token: "Contract", description: "Purchase agreement defining products, price and commercial terms." },
@@ -8,33 +8,11 @@ export const PURCHASE_ORDER_DOCUMENT_TYPES = [
   { value: "OTHER", label: "Other", token: "Other", description: "Other document specifically related to this purchase order." },
 ];
 
-const SUPPLIER_NOISE = new Set([
-  "auto", "automotive", "accessary", "accessories", "company", "co", "corp", "corporation",
-  "danyang", "equipment", "factory", "guangzhou", "hainan", "inc", "information", "jiepai",
-  "lechang", "limited", "ltd", "manufacturing", "manufacturer", "parts", "technology", "trading", "changzhou",
-]);
-
-function cleanToken(value) {
-  return String(value || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, "");
-}
-
 export function purchaseOrderDocumentType(value) {
   return PURCHASE_ORDER_DOCUMENT_TYPES.find(item => item.value === value) || null;
 }
 
-export function supplierDocumentShortName(name) {
-  const tokens = String(name || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .match(/[A-Za-z0-9]+/g) || [];
-  const meaningful = tokens.filter(token => !SUPPLIER_NOISE.has(token.toLowerCase()));
-  const selected = (meaningful.length ? meaningful : tokens).slice(0, 2);
-  const joined = selected.map(cleanToken).filter(Boolean).join("");
-  return joined || "Supplier";
-}
+export const supplierDocumentShortName = supplierShortName;
 
 export function governedPurchaseOrderDocumentName({ fileName, poNumber, supplierName, documentType, documentDate }) {
   const type = purchaseOrderDocumentType(documentType);
