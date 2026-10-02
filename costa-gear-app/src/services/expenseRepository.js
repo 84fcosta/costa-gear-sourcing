@@ -110,6 +110,33 @@ export async function createExpenseDocument(input) {
 }
 
 export async function removeExpenseDocument(id) {
+  const { data: document, error: loadError } = await supabase
+    .from("expense_documents")
+    .select("id,expense_id,asset_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) throw loadError;
+
   const { error } = await supabase.from("expense_documents").delete().eq("id", id);
   if (error) throw error;
+
+  if (document?.expense_id) {
+    const { count, error: countError } = await supabase
+      .from("expense_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("expense_id", document.expense_id);
+    if (countError) throw countError;
+
+    if ((count || 0) === 0) {
+      const { error: updateError } = await supabase
+        .from("business_expenses")
+        .update({
+          receipt_status: "Missing",
+          tax_ready: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document.expense_id);
+      if (updateError) throw updateError;
+    }
+  }
 }
