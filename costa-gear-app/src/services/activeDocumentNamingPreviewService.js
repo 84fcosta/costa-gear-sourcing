@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { moveOneDriveItem } from "./oneDriveAppFolderService";
 import {
   analyzeOfficialDocumentName,
   assetRecordKey,
@@ -373,4 +374,144 @@ export async function loadActiveDocumentNamingPreview() {
 
 export async function refreshActiveDocumentNamingPreview() {
   return loadActiveDocumentNamingPreview();
+}
+
+
+function folderPartsFromDestination(destination) {
+  return String(destination || "").split("/").map(part => part.trim()).filter(Boolean);
+}
+
+async function ensureNoTargetCollision(row) {
+  const targetPath = `COSTA GEAR/${[row.proposed_destination, row.proposed_name].filter(Boolean).join("/")}`;
+  const { data, error } = await supabase
+    .from("onedrive_items")
+    .select("item_id,name,path")
+    .eq("is_deleted", false)
+    .eq("path", targetPath)
+    .neq("item_id", row.item_id)
+    .limit(1);
+  if (error) throw error;
+  if ((data || []).length) {
+    throw new Error(`Target filename already exists: ${row.proposed_name}`);
+  }
+}
+
+async function updateDocumentReferences(itemId, moved, row) {
+  const now = new Date().toISOString();
+  const newPath = `COSTA GEAR/${moved.destinationPath}`.replace(/^COSTA GEAR\/COSTA GEAR\//, "COSTA GEAR/");
+
+  const { error: indexError } = await supabase
+    .from("onedrive_items")
+    .update({
+      name: moved.fileName || row.proposed_name,
+      path: newPath,
+      extension: extensionFromName(moved.fileName || row.proposed_name),
+      mime_type: moved.mimeType || null,
+      size_bytes: Number(moved.sizeBytes || 0),
+      web_url: moved.webUrl || null,
+      naming_compliant: true,
+      naming_issue: null,
+      is_deleted: false,
+      last_seen_at: now,
+      indexed_at: now,
+    })
+    .eq("item_id", itemId);
+  if (indexError) throw indexError;
+
+  const updates = [
+    supabase.from("supplier_documents")
+      .update({
+        file_name: moved.fileName || row.proposed_name,
+        onedrive_web_url: moved.webUrl || null,
+        mime_type: moved.mimeType || null,
+        size_bytes: Number(moved.sizeBytes || 0),
+        updated_at: now,
+      })
+      .eq("onedrive_item_id", itemId),
+    supabase.from("purchase_order_documents")
+      .update({
+        file_name: moved.fileName || row.proposed_name,
+        onedrive_web_url: moved.webUrl || null,
+        mime_type: moved.mimeType || null,
+        size_bytes: Number(moved.sizeBytes || 0),
+        updated_at: now,
+      })
+      .eq("onedrive_item_id", itemId),
+    supabase.from("expense_documents")
+      .update({
+        file_name: moved.fileName || row.proposed_name,
+        onedrive_web_url: moved.webUrl || null,
+        mime_type: moved.mimeType || null,
+        size_bytes: Number(moved.sizeBytes || 0),
+      })
+      .eq("onedrive_item_id", itemId),
+  ];
+
+  const results = await Promise.all(updates);
+  const failed = results.find(result => result.error);
+  if (failed?.error) throw failed.error;
+}
+
+export async function migrateActiveDocumentName(itemId) {
+  const rows = await loadActiveDocumentNamingPreview();
+  const row = rows.find(item => item.item_id === itemId);
+  if (!row) throw new Error("This document no longer requires a naming migration.");
+  if (row.proposal_state !== "ready" || !row.proposed_name) {
+    throw new Error("This document still requires review and cannot be renamed automatically.");
+  }
+
+  await ensureNoTargetCollision(row);
+
+  const compliance = analyzeOfficialDocumentName(row.proposed_name);
+  if (compliance.compliant !== true) {
+    throw new Error(`Proposed filename failed the central naming policy: ${compliance.issue || "unknown issue"}.`);
+  }
+
+  const folderPath = folderPartsFromDestination(row.proposed_destination);
+  const moved = await moveOneDriveItem({
+    itemId: row.item_id,
+    folderPath,
+    newName: row.proposed_name,
+  });
+
+  try {
+    await updateDocumentReferences(row.item_id, moved, row);
+  } catch (updateError) {
+    try {
+      await moveOneDriveItem({
+        itemId: row.item_id,
+        folderPath,
+        newName: row.source_name,
+      });
+    } catch (rollbackError) {
+      throw new Error(
+        `OneDrive was renamed but database synchronization failed, and automatic rollback also failed. ${updateError?.message || ""} ${rollbackError?.message || ""}`.trim()
+      );
+    }
+    throw new Error(`Database synchronization failed; the OneDrive rename was rolled back. ${updateError?.message || ""}`.trim());
+  }
+
+  return { ...row, moved };
+}
+
+export async function migrateAllReadyActiveDocumentNames() {
+  const rows = await loadActiveDocumentNamingPreview();
+  const ready = rows.filter(row => row.proposal_state === "ready" && row.proposed_name);
+  const results = [];
+
+  for (const row of ready) {
+    try {
+      await migrateActiveDocumentName(row.item_id);
+      results.push({ id: row.item_id, source_name: row.source_name, proposed_name: row.proposed_name, ok: true });
+    } catch (error) {
+      results.push({
+        id: row.item_id,
+        source_name: row.source_name,
+        proposed_name: row.proposed_name,
+        ok: false,
+        error: error?.message || "Naming migration failed.",
+      });
+    }
+  }
+  return results;
 }
