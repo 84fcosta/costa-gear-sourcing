@@ -27,9 +27,18 @@ import {
   refreshLegacyCloseoutProposals,
 } from "../services/legacyCloseoutMigrationService";
 import { deleteEmptyLegacyStagingTree } from "../services/legacyStagingCleanupService";
+import { loadActiveDocumentNamingPreview, refreshActiveDocumentNamingPreview } from "../services/activeDocumentNamingPreviewService";
 import "../legacy-migration.css";
 
 const BATCHES = {
+  active_naming_preview: {
+    label: "Naming · Active Documents",
+    shortLabel: "Active Naming",
+    description: "Read-only Current Name → Proposed Name review for active formal documents. Images, archive and Supplier Intake staging are excluded.",
+    load: loadActiveDocumentNamingPreview,
+    refresh: refreshActiveDocumentNamingPreview,
+    previewOnly: true,
+  },
   admin_finance: {
     label: "Batch 1 · Admin + Finance",
     shortLabel: "Admin + Finance",
@@ -70,9 +79,9 @@ const BATCHES = {
 
 function initialBatch() {
   try {
-    return sessionStorage.getItem("cg:legacy-migration-batch") || "legacy_closeout";
+    return sessionStorage.getItem("cg:legacy-migration-batch") || "active_naming_preview";
   } catch (_) {
-    return "legacy_closeout";
+    return "active_naming_preview";
   }
 }
 
@@ -103,7 +112,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   const [cleanupWorking, setCleanupWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const config = BATCHES[batch] || BATCHES.legacy_closeout;
+  const config = BATCHES[batch] || BATCHES.active_naming_preview;
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -147,6 +156,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   }), [rows]);
 
   async function migrate(row) {
+    if (config.previewOnly) return;
     setWorkingId(row.id);
     setError("");
     setNotice("");
@@ -163,6 +173,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   }
 
   async function setStatus(row, status) {
+    if (config.previewOnly) return;
     setWorkingId(row.id);
     setError("");
     try {
@@ -176,7 +187,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   }
 
   async function migrateReady() {
-    if (!counts.ready) return;
+    if (config.previewOnly || !counts.ready) return;
     if (!window.confirm(`Migrate all ${counts.ready} ready ${config.shortLabel} documents? Needs-review and possible-duplicate files will not move.`)) return;
     setBulkWorking(true);
     setError("");
@@ -247,7 +258,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div>
           <span className="cg-panel-eyebrow">Document Governance</span>
           <h2>Legacy Migration</h2>
-          <p>{config.description} Source: <strong>99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING</strong>.</p>
+          <p>{config.description}{config.previewOnly ? null : <> Source: <strong>99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING</strong>.</>}</p>
         </div>
         <div className="cg-legacy-actions">
           {onBack ? <button className="cg-expense-btn" onClick={onBack}><RotateCcw size={15} />Back to Expenses</button> : null}
@@ -262,7 +273,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
               <Trash2 size={15} />{cleanupWorking ? "Checking and removing..." : "Remove empty staging tree"}
             </button>
           ) : null}
-          <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button>
+          {!config.previewOnly ? <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button> : null}
         </div>
       </div>
 
@@ -281,7 +292,9 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>{config.previewOnly
+        ? <>This batch is <strong>read-only</strong>. It compares active formal documents with the permanent naming framework and does not rename, move or delete files. Review all <strong>Needs review</strong> rows before any migration is enabled.</>
+        : <>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</>}</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
@@ -298,7 +311,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                   <tr key={row.id}>
                     <td><strong>{row.source_name}</strong><small>{row.source_path.replace("COSTA GEAR/99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING/", "")}</small></td>
                     <td><code>{row.proposed_destination}</code></td>
-                    <td><code>{row.proposed_name}</code></td>
+                    <td>{row.proposed_name ? <code>{row.proposed_name}</code> : <span className="cg-legacy-status review">Manual review required</span>}</td>
                     <td>
                       {row.business_expenses ? <strong>EXP {String(row.business_expenses.expense_number).padStart(4, "0")} · {row.business_expenses.vendor}</strong> : null}
                       <small>{row.review_note}</small>
@@ -307,16 +320,17 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                     <td><span className={`cg-legacy-status ${statusClass(row)}`}>{statusLabel(row)}</span></td>
                     <td>
                       <div className="cg-legacy-row-actions">
-                        {row.status === "review" && row.proposal_state === "ready" ? (
+                        {!config.previewOnly && row.status === "review" && row.proposal_state === "ready" ? (
                           <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><CheckCircle2 size={14} />Migrate</button>
                         ) : null}
-                        {row.status === "review" ? (
+                        {!config.previewOnly && row.status === "review" ? (
                           <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><Archive size={14} />Keep staging</button>
                         ) : null}
-                        {row.status === "skipped" ? (
+                        {!config.previewOnly && row.status === "skipped" ? (
                           <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><SkipForward size={14} />Review again</button>
                         ) : null}
-                        {row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
+                        {!config.previewOnly && row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
+                        {config.previewOnly ? <span className="cg-legacy-status review">Preview only</span> : null}
                       </div>
                     </td>
                   </tr>
