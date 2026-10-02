@@ -511,9 +511,11 @@ export default function ExpenseWorkspace() {
     if (!document.onedrive_item_id) return;
     if (!window.confirm(`Delete "${document.file_name || "document"}" from OneDrive?`)) return;
     try {
-      await deleteBusinessDocumentFromOneDrive(document.onedrive_item_id);
+      const result = await deleteBusinessDocumentFromOneDrive(document.onedrive_item_id);
       await removeExpenseDocument(document.id);
-      setNotice("Document deleted from OneDrive and its metadata removed.");
+      setNotice(result?.alreadyMissing
+        ? "The OneDrive file was already missing. Stale attachment metadata was removed."
+        : "Document deleted from OneDrive and its metadata removed.");
       await loadData();
     } catch (deleteError) {
       setError(deleteError.message || "Unable to delete document.");
