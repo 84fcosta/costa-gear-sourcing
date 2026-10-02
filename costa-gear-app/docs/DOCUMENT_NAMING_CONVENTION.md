@@ -63,10 +63,8 @@ Costa Gear quotation references such as `CGQ-SUP012-20260929-01` are represented
 `QUO012-20260929-01`
 
 Patterns:
-- `CG_QUO###-YYYYMMDD-##_ <SupplierShort>_Source_<Date>.<ext>`
-- `CG_QUO###-YYYYMMDD-##_ <SupplierShort>_Import_<Date>.xlsx`
-
-Remove the space after `##_ ` in actual filenames; it appears here only to make the pattern readable.
+- `CG_QUO###-YYYYMMDD-##_<SupplierShort>_Source_<Date>.<ext>`
+- `CG_QUO###-YYYYMMDD-##_<SupplierShort>_Import_<Date>.xlsx`
 
 Examples:
 - `CG_QUO012-20260929-01_Xinyi_Source_2026-09-29.pdf`
