@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { quotationRecordKey, supplierRecordKey } from "../domain/documentNaming";
 import { cleanOneDriveNamePart, moveOneDriveItem } from "./oneDriveAppFolderService";
 import { syncOneDriveDocumentIndex } from "./oneDriveDocumentIndexService";
 
@@ -149,7 +150,18 @@ function isAmbiguousTransactional(name) {
 }
 
 function buildName({ typeCode, key, shortName, description, version, date, extension }) {
-  const parts = ["CG", typeCode, cleanOneDriveNamePart(key, "Record", 24)];
+  let recordKey;
+  if (typeCode === "SUP") {
+    if (key === "Master") recordKey = "SUP_Master";
+    else if (key === "REVIEW") recordKey = "SUP_REVIEW";
+    else recordKey = supplierRecordKey(key);
+  } else if (typeCode === "QUO") {
+    recordKey = key === "REVIEW" ? "QUO_REVIEW" : quotationRecordKey(key);
+  } else {
+    recordKey = [typeCode, cleanOneDriveNamePart(key, "Record", 24)].filter(Boolean).join("_");
+  }
+
+  const parts = [recordKey];
   if (shortName) parts.push(cleanOneDriveNamePart(shortName, "Supplier", 24));
   parts.push(cleanOneDriveNamePart(description, "Document", 56));
   if (version) parts.push(version);
@@ -227,7 +239,7 @@ function baseProposal(item, suppliers, quotes) {
 
   if (isQuoteLike(item.name)) {
     const quote = findQuote(supplier, date, quotes);
-    const key = quote?.quote_ref || supplier.sup_id;
+    const key = quote?.quote_ref || "REVIEW";
     return {
       proposed_destination: destination,
       proposed_name: buildName({ typeCode: "QUO", key, shortName, description: quoteDescriptor(item.name), version, date, extension }),
