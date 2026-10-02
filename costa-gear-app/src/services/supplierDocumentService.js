@@ -226,7 +226,6 @@ async function availableGeneralDocumentName(folderId, desiredName) {
 export function governedSupplierDocumentName({
   fileName,
   supplier,
-  folderName,
   documentType,
   quotation = null,
   description = "",
