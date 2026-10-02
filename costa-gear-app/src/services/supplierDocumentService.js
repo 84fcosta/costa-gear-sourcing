@@ -1,5 +1,5 @@
 import { supabase } from "../supabase";
-import { quotationRecordKey, supplierRecordKey } from "../domain/documentNaming";
+import { quotationRecordKey, supplierRecordKey, supplierShortName } from "../domain/documentNaming";
 import {
   cleanOneDriveNamePart,
   deleteOneDriveItem,
@@ -235,7 +235,7 @@ export function governedSupplierDocumentName({
   const extension = extensionFromName(fileName);
   const ext = extension ? `.${extension}` : "";
   const shortName = cleanOneDriveNamePart(
-    supplierShortNameFromFolder(folderName, supplier.sup_id),
+    supplierShortName(supplier.name),
     "Supplier",
     36
   );
