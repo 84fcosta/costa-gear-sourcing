@@ -322,7 +322,11 @@ Supplier Intake staging files are temporary technical artifacts and use:
 
 Legacy `CG_INTAKE_...` files remain recognized for cleanup compatibility.
 
-## 12. Change-control requirement
+## 12. Legacy migration decisions
+
+The historical supplier catalogs that were already in the active Costa Gear repository without a complete document date were approved for the migration date **2026-06-15**. This is a one-time migration decision for those legacy catalog files only. It is **not** a default date for future supplier documents, and new Supplier Intake documents still require their actual document date.
+
+## 13. Change-control requirement
 
 A naming change is not complete unless all of the following remain aligned:
 
