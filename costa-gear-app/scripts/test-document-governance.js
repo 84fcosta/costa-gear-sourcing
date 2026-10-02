@@ -18,7 +18,7 @@ function read(relative) {
   assert.strictEqual(naming.purchaseOrderRecordKey(2), "PO002");
   assert.strictEqual(naming.expenseRecordKey(25), "EXP0025");
   assert.strictEqual(naming.assetRecordKey("A-001"), "AST001");
-  assert.strictEqual(naming.quotationRecordKey("CGQ-SUP012-20260929-01"), "QUO012-20260929-01");
+  assert.strictEqual(naming.quotationRecordKey("QUO3"), "QUO003");
 
   assert.strictEqual(
     governance.supplierDocumentShortName("Danyang Jiepai Yize Auto Parts Factory"),
@@ -37,7 +37,7 @@ function read(relative) {
       documentType: "RECEIPT",
       documentDate: "2026-09-29",
     }),
-    "CG_PO002_Xinyi_Receipt_2026-09-29.pdf"
+    "PO002_Xinyi_Receipt_2026-09-29.pdf"
   );
 
   assert.strictEqual(
@@ -48,7 +48,7 @@ function read(relative) {
       documentType: "CONTRACT",
       documentDate: "2026-06-15",
     }),
-    "CG_PO001_Yize_Contract_2026-06-15.pdf"
+    "PO001_Yize_Contract_2026-06-15.pdf"
   );
 
   assert.strictEqual(
@@ -65,21 +65,33 @@ function read(relative) {
   );
 
   const supplierDocs = read("src/services/supplierDocumentService.js");
-  assert.match(supplierDocs, /return \`CG_\$\{supplierKey\}_\$\{shortName\}_\$\{typeToken\}/);
-  assert.match(supplierDocs, /return \`CG_\$\{quoteKey\}_\$\{shortName\}_\$\{role\}/);
-  assert.doesNotMatch(supplierDocs, /CG_SUP_/);
-  assert.doesNotMatch(supplierDocs, /CG_QUO_/);
+  assert.match(supplierDocs, /return \`\$\{supplierKey\}_\$\{shortName\}_\$\{typeToken\}/);
+  assert.match(supplierDocs, /return \`\$\{quoteKey\}_\$\{shortName\}_\$\{role\}/);
+  assert.doesNotMatch(supplierDocs, /`CG_/);
   assert.match(supplierDocs, /"Source" : "Import"/);
 
   const oneDrive = read("src/services/oneDriveAppFolderService.js");
-  assert.match(oneDrive, /CG_\$\{key\}_\$\{vendor\}_\$\{description\}/);
-  assert.doesNotMatch(oneDrive, /CG_EXP_/);
-  assert.doesNotMatch(oneDrive, /CG_AST_/);
+  assert.match(oneDrive, /\$\{key\}_\$\{vendor\}_\$\{description\}/);
+  assert.doesNotMatch(oneDrive, /`CG_/);
+
+  const namingStandard = read("docs/DOCUMENT_NAMING_CONVENTION.md");
+  assert.match(namingStandard, /Do \*\*not\*\* prefix filenames with \`CG\`/);
+  assert.match(namingStandard, /QUO###/);
+  assert.doesNotMatch(namingStandard, /CG_PO###/);
+
+  const legacyAdmin = read("src/services/legacyDocumentMigrationService.js");
+  assert.doesNotMatch(legacyAdmin, /CG_(?:EXP|BNK|REV|BUD)/);
+
+  const legacySupplier = read("src/services/legacyProductSupplierMigrationService.js");
+  assert.doesNotMatch(legacySupplier, /const parts = \["CG"/);
 
   const expenses = read("src/domain/expenseTracking.js");
   assert.match(expenses, /"Samples & Prototypes"/);
   assert.doesNotMatch(expenses, /"Inventory \/ Product Samples"/);
   assert.match(expenses, /Non-resale items bought for evaluation, testing or prototyping/);
+  assert.match(expenses, /RPT_Expenses_FY/);
+  assert.match(expenses, /RPT_Assets_CCA_FY/);
+  assert.match(expenses, /RPT_Tax_FY/);
 
   const expenseUi = read("src/components/ExpenseWorkspace.js");
   assert.match(expenseUi, /Receipt \/ Invoice/);
