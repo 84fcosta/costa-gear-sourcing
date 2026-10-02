@@ -27,7 +27,12 @@ import {
   refreshLegacyCloseoutProposals,
 } from "../services/legacyCloseoutMigrationService";
 import { deleteEmptyLegacyStagingTree } from "../services/legacyStagingCleanupService";
-import { loadActiveDocumentNamingPreview, refreshActiveDocumentNamingPreview } from "../services/activeDocumentNamingPreviewService";
+import {
+  loadActiveDocumentNamingPreview,
+  refreshActiveDocumentNamingPreview,
+  migrateActiveDocumentName,
+  migrateAllReadyActiveDocumentNames,
+} from "../services/activeDocumentNamingPreviewService";
 import "../legacy-migration.css";
 
 const BATCHES = {
@@ -37,7 +42,10 @@ const BATCHES = {
     description: "Read-only Current Name → Proposed Name review for active formal documents. Images, archive and Supplier Intake staging are excluded.",
     load: loadActiveDocumentNamingPreview,
     refresh: refreshActiveDocumentNamingPreview,
+    migrateOne: migrateActiveDocumentName,
+    migrateAll: migrateAllReadyActiveDocumentNames,
     previewOnly: true,
+    namingMigration: true,
   },
   admin_finance: {
     label: "Batch 1 · Admin + Finance",
@@ -156,7 +164,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   }), [rows]);
 
   async function migrate(row) {
-    if (config.previewOnly) return;
+    if (config.previewOnly && !config.namingMigration) return;
     setWorkingId(row.id);
     setError("");
     setNotice("");
@@ -187,8 +195,8 @@ export default function LegacyMigrationWorkspace({ onBack }) {
   }
 
   async function migrateReady() {
-    if (config.previewOnly || !counts.ready) return;
-    if (!window.confirm(`Migrate all ${counts.ready} ready ${config.shortLabel} documents? Needs-review and possible-duplicate files will not move.`)) return;
+    if ((config.previewOnly && !config.namingMigration) || !counts.ready) return;
+    if (!window.confirm(`Rename all ${counts.ready} reviewed ${config.shortLabel} documents? Needs-review files remain blocked and will not change.`)) return;
     setBulkWorking(true);
     setError("");
     setNotice("");
@@ -273,7 +281,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
               <Trash2 size={15} />{cleanupWorking ? "Checking and removing..." : "Remove empty staging tree"}
             </button>
           ) : null}
-          {!config.previewOnly ? <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Migrating..." : `Migrate all ready (${counts.ready})`}</button> : null}
+          {(!config.previewOnly || config.namingMigration) ? <button className="cg-expense-btn primary" onClick={migrateReady} disabled={!counts.ready || busy}><FileCheck2 size={15} />{bulkWorking ? "Renaming..." : `Rename reviewed (${counts.ready})`}</button> : null}
         </div>
       </div>
 
@@ -292,9 +300,11 @@ export default function LegacyMigrationWorkspace({ onBack }) {
         <div><span>Kept staging</span><strong>{counts.skipped}</strong></div>
       </div>
 
-      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>{config.previewOnly
-        ? <>This batch is <strong>read-only</strong>. It compares active formal documents with the permanent naming framework and does not rename, move or delete files. Review all <strong>Needs review</strong> rows before any migration is enabled.</>
-        : <>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</>}</span></div>
+      <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>{config.namingMigration
+        ? <>Only rows marked <strong>Ready</strong> can be renamed. Each rename is revalidated against the live business records and checked for filename collisions immediately before OneDrive is changed. <strong>Needs review</strong> rows remain blocked.</>
+        : config.previewOnly
+          ? <>This batch is <strong>read-only</strong>. It compares active formal documents with the permanent naming framework and does not rename, move or delete files.</>
+          : <>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</>}</span></div>
 
       {error ? <div className="cg-dashboard-error">{error}</div> : null}
       {notice ? <div className="cg-expense-success">{notice}</div> : null}
@@ -320,8 +330,8 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                     <td><span className={`cg-legacy-status ${statusClass(row)}`}>{statusLabel(row)}</span></td>
                     <td>
                       <div className="cg-legacy-row-actions">
-                        {!config.previewOnly && row.status === "review" && row.proposal_state === "ready" ? (
-                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><CheckCircle2 size={14} />Migrate</button>
+                        {(!config.previewOnly || config.namingMigration) && row.status === "review" && row.proposal_state === "ready" ? (
+                          <button className="cg-expense-btn primary compact" onClick={() => migrate(row)} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><CheckCircle2 size={14} />Rename</button>
                         ) : null}
                         {!config.previewOnly && row.status === "review" ? (
                           <button className="cg-expense-btn compact" onClick={() => setStatus(row, "skipped")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><Archive size={14} />Keep staging</button>
@@ -330,7 +340,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                           <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><SkipForward size={14} />Review again</button>
                         ) : null}
                         {!config.previewOnly && row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
-                        {config.previewOnly ? <span className="cg-legacy-status review">Preview only</span> : null}
+                        {config.previewOnly && !config.namingMigration ? <span className="cg-legacy-status review">Preview only</span> : null}
                       </div>
                     </td>
                   </tr>
