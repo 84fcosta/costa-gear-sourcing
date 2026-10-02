@@ -32,10 +32,13 @@ export function cleanDocumentNamePart(value, fallback = "Document", maxLength = 
 
 function sequentialKey(family, value, width) {
   const raw = String(value ?? "").trim();
-  const numeric = raw.match(/(?:^|[-_])(\d+)$/)?.[1] || (/^\d+$/.test(raw) ? raw : "");
+  const withoutFamily = raw.replace(new RegExp("^" + family + "[-_]?", "i"), "");
+  const numeric =
+    (/^\d+$/.test(withoutFamily) ? withoutFamily : "") ||
+    raw.match(/(?:^|[-_])(\d+)$/)?.[1] ||
+    "";
   if (numeric) return family + numeric.padStart(width, "0");
-  const cleaned = cleanDocumentNamePart(raw, "Record", 20)
-    .replace(new RegExp("^" + family + "[-_]?", "i"), "");
+  const cleaned = cleanDocumentNamePart(withoutFamily || raw, "Record", 20);
   return family + cleaned;
 }
 
