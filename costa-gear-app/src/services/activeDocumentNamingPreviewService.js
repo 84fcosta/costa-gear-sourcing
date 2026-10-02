@@ -1,5 +1,5 @@
 import { supabase } from "../supabase";
-import { moveOneDriveItem } from "./oneDriveAppFolderService";
+import { deleteOneDriveItem, moveOneDriveItem } from "./oneDriveAppFolderService";
 import {
   analyzeOfficialDocumentName,
   assetRecordKey,
@@ -228,10 +228,14 @@ function proposalForPurchaseOrder(item, poDoc, purchaseOrder, supplier) {
   const match = stemFromName(item.name).match(/^CG_PO_PO(\d+)_([^_]+)_(.+)_((?:19|20)\d{2}-\d{2}-\d{2})$/i);
   const poNumber = purchaseOrder?.po_number || (match ? Number(match[1]) : null);
   if (!poNumber || !purchaseOrder || !supplier) {
+    const orphan = Boolean(match && !poDoc && !purchaseOrder && !item.linked_entity_id);
     return rowBase(item, {
-      note: match
-        ? `Legacy filename refers to PO${String(match[1]).padStart(3, "0")}, but no matching purchase_order record exists.`
-        : "Purchase-order document cannot be linked confidently to a PO record.",
+      state: orphan ? "delete_ready" : "needs_review",
+      note: orphan
+        ? `Orphan purchase-order document: legacy filename refers to PO${String(match[1]).padStart(3, "0")}, but no PO record or document link exists. It may be deleted after confirmation.`
+        : (match
+          ? `Legacy filename refers to PO${String(match[1]).padStart(3, "0")}, but no matching purchase_order record exists.`
+          : "Purchase-order document cannot be linked confidently to a PO record."),
     });
   }
 
@@ -514,4 +518,69 @@ export async function migrateAllReadyActiveDocumentNames() {
     }
   }
   return results;
+}
+
+
+async function assertOrphanDocumentStillSafe(itemId) {
+  const [itemResult, supplierDocsResult, purchaseDocsResult, expenseDocsResult] = await Promise.all([
+    supabase.from("onedrive_items")
+      .select("item_id,name,path,linked_entity_id,is_deleted")
+      .eq("item_id", itemId)
+      .single(),
+    supabase.from("supplier_documents").select("id").eq("onedrive_item_id", itemId).limit(1),
+    supabase.from("purchase_order_documents").select("id").eq("onedrive_item_id", itemId).limit(1),
+    supabase.from("expense_documents").select("id").eq("onedrive_item_id", itemId).limit(1),
+  ]);
+
+  const failed = [itemResult, supplierDocsResult, purchaseDocsResult, expenseDocsResult].find(result => result.error);
+  if (failed?.error) throw failed.error;
+
+  const item = itemResult.data;
+  const isLegacyOrphanPo = Boolean(
+    item
+    && !item.is_deleted
+    && !item.linked_entity_id
+    && String(item.path || "").includes("/03_OPERATIONS/Purchase_Orders/")
+    && /^CG_PO_PO\d+_/i.test(String(item.name || ""))
+    && !(supplierDocsResult.data || []).length
+    && !(purchaseDocsResult.data || []).length
+    && !(expenseDocsResult.data || []).length
+  );
+
+  if (!isLegacyOrphanPo) {
+    throw new Error("This file is no longer an unlinked legacy PO document and cannot be deleted by this cleanup action.");
+  }
+  return item;
+}
+
+export async function deleteOrphanActivePurchaseDocument(itemId) {
+  const rows = await loadActiveDocumentNamingPreview();
+  const row = rows.find(item => item.item_id === itemId);
+  if (!row || row.proposal_state !== "delete_ready") {
+    throw new Error("This document is not currently approved for orphan cleanup.");
+  }
+
+  await assertOrphanDocumentStillSafe(itemId);
+  await deleteOneDriveItem(itemId);
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("onedrive_items")
+    .update({
+      is_deleted: true,
+      deleted_at: now,
+      naming_compliant: null,
+      naming_issue: "Deleted as unlinked legacy purchase-order document.",
+      last_seen_at: now,
+      indexed_at: now,
+    })
+    .eq("item_id", itemId);
+
+  if (error) {
+    throw new Error(
+      `The OneDrive file was deleted, but the local index could not be marked deleted. Refresh the OneDrive index before continuing. ${error.message || ""}`.trim()
+    );
+  }
+
+  return { itemId, sourceName: row.source_name, deletedAt: now };
 }
