@@ -245,7 +245,7 @@ export function governedSupplierDocumentName({
     const quoteKey = quotationRecordKey(quotation.quote_ref);
     const role = documentType === "QUOTATION_SOURCE" ? "Source" : "Import";
     const date = cleanOneDriveNamePart(documentDate || quotation.quote_date || today(), today(), 10);
-    return `CG_${quoteKey}_${shortName}_${role}_${date}${ext}`;
+    return `${quoteKey}_${shortName}_${role}_${date}${ext}`;
   }
 
   const typeToken = documentTypeToken(documentType);
@@ -255,7 +255,7 @@ export function governedSupplierDocumentName({
     : "Undated";
   const descriptorPart = descriptor ? `_${descriptor}` : "";
 
-  return `CG_${supplierKey}_${shortName}_${typeToken}${descriptorPart}_${dateToken}${ext}`;
+  return `${supplierKey}_${shortName}_${typeToken}${descriptorPart}_${dateToken}${ext}`;
 }
 
 async function sha1Hex(file) {

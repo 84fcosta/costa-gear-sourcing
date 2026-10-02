@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { reportFileName } from "./documentNaming";
 
 export const EXPENSE_CATEGORIES = [
   "Software & Subscriptions",
@@ -172,7 +173,7 @@ export function exportExpenses(expenses, documents, year) {
     workbookSheet(rows, [12, 28, 36, 26, 12, 14, 14, 18, 18, 16, 42, 14, 12, 42]),
     "Expenses"
   );
-  downloadWorkbook(workbook, `Costa_Gear_Expenses_${year}_${today()}.xlsx`);
+  downloadWorkbook(workbook, reportFileName({ report: "Expenses", period: `FY${year}`, generatedDate: today() }));
 }
 
 export function exportAssets(assets, documents, year) {
@@ -198,7 +199,7 @@ export function exportAssets(assets, documents, year) {
     workbookSheet(rows, [13, 32, 14, 26, 12, 12, 12, 14, 16, 24, 12, 42, 42]),
     "Assets CCA"
   );
-  downloadWorkbook(workbook, `Costa_Gear_Assets_CCA_${year}_${today()}.xlsx`);
+  downloadWorkbook(workbook, reportFileName({ report: "Assets_CCA", period: `FY${year}`, generatedDate: today() }));
 }
 
 export function exportTaxReport(expenses, assets, documents, year) {
@@ -274,5 +275,5 @@ export function exportTaxReport(expenses, assets, documents, year) {
     "Assets CCA"
   );
 
-  downloadWorkbook(workbook, `Costa_Gear_Tax_Report_${year}_${today()}.xlsx`);
+  downloadWorkbook(workbook, reportFileName({ report: "Tax", period: `FY${year}`, generatedDate: today() }));
 }

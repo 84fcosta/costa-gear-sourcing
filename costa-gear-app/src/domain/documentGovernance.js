@@ -22,7 +22,7 @@ export function governedPurchaseOrderDocumentName({ fileName, poNumber, supplier
   const po = purchaseOrderRecordKey(poNumber);
   const supplier = supplierDocumentShortName(supplierName);
   const date = String(documentDate).slice(0, 10);
-  return "CG_" + po + "_" + supplier + "_" + type.token + "_" + date + extension;
+  return po + "_" + supplier + "_" + type.token + "_" + date + extension;
 }
 
 export function detectPostPurchaseDocument({ fileName = "", evidence = "" } = {}) {

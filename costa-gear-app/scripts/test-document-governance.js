@@ -10,15 +10,17 @@ function read(relative) {
   const namingCode = read("src/domain/documentNaming.js");
   const namingUrl = "data:text/javascript;base64," + Buffer.from(namingCode).toString("base64");
   const naming = await import(namingUrl);
+
   const governanceCode = read("src/domain/documentGovernance.js")
     .replace('"./documentNaming"', '"' + namingUrl + '"');
   const governance = await import("data:text/javascript;base64," + Buffer.from(governanceCode).toString("base64"));
 
-  assert.strictEqual(naming.supplierRecordKey("SUP-003"), "SUP003");
-  assert.strictEqual(naming.purchaseOrderRecordKey(2), "PO002");
+  assert.strictEqual(naming.DOCUMENT_RECORD_DIGITS, 4);
+  assert.strictEqual(naming.supplierRecordKey("SUP-003"), "SUP0003");
+  assert.strictEqual(naming.quotationRecordKey("QUO3"), "QUO0003");
+  assert.strictEqual(naming.purchaseOrderRecordKey(2), "PO0002");
   assert.strictEqual(naming.expenseRecordKey(25), "EXP0025");
-  assert.strictEqual(naming.assetRecordKey("A-001"), "AST001");
-  assert.strictEqual(naming.quotationRecordKey("CGQ-SUP012-20260929-01"), "QUO012-20260929-01");
+  assert.strictEqual(naming.assetRecordKey("A-001"), "AST0001");
 
   assert.strictEqual(
     governance.supplierDocumentShortName("Danyang Jiepai Yize Auto Parts Factory"),
@@ -37,7 +39,7 @@ function read(relative) {
       documentType: "RECEIPT",
       documentDate: "2026-09-29",
     }),
-    "CG_PO002_Xinyi_Receipt_2026-09-29.pdf"
+    "PO0002_Xinyi_Receipt_2026-09-29.pdf"
   );
 
   assert.strictEqual(
@@ -48,8 +50,50 @@ function read(relative) {
       documentType: "CONTRACT",
       documentDate: "2026-06-15",
     }),
-    "CG_PO001_Yize_Contract_2026-06-15.pdf"
+    "PO0001_Yize_Contract_2026-06-15.pdf"
   );
+
+  assert.strictEqual(
+    naming.reportFileName({
+      report: "Expenses",
+      period: "FY2026",
+      generatedDate: "2026-10-02",
+    }),
+    "RPT_Expenses_FY2026_2026-10-02.xlsx"
+  );
+
+  assert.strictEqual(
+    naming.sopFileName({
+      process: "Receiving",
+      title: "Inventory_Receiving",
+      version: 1,
+      extension: "pdf",
+    }),
+    "SOP_Receiving_Inventory_Receiving_V01.pdf"
+  );
+
+  assert.strictEqual(
+    naming.templateFileName({
+      process: "Sourcing",
+      name: "Supplier_Quotation_Import",
+      version: 1,
+      extension: "xlsx",
+    }),
+    "TPL_Sourcing_Supplier_Quotation_Import_V01.xlsx"
+  );
+
+  assert.deepStrictEqual(
+    naming.analyzeOfficialDocumentName("PO0002_Xinyi_Receipt_2026-09-29.pdf"),
+    { typeCode: "PO", compliant: true, issue: null }
+  );
+  assert.deepStrictEqual(
+    naming.analyzeOfficialDocumentName("CG_PO0002_Xinyi_Receipt_2026-09-29.pdf"),
+    { typeCode: "PO0002", compliant: false, issue: "Redundant CG prefix" }
+  );
+  assert.strictEqual(naming.analyzeOfficialDocumentName("Installed Driver Side.jpg").compliant, null);
+  assert.strictEqual(naming.analyzeOfficialDocumentName("PO002_Xinyi_Receipt_2026-09-29.pdf").compliant, false);
+  assert.strictEqual(naming.analyzeOfficialDocumentName("SOP_Receiving_Inventory_Receiving_V01.pdf").compliant, true);
+  assert.strictEqual(naming.analyzeOfficialDocumentName("TPL_Sourcing_Supplier_Quotation_Import_V01.xlsx").compliant, true);
 
   assert.strictEqual(
     governance.detectPostPurchaseDocument({ fileName: "TA_CONTRACT_1790703352348.pdf" }),
@@ -65,21 +109,27 @@ function read(relative) {
   );
 
   const supplierDocs = read("src/services/supplierDocumentService.js");
-  assert.match(supplierDocs, /return \`CG_\$\{supplierKey\}_\$\{shortName\}_\$\{typeToken\}/);
-  assert.match(supplierDocs, /return \`CG_\$\{quoteKey\}_\$\{shortName\}_\$\{role\}/);
-  assert.doesNotMatch(supplierDocs, /CG_SUP_/);
-  assert.doesNotMatch(supplierDocs, /CG_QUO_/);
+  assert.match(supplierDocs, /quotationRecordKey/);
+  assert.match(supplierDocs, /supplierRecordKey/);
   assert.match(supplierDocs, /"Source" : "Import"/);
+  assert.doesNotMatch(supplierDocs, /CG_QUO_/);
+  assert.doesNotMatch(supplierDocs, /CG_SUP_/);
 
   const oneDrive = read("src/services/oneDriveAppFolderService.js");
-  assert.match(oneDrive, /CG_\$\{key\}_\$\{vendor\}_\$\{description\}/);
+  assert.match(oneDrive, /expenseRecordKey/);
+  assert.match(oneDrive, /assetRecordKey/);
   assert.doesNotMatch(oneDrive, /CG_EXP_/);
   assert.doesNotMatch(oneDrive, /CG_AST_/);
+
+  const indexService = read("src/services/oneDriveDocumentIndexService.js");
+  assert.match(indexService, /analyzeOfficialDocumentName/);
+  assert.match(indexService, /99_ARCHIVE/);
 
   const expenses = read("src/domain/expenseTracking.js");
   assert.match(expenses, /"Samples & Prototypes"/);
   assert.doesNotMatch(expenses, /"Inventory \/ Product Samples"/);
   assert.match(expenses, /Non-resale items bought for evaluation, testing or prototyping/);
+  assert.match(expenses, /reportFileName/);
 
   const expenseUi = read("src/components/ExpenseWorkspace.js");
   assert.match(expenseUi, /Receipt \/ Invoice/);
@@ -99,6 +149,15 @@ function read(relative) {
 
   const buying = read("src/components/BuyingDecisionWorkspace.js");
   assert.match(buying, /PurchaseOrderDocumentsPanel/);
+
+  const policy = read("docs/DOCUMENT_NAMING_CONVENTION.md");
+  assert.match(policy, /authoritative document naming standard/);
+  assert.match(policy, /SUP0001/);
+  assert.match(policy, /QUO0001/);
+  assert.match(policy, /PO0001/);
+  assert.match(policy, /EXP0001/);
+  assert.match(policy, /AST0001/);
+  assert.match(policy, /Do \*\*not\*\* add a generic `CG_` prefix/);
 
   process.stdout.write("Document governance regression test passed.\n");
 })().catch(error => {

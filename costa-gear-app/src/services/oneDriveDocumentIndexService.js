@@ -1,22 +1,8 @@
 import { supabase } from "../supabase";
 import { scanOneDriveAppFolderTree } from "./oneDriveAppFolderService";
-
-const TYPE_CODES = new Set([
-  "ADM", "AGR", "INS", "POL", "TAX", "EXP", "REV", "BNK", "BUD",
-  "BRN", "MKT", "WEB", "RES", "PRD", "SPC", "SUP", "QUO", "CST",
-  "PO", "LOG", "STK", "SOP", "SAL", "CUS", "TMP", "AST",
-]);
-
-const TRANSACTIONAL_TYPES = new Set([
-  "AGR", "TAX", "EXP", "REV", "BNK", "QUO", "PO", "LOG", "SAL", "AST",
-]);
+import { analyzeOfficialDocumentName } from "../domain/documentNaming";
 
 const LEGACY_STAGING_SEGMENT = "/99_ARCHIVE/COSTA_GEAR_LEGACY_STAGING/";
-
-// Recognize plausible business/document dates, not arbitrary four-digit record keys like 0013.
-// Supported filename date forms: YYYY, YYYY-MM and YYYY-MM-DD.
-const DATE_PATTERN = /^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
-const VERSION_PATTERN = /^V\d{2}$/;
 
 function extensionFromName(name) {
   const match = String(name || "").match(/\.([A-Za-z0-9]{1,12})$/);
@@ -24,61 +10,24 @@ function extensionFromName(name) {
 }
 
 function isLegacyStagingPath(path) {
-  return String(path || "").includes(LEGACY_STAGING_SEGMENT);
+  const value = String(path || "");
+  return value.includes(LEGACY_STAGING_SEGMENT)
+    || value.includes("/02_PRODUCTS/Suppliers_Sourcing/_INTAKE/")
+    || value.includes("/99_ARCHIVE/");
 }
 
-function analyzeNaming(name, isFolder) {
+function analyzeNaming(name, isFolder, path) {
   if (isFolder) return { typeCode: null, compliant: null, issue: null };
-
-  const extension = extensionFromName(name);
-  const base = extension ? name.slice(0, -(extension.length + 1)) : name;
-  const parts = String(base || "").split("_").filter(Boolean);
-
-  if (parts[0] !== "CG") return { typeCode: null, compliant: false, issue: "Missing CG prefix" };
-
-  const typeCode = parts[1] || null;
-  if (!TYPE_CODES.has(typeCode)) {
-    return { typeCode, compliant: false, issue: "Unknown or missing document type code" };
+  if (isLegacyStagingPath(path)) {
+    return { typeCode: null, compliant: null, issue: "Staging/archive excluded from active document naming compliance" };
   }
-
-  if (parts.length < 4) {
-    return { typeCode, compliant: false, issue: "Missing key or description" };
-  }
-
-  if (parts.some((part) => /^(FINAL|FINAL\d+|COPY|REVISED)$/i.test(part))) {
-    return { typeCode, compliant: false, issue: "Use V01, V02... instead of FINAL/COPY/REVISED" };
-  }
-
-  const versionParts = parts.filter((part) => /^V\d+$/i.test(part));
-  if (versionParts.some((part) => !VERSION_PATTERN.test(part.toUpperCase()))) {
-    return { typeCode, compliant: false, issue: "Version must use two digits, e.g. V01" };
-  }
-
-  const dateIndexes = parts
-    .map((part, index) => DATE_PATTERN.test(part) ? index : -1)
-    .filter((index) => index >= 0);
-
-  if (dateIndexes.length && dateIndexes.some((index) => index !== parts.length - 1)) {
-    return { typeCode, compliant: false, issue: "Date must be the final filename element" };
-  }
-
-  if (TRANSACTIONAL_TYPES.has(typeCode) && !DATE_PATTERN.test(parts[parts.length - 1] || "")) {
-    return { typeCode, compliant: false, issue: "Document date is required for this type" };
-  }
-
-  if (/\s/.test(base)) {
-    return { typeCode, compliant: false, issue: "Use underscores instead of spaces" };
-  }
-
-  return { typeCode, compliant: true, issue: null };
+  return analyzeOfficialDocumentName(name);
 }
 
 function toIndexRow(item, now) {
   const isFolder = Boolean(item?.folder);
   const path = item?._relativePath || item?.name || "";
-  const naming = !isFolder && isLegacyStagingPath(path)
-    ? { typeCode: null, compliant: null, issue: "Legacy staging excluded from compliance" }
-    : analyzeNaming(item?.name || "", isFolder);
+  const naming = analyzeNaming(item?.name || "", isFolder, path);
 
   return {
     item_id: item.id,
