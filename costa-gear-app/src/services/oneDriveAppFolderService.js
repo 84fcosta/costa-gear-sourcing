@@ -77,7 +77,10 @@ async function graphRequest(pathOrUrl, options = {}) {
 
   if (!response.ok) {
     const graphMessage = body?.error?.message || (typeof body === "string" ? body : "");
-    throw new Error(graphMessage || `Microsoft Graph request failed with status ${response.status}.`);
+    const error = new Error(graphMessage || `Microsoft Graph request failed with status ${response.status}.`);
+    error.status = response.status;
+    error.code = body?.error?.code || null;
+    throw error;
   }
 
   return body;
@@ -676,7 +679,15 @@ export async function uploadBusinessDocument({ file, ownerType, ownerId, year })
 }
 
 export async function deleteBusinessDocumentFromOneDrive(itemId) {
-  if (!itemId) return;
+  if (!itemId) return { alreadyMissing: true };
   const path = await driveItemPath(itemId);
-  await graphRequest(path, { method: "DELETE" });
+  try {
+    await graphRequest(path, { method: "DELETE" });
+    return { alreadyMissing: false };
+  } catch (error) {
+    if (error?.status === 404 || error?.code === "itemNotFound") {
+      return { alreadyMissing: true };
+    }
+    throw error;
+  }
 }
