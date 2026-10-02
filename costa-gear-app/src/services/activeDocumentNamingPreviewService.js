@@ -15,7 +15,6 @@ import {
 const ACTIVE_ROOT = "COSTA GEAR/";
 const ARCHIVE_PREFIX = "COSTA GEAR/99_ARCHIVE/";
 const INTAKE_SEGMENT = "/Suppliers_Sourcing/_INTAKE/";
-const LEGACY_SUPPLIER_CATALOG_APPROVED_DATE = "2026-06-15";
 
 function extensionFromName(name) {
   const match = String(name || "").match(/\.([A-Za-z0-9]{1,12})$/);
@@ -74,11 +73,7 @@ function supplierTypeToken(documentType, rest) {
 
 function supplierDescription(rest, typeToken, date) {
   let value = String(rest || "");
-  if (date) {
-    value = value.replace(new RegExp("_" + date.replace(/-/g, "\\-") + "$"), "");
-    const year = String(date).slice(0, 4);
-    value = value.replace(new RegExp("_" + year + "$"), "");
-  }
+  if (date) value = value.replace(new RegExp("_" + date.replace(/-/g, "\\-") + "$"), "");
   if (typeToken === "Price_List") value = value.replace(/(?:^|_)Price_List(?:_|$)/i, "_");
   else if (typeToken) value = value.replace(new RegExp("(?:^|_)" + typeToken + "(?:_|$)", "i"), "_");
   return cleanDocumentNamePart(value.replace(/^_+|_+$/g, ""), "", 72);
@@ -160,27 +155,19 @@ function proposalForSupplier(item, supplierDoc, supplier) {
   }
 
   const ext = extensionFromName(item.name);
-  const escapedShort = folder.shortName.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
-  const prefix = new RegExp(
-    "^CG_SUP_SUP-" + String(folder.number).padStart(3, "0") + "_" + escapedShort + "_",
-    "i"
-  );
-  const rest = stemFromName(item.name).replace(prefix, "");
-  const typeToken = supplierTypeToken(supplierDoc?.document_type, rest);
-  if (!typeToken) {
-    return rowBase(item, { note: "Supplier document type cannot be determined reliably." });
-  }
-
-  const explicitDate = supplierDoc?.document_date || exactDateFromName(item.name);
-  const isApprovedLegacyCatalog = !explicitDate
-    && typeToken === "Catalog"
-    && /^CG_SUP_SUP-\d+_/i.test(String(item.name || ""));
-  const date = explicitDate || (isApprovedLegacyCatalog ? LEGACY_SUPPLIER_CATALOG_APPROVED_DATE : null);
-
+  const date = supplierDoc?.document_date || exactDateFromName(item.name);
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return rowBase(item, {
       note: "Exact document date is missing. A year-only or undated supplier file cannot be auto-renamed.",
     });
+  }
+
+  const escapedShort = folder.shortName.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
+  const prefix = new RegExp("^CG_SUP_SUP-" + String(folder.number).padStart(3, "0") + "_" + escapedShort + "_", "i");
+  const rest = stemFromName(item.name).replace(prefix, "");
+  const typeToken = supplierTypeToken(supplierDoc?.document_type, rest);
+  if (!typeToken) {
+    return rowBase(item, { note: "Supplier document type cannot be determined reliably." });
   }
 
   const description = supplierDescription(rest, typeToken, date);
@@ -191,9 +178,7 @@ function proposalForSupplier(item, supplierDoc, supplier) {
   return rowBase(item, {
     state: "ready",
     name: parts.join("_") + "." + ext,
-    note: isApprovedLegacyCatalog
-      ? `Legacy catalog migration date approved as ${LEGACY_SUPPLIER_CATALOG_APPROVED_DATE}; supplier record and Catalog type confirmed.`
-      : "Supplier record, document type and exact date are confirmed.",
+    note: "Supplier record, document type and exact date are confirmed.",
   });
 }
 
