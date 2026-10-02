@@ -7,8 +7,18 @@ function read(relative) {
 }
 
 (async () => {
-  const governanceCode = read("src/domain/documentGovernance.js");
+  const namingCode = read("src/domain/documentNaming.js");
+  const namingUrl = "data:text/javascript;base64," + Buffer.from(namingCode).toString("base64");
+  const naming = await import(namingUrl);
+  const governanceCode = read("src/domain/documentGovernance.js")
+    .replace('"./documentNaming"', '"' + namingUrl + '"');
   const governance = await import("data:text/javascript;base64," + Buffer.from(governanceCode).toString("base64"));
+
+  assert.strictEqual(naming.supplierRecordKey("SUP-003"), "SUP003");
+  assert.strictEqual(naming.purchaseOrderRecordKey(2), "PO002");
+  assert.strictEqual(naming.expenseRecordKey(25), "EXP0025");
+  assert.strictEqual(naming.assetRecordKey("A-001"), "AST001");
+  assert.strictEqual(naming.quotationRecordKey("CGQ-SUP012-20260929-01"), "QUO012-20260929-01");
 
   assert.strictEqual(
     governance.supplierDocumentShortName("Danyang Jiepai Yize Auto Parts Factory"),
@@ -27,7 +37,7 @@ function read(relative) {
       documentType: "RECEIPT",
       documentDate: "2026-09-29",
     }),
-    "CG_PO_002_Xinyi_Receipt_2026-09-29.pdf"
+    "CG_PO002_Xinyi_Receipt_2026-09-29.pdf"
   );
 
   assert.strictEqual(
@@ -38,7 +48,7 @@ function read(relative) {
       documentType: "CONTRACT",
       documentDate: "2026-06-15",
     }),
-    "CG_PO_001_Yize_Contract_2026-06-15.pdf"
+    "CG_PO001_Yize_Contract_2026-06-15.pdf"
   );
 
   assert.strictEqual(
@@ -53,6 +63,18 @@ function read(relative) {
     governance.detectPostPurchaseDocument({ fileName: "supplier_proforma_invoice.xlsx" }),
     null
   );
+
+  const supplierDocs = read("src/services/supplierDocumentService.js");
+  assert.match(supplierDocs, /return \`CG_\$\{supplierKey\}_\$\{shortName\}_\$\{typeToken\}/);
+  assert.match(supplierDocs, /return \`CG_\$\{quoteKey\}_\$\{shortName\}_\$\{role\}/);
+  assert.doesNotMatch(supplierDocs, /CG_SUP_/);
+  assert.doesNotMatch(supplierDocs, /CG_QUO_/);
+  assert.match(supplierDocs, /"Source" : "Import"/);
+
+  const oneDrive = read("src/services/oneDriveAppFolderService.js");
+  assert.match(oneDrive, /CG_\$\{key\}_\$\{vendor\}_\$\{description\}/);
+  assert.doesNotMatch(oneDrive, /CG_EXP_/);
+  assert.doesNotMatch(oneDrive, /CG_AST_/);
 
   const expenses = read("src/domain/expenseTracking.js");
   assert.match(expenses, /"Samples & Prototypes"/);
