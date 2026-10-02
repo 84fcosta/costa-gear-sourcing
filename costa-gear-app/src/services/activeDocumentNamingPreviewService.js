@@ -160,24 +160,11 @@ function proposalForSupplier(item, supplierDoc, supplier) {
   }
 
   const ext = extensionFromName(item.name);
-  const escapedShort = folder.shortName.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\  const ext = extensionFromName(item.name);
-  const date = supplierDoc?.document_date || exactDateFromName(item.name);
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return rowBase(item, {
-      note: "Exact document date is missing. A year-only or undated supplier file cannot be auto-renamed.",
-    });
-  }
-
   const escapedShort = folder.shortName.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
-  const prefix = new RegExp("^CG_SUP_SUP-" + String(folder.number).padStart(3, "0") + "_" + escapedShort + "_", "i");
-  const rest = stemFromName(item.name).replace(prefix, "");
-  const typeToken = supplierTypeToken(supplierDoc?.document_type, rest);
-  if (!typeToken) {
-    return rowBase(item, { note: "Supplier document type cannot be determined reliably." });
-  }
-
-  const description = supplierDescription(rest, typeToken, date);");
-  const prefix = new RegExp("^CG_SUP_SUP-" + String(folder.number).padStart(3, "0") + "_" + escapedShort + "_", "i");
+  const prefix = new RegExp(
+    "^CG_SUP_SUP-" + String(folder.number).padStart(3, "0") + "_" + escapedShort + "_",
+    "i"
+  );
   const rest = stemFromName(item.name).replace(prefix, "");
   const typeToken = supplierTypeToken(supplierDoc?.document_type, rest);
   if (!typeToken) {
