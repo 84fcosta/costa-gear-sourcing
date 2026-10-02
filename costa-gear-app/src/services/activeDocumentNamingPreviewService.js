@@ -462,13 +462,35 @@ export async function migrateActiveDocumentName(itemId) {
 
   await ensureNoTargetCollision(row);
 
+  const compliance = analyzeOfficialDocumentName(row.proposed_name);
+  if (compliance.compliant !== true) {
+    throw new Error(`Proposed filename failed the central naming policy: ${compliance.issue || "unknown issue"}.`);
+  }
+
+  const folderPath = folderPartsFromDestination(row.proposed_destination);
   const moved = await moveOneDriveItem({
     itemId: row.item_id,
-    folderPath: folderPartsFromDestination(row.proposed_destination),
+    folderPath,
     newName: row.proposed_name,
   });
 
-  await updateDocumentReferences(row.item_id, moved, row);
+  try {
+    await updateDocumentReferences(row.item_id, moved, row);
+  } catch (updateError) {
+    try {
+      await moveOneDriveItem({
+        itemId: row.item_id,
+        folderPath,
+        newName: row.source_name,
+      });
+    } catch (rollbackError) {
+      throw new Error(
+        `OneDrive was renamed but database synchronization failed, and automatic rollback also failed. ${updateError?.message || ""} ${rollbackError?.message || ""}`.trim()
+      );
+    }
+    throw new Error(`Database synchronization failed; the OneDrive rename was rolled back. ${updateError?.message || ""}`.trim());
+  }
+
   return { ...row, moved };
 }
 
