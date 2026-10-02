@@ -21,3 +21,9 @@ Key current invariants:
 - active archive/staging content is excluded from current naming compliance until reactivated.
 
 Do not rename historical OneDrive documents in bulk without a reviewed Current Name → Proposed Name migration preview.
+
+## Legacy document migration is closed
+
+The legacy repository migration was completed on 2026-10-02. Normal operations use **Document Governance** for active repository compliance; do not re-enable the old Legacy Migration workspace as part of routine document handling.
+
+The historical `legacy_document_migration_queue` is retained as an audit trail. The one-time legacy catalog migration date decision (2026-06-15) remains documented in the naming policy for traceability, but it must not be used as a runtime default for future supplier documents.
