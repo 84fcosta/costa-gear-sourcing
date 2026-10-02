@@ -1,3 +1,5 @@
+import { extensionFromFileName, purchaseOrderRecordKey } from "./documentNaming";
+
 export const PURCHASE_ORDER_DOCUMENT_TYPES = [
   { value: "CONTRACT", label: "Contract", token: "Contract", description: "Purchase agreement defining products, price and commercial terms." },
   { value: "RECEIPT", label: "Receipt", token: "Receipt", description: "Proof of payment for this purchase order." },
@@ -34,22 +36,15 @@ export function supplierDocumentShortName(name) {
   return joined || "Supplier";
 }
 
-export function purchaseOrderNumberToken(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 1) return "000";
-  return String(Math.trunc(number)).padStart(3, "0");
-}
-
 export function governedPurchaseOrderDocumentName({ fileName, poNumber, supplierName, documentType, documentDate }) {
   const type = purchaseOrderDocumentType(documentType);
   if (!type) throw new Error("Select a valid purchase-order document type.");
   if (!documentDate) throw new Error("Enter the document date before uploading.");
-  const extensionMatch = String(fileName || "").match(/\.([A-Za-z0-9]{1,10})$/);
-  const extension = extensionMatch ? "." + extensionMatch[1].toLowerCase() : "";
-  const po = purchaseOrderNumberToken(poNumber);
+  const extension = extensionFromFileName(fileName);
+  const po = purchaseOrderRecordKey(poNumber);
   const supplier = supplierDocumentShortName(supplierName);
   const date = String(documentDate).slice(0, 10);
-  return "CG_PO_" + po + "_" + supplier + "_" + type.token + "_" + date + extension;
+  return "CG_" + po + "_" + supplier + "_" + type.token + "_" + date + extension;
 }
 
 export function detectPostPurchaseDocument({ fileName = "", evidence = "" } = {}) {
