@@ -61,7 +61,9 @@ export function sequentialRecordKey(family, value, width = DOCUMENT_RECORD_DIGIT
     throw new Error(`Unsupported sequential document family: ${normalizedFamily || "(blank)"}.`);
   }
 
-  const numeric = trailingNumericId(value);
+  const raw = String(value ?? "").trim();
+  const familyMatch = raw.match(new RegExp("^" + normalizedFamily + "[-_]?(\\d+)$", "i"));
+  const numeric = familyMatch?.[1] || trailingNumericId(raw);
   if (!numeric) {
     throw new Error(`A numeric ${normalizedFamily} identifier is required for governed document naming.`);
   }
@@ -249,8 +251,13 @@ export function analyzeOfficialDocumentName(fileName) {
     if (dateIndexes.length !== 1) {
       return { typeCode: family, compliant: false, issue: "Use one document date only" };
     }
-  } else if (dateIndexes.length) {
-    return { typeCode: family, compliant: false, issue: "SOP and template names use version control instead of a filename date" };
+  } else {
+    if (dateIndexes.length) {
+      return { typeCode: family, compliant: false, issue: "SOP and template names use version control instead of a filename date" };
+    }
+    if (!VERSION_PATTERN.test((parts[parts.length - 1] || "").toUpperCase())) {
+      return { typeCode: family, compliant: false, issue: "SOP and template names must end with V01, V02..." };
+    }
   }
 
   return { typeCode: family, compliant: true, issue: null };
