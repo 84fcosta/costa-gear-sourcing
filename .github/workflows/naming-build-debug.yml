@@ -3,6 +3,8 @@ name: Naming Build Debug
 on:
   push:
     branches: [agent/document-naming-v2]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
