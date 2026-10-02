@@ -35,6 +35,7 @@ const exclusions = new Set([
   // Legacy/archive migration code may need to recognize historical names as input.
   "src/services/legacyBrandMarketingMigrationService.js",
   "src/services/legacyCloseoutMigrationService.js",
+  "src/services/activeDocumentNamingPreviewService.js", // must recognize legacy names as migration input
 ]);
 
 const violations = [];
