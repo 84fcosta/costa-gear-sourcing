@@ -56,17 +56,7 @@ export function assetRecordKey(value) {
 }
 
 export function quotationRecordKey(value) {
-  let raw = String(value || "").trim();
-  raw = raw.replace(/^CGQ[-_]?/i, "").replace(/^QUO[-_]?/i, "");
-  const formal = raw.match(/^SUP[-_]?(\d+)[-_](\d{8})[-_](\d+)$/i);
-  if (formal) {
-    return "QUO" + String(Number(formal[1])).padStart(3, "0") + "-" + formal[2] + "-" + String(Number(formal[3])).padStart(2, "0");
-  }
-  const compact = raw.match(/^(\d+)[-_](\d{8})[-_](\d+)$/);
-  if (compact) {
-    return "QUO" + String(Number(compact[1])).padStart(3, "0") + "-" + compact[2] + "-" + String(Number(compact[3])).padStart(2, "0");
-  }
-  return "QUO" + cleanDocumentNamePart(raw, "Record", 40).replace(/^SUP[-_]?/i, "");
+  return sequentialKey("QUO", value, 3);
 }
 
 export function extensionFromFileName(fileName) {
