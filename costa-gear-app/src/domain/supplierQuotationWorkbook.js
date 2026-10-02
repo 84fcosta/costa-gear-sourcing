@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { ITEM_HEADERS, QUOTATION_HEADERS } from "./supplierQuotationImport";
+import { templateFileName } from "./documentNaming";
 
 const asValue = value => value === null || value === undefined ? "" : value;
 const clean = value => value === null || value === undefined ? "" : String(value).trim();
@@ -76,7 +77,7 @@ export function buildCostaGearSupplierQuotationFile({
   supplierName,
   header,
   lines,
-  fileName = "Costa_Gear_Supplier_Quotation_Import.xlsx",
+  fileName = templateFileName({ process: "Sourcing", name: "Supplier_Quotation_Import", version: 1, extension: "xlsx" }),
 }) {
   const wb = buildCostaGearSupplierQuotationWorkbook({ supplierName, header, lines });
   const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
