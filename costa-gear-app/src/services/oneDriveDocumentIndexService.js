@@ -10,14 +10,16 @@ function extensionFromName(name) {
 }
 
 function isLegacyStagingPath(path) {
-  return String(path || "").includes(LEGACY_STAGING_SEGMENT)
-    || String(path || "").includes("/02_PRODUCTS/Suppliers_Sourcing/_INTAKE/");
+  const value = String(path || "");
+  return value.includes(LEGACY_STAGING_SEGMENT)
+    || value.includes("/02_PRODUCTS/Suppliers_Sourcing/_INTAKE/")
+    || value.includes("/99_ARCHIVE/");
 }
 
 function analyzeNaming(name, isFolder, path) {
   if (isFolder) return { typeCode: null, compliant: null, issue: null };
   if (isLegacyStagingPath(path)) {
-    return { typeCode: null, compliant: null, issue: "Internal staging excluded from document naming compliance" };
+    return { typeCode: null, compliant: null, issue: "Staging/archive excluded from active document naming compliance" };
   }
   return analyzeOfficialDocumentName(name);
 }
