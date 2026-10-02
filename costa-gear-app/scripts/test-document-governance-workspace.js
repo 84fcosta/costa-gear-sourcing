@@ -9,7 +9,11 @@ function read(relative) {
 const app = read("src/App.js");
 assert.match(app, /DocumentGovernanceWorkspace/);
 assert.match(app, /governance: \["Document Governance"/);
-assert.match(app, /Document governance/);
+assert.match(app, /aria-label="Document Governance module"/);
+assert.match(app, /workspace === "expenses" \? "active" : ""/);
+assert.match(app, /workspace === "governance" \? "active" : ""/);
+assert.ok((app.match(/cg-nav-divider/g) || []).length >= 2, "Expenses and Governance should be separated modules in the top navigation.");
+assert.match(app, /<DocumentGovernanceWorkspace \/>/);
 assert.doesNotMatch(app, /import LegacyMigrationWorkspace/);
 
 const workspace = read("src/components/DocumentGovernanceWorkspace.js");

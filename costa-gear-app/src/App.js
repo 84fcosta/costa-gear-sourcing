@@ -236,9 +236,14 @@ export default function App() {
             <span className="cg-nav-label">{step && <b className="cg-nav-step">{step}</b>}<span>{label}</span></span>
           </button>)}
           <span className="cg-nav-divider" aria-hidden="true" />
-          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" || workspace === "governance" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "expenses" ? "active" : ""}`} onClick={() => navigate("expenses")} aria-label="Administrative module: Expenses">
             <ReceiptText size={18} strokeWidth={1.9} />
             <span className="cg-nav-label"><span>Expenses</span></span>
+          </button>
+          <span className="cg-nav-divider" aria-hidden="true" />
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "governance" ? "active" : ""}`} onClick={() => navigate("governance")} aria-label="Document Governance module">
+            <ShieldCheck size={18} strokeWidth={1.9} />
+            <span className="cg-nav-label"><span>Governance</span></span>
           </button>
         </nav>
       </div>
@@ -273,11 +278,6 @@ export default function App() {
                         ? "Reconnect OneDrive"
                         : "Connect OneDrive"}
               </button>
-              {workspace === "expenses" ? (
-                <button type="button" className="cg-text-button" onClick={() => navigate("governance")} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  <ShieldCheck size={14} />Document governance
-                </button>
-              ) : null}
               {oneDriveMessage ? <span className="cg-page-header-action-message" style={{ fontSize: 10.5, color: "#687166", maxWidth: 360, textAlign: "right" }}>{oneDriveMessage}</span> : null}
               {oneDriveAuth.username ? <span className="cg-page-header-action-account" style={{ fontSize: 10.5, color: "#687166" }}>{oneDriveAuth.username}</span> : null}
             </div>
@@ -293,7 +293,7 @@ export default function App() {
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
           : workspace === "expenses" ? <ExpenseWorkspace key={oneDriveVersion} />
-          : workspace === "governance" ? <DocumentGovernanceWorkspace onBack={() => navigate("expenses")} />
+          : workspace === "governance" ? <DocumentGovernanceWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
@@ -313,7 +313,8 @@ export default function App() {
         <div className="cg-mobile-sheet-links">
           <button className={workspace === "buying" ? "active" : ""} onClick={() => navigate("buying")}><ShoppingCart size={22}/><span><strong>Buying</strong><small>Purchase decisions and POs</small></span></button>
           <button className={workspace === "logistics" ? "active" : ""} onClick={() => navigate("logistics")}><Truck size={22}/><span><strong>Logistics</strong><small>Shipments and landed cost</small></span></button>
-          <button className={workspace === "expenses" || workspace === "governance" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
+          <button className={workspace === "expenses" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
+          <button className={workspace === "governance" ? "active" : ""} onClick={() => navigate("governance")}><ShieldCheck size={22}/><span><strong>Document Governance</strong><small>Repository compliance and naming</small></span></button>
         </div>
       </section>
     </div> : null}
