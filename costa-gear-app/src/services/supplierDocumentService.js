@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { quotationRecordKey, supplierRecordKey } from "../domain/documentNaming";
 import {
   cleanOneDriveNamePart,
   deleteOneDriveItem,
@@ -174,7 +175,7 @@ function documentTypeToken(documentType) {
   if (documentType === "CATALOG") return "Catalog";
   if (documentType === "PRICE_LIST") return "Price_List";
   if (documentType === "TECHNICAL") return "Technical";
-  if (documentType === "OTHER_SOURCING") return "Sourcing_Document";
+  if (documentType === "OTHER_SOURCING") return "Other_PrePurchase";
   return "Document";
 }
 
@@ -238,14 +239,14 @@ export function governedSupplierDocumentName({
     "Supplier",
     36
   );
-  const supplierKey = cleanOneDriveNamePart(String(supplier.sup_id || "").replace(/^SUP-?/i, ""), "Supplier", 20);
+  const supplierKey = supplierRecordKey(supplier.sup_id);
 
   if (isQuotationDocumentType(documentType)) {
     if (!quotation?.quote_ref) throw new Error("The quotation must have a Costa Gear reference before documents can be stored.");
-    const quoteKey = cleanOneDriveNamePart(String(quotation.quote_ref || "").replace(/^CGQ-?/i, ""), "Quotation", 48);
-    const role = documentType === "QUOTATION_SOURCE" ? "Supplier_Source" : "Costa_Gear_Import";
+    const quoteKey = quotationRecordKey(quotation.quote_ref);
+    const role = documentType === "QUOTATION_SOURCE" ? "Source" : "Import";
     const date = cleanOneDriveNamePart(documentDate || quotation.quote_date || today(), today(), 10);
-    return `CG_QUO_${quoteKey}_${shortName}_${role}_${date}${ext}`;
+    return `CG_${quoteKey}_${shortName}_${role}_${date}${ext}`;
   }
 
   const typeToken = documentTypeToken(documentType);
@@ -255,7 +256,7 @@ export function governedSupplierDocumentName({
     : "Undated";
   const descriptorPart = descriptor ? `_${descriptor}` : "";
 
-  return `CG_SUP_${supplierKey}_${shortName}_${typeToken}${descriptorPart}_${dateToken}${ext}`;
+  return `CG_${supplierKey}_${shortName}_${typeToken}${descriptorPart}_${dateToken}${ext}`;
 }
 
 async function sha1Hex(file) {
