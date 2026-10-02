@@ -46,7 +46,7 @@ function adminProposal(item) {
   const semanticName = sourceName.toUpperCase().replace(/[_-]+/g, " ");
 
   let typeCode = "ADM";
-  let key = "Corporate";
+  let key = null;
   let destination = ["00_ADMIN", "Business_Legal"];
   let classificationNote = "Administrative document mapped by legacy folder.";
 
@@ -72,11 +72,11 @@ function adminProposal(item) {
     classificationNote = "Tax document classified from filename semantics.";
   } else if (sourcePath.includes("/Contracts_Agreements/")) {
     typeCode = "AGR";
-    key = "General";
+    key = null;
     destination = ["00_ADMIN", "Agreements"];
   } else if (sourcePath.includes("/Insurance/")) {
     typeCode = "INS";
-    key = "Policy";
+    key = null;
     destination = ["00_ADMIN", "Insurance_Compliance"];
   } else if (sourcePath.includes("/Compliance_Taxes/")) {
     typeCode = "TAX";
@@ -85,7 +85,9 @@ function adminProposal(item) {
     classificationNote = "Tax document mapped from legacy Compliance/Taxes folder.";
   }
 
-  const parts = ["CG", typeCode, key, description];
+  const parts = [typeCode];
+  if (key) parts.push(key);
+  parts.push(description);
   if (version) parts.push(version);
   if (date) parts.push(date);
   const proposedName = `${parts.join("_")}${extension ? `.${extension}` : ""}`;
@@ -120,7 +122,7 @@ function expenseProposal(item, expenses) {
   const extension = extensionFromName(sourceName);
   return {
     proposed_destination: `01_FINANCE/Expenses/${year || "REVIEW"}`,
-    proposed_name: `CG_EXP_REVIEW_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
+    proposed_name: `EXP_REVIEW_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
     proposal_state: "needs_review",
     linked_expense_id: null,
     review_note: dateMatches.length > 1
@@ -144,7 +146,7 @@ function financeProposal(item, expenses) {
     if (year) destination.push(year);
     return {
       proposed_destination: destination.join("/"),
-      proposed_name: `CG_BNK_Review_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
+      proposed_name: `BNK_REVIEW_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
       proposal_state: "needs_review",
       linked_expense_id: null,
       review_note: "Confirm institution/account key before migration.",
@@ -154,7 +156,7 @@ function financeProposal(item, expenses) {
   if (path.includes("/Revenue/")) {
     return {
       proposed_destination: "01_FINANCE/Revenue",
-      proposed_name: `CG_REV_Review_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
+      proposed_name: `REV_REVIEW_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
       proposal_state: "needs_review",
       linked_expense_id: null,
       review_note: "Confirm revenue record key before migration.",
@@ -163,7 +165,7 @@ function financeProposal(item, expenses) {
 
   return {
     proposed_destination: "01_FINANCE",
-    proposed_name: `CG_BUD_Review_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
+    proposed_name: `FIN_REVIEW_${description}${date ? `_${date}` : ""}${extension ? `.${extension}` : ""}`,
     proposal_state: "needs_review",
     linked_expense_id: null,
     review_note: "Review finance document classification before migration.",
