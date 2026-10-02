@@ -32,6 +32,7 @@ import {
   refreshActiveDocumentNamingPreview,
   migrateActiveDocumentName,
   migrateAllReadyActiveDocumentNames,
+  deleteOrphanActivePurchaseDocument,
 } from "../services/activeDocumentNamingPreviewService";
 import "../legacy-migration.css";
 
@@ -99,6 +100,7 @@ function statusLabel(row) {
   if (row.status === "error") return "Error";
   if (row.proposal_state === "ready") return "Ready";
   if (row.proposal_state === "possible_duplicate") return "Possible duplicate";
+  if (row.proposal_state === "delete_ready") return "Delete approved";
   return "Needs review";
 }
 
@@ -107,6 +109,7 @@ function statusClass(row) {
   if (row.status === "skipped") return "skipped";
   if (row.status === "error") return "error";
   if (row.proposal_state === "possible_duplicate") return "duplicate";
+  if (row.proposal_state === "delete_ready") return "error";
   return row.proposal_state === "ready" ? "ready" : "review";
 }
 
@@ -159,6 +162,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
     review: rows.filter((row) => row.proposal_state === "needs_review" && row.status === "review").length,
     duplicates: rows.filter((row) => row.proposal_state === "possible_duplicate" && row.status === "review").length,
     duplicateCandidates: rows.filter((row) => row.proposal_state === "possible_duplicate").length,
+    deleteReady: rows.filter((row) => row.proposal_state === "delete_ready" && row.status === "review").length,
     migrated: rows.filter((row) => row.status === "migrated").length,
     skipped: rows.filter((row) => row.status === "skipped").length,
   }), [rows]);
@@ -211,6 +215,28 @@ export default function LegacyMigrationWorkspace({ onBack }) {
       await load(false);
     } finally {
       setBulkWorking(false);
+    }
+  }
+
+  async function deleteOrphan(row) {
+    if (!config.namingMigration || row.proposal_state !== "delete_ready") return;
+    const approved = window.confirm(
+      `Delete "${row.source_name}" from OneDrive? This action is only available because the file has no linked PO or document record.`
+    );
+    if (!approved) return;
+
+    setWorkingId(row.id);
+    setError("");
+    setNotice("");
+    try {
+      await deleteOrphanActivePurchaseDocument(row.item_id);
+      setNotice(`Deleted orphan document: ${row.source_name}`);
+      await load(false);
+    } catch (deleteError) {
+      setError(deleteError?.message || "Unable to delete the orphan purchase-order document.");
+      await load(false);
+    } finally {
+      setWorkingId(null);
     }
   }
 
@@ -301,7 +327,7 @@ export default function LegacyMigrationWorkspace({ onBack }) {
       </div>
 
       <div className="cg-legacy-safety"><ShieldCheck size={17} /><span>{config.namingMigration
-        ? <>Only rows marked <strong>Ready</strong> can be renamed. Each rename is revalidated against the live business records and checked for filename collisions immediately before OneDrive is changed. <strong>Needs review</strong> rows remain blocked.</>
+        ? <>Only rows marked <strong>Ready</strong> can be renamed. Each rename is revalidated against the live business records and checked for filename collisions immediately before OneDrive is changed. A legacy PO file may show <strong>Delete approved</strong> only when it has no PO/document links, and deletion is revalidated again before OneDrive is changed. <strong>Needs review</strong> rows remain blocked.</>
         : config.previewOnly
           ? <>This batch is <strong>read-only</strong>. It compares active formal documents with the permanent naming framework and does not rename, move or delete files.</>
           : <>Migration uses the existing <strong>Files.ReadWrite.AppFolder</strong> permission and never deletes source files. Batch 4 cleanup is a separate guarded action that deletes only <strong>COSTA_GEAR_LEGACY_STAGING</strong> after a live OneDrive scan confirms the tree contains folders only.</>}</span></div>
@@ -340,6 +366,11 @@ export default function LegacyMigrationWorkspace({ onBack }) {
                           <button className="cg-expense-btn compact" onClick={() => setStatus(row, "review")} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}><SkipForward size={14} />Review again</button>
                         ) : null}
                         {!config.previewOnly && row.status === "migrated" && row.migrated_web_url ? <a className="cg-expense-btn compact" href={row.migrated_web_url} target="_blank" rel="noreferrer">Open</a> : null}
+                        {config.namingMigration && row.proposal_state === "delete_ready" ? (
+                          <button className="cg-expense-btn compact" onClick={() => deleteOrphan(row)} disabled={workingId === row.id || bulkWorking || verifyWorking || cleanupWorking}>
+                            <Trash2 size={14} />Delete orphan
+                          </button>
+                        ) : null}
                         {config.previewOnly && !config.namingMigration ? <span className="cg-legacy-status review">Preview only</span> : null}
                       </div>
                     </td>
