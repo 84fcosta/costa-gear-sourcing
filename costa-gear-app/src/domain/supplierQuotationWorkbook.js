@@ -76,7 +76,7 @@ export function buildCostaGearSupplierQuotationFile({
   supplierName,
   header,
   lines,
-  fileName = "Costa_Gear_Supplier_Quotation_Import.xlsx",
+  fileName = "TPL_Supplier_Quotation_Import.xlsx",
 }) {
   const wb = buildCostaGearSupplierQuotationWorkbook({ supplierName, header, lines });
   const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
