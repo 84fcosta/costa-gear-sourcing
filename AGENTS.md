@@ -5,6 +5,7 @@
 Before creating or changing any feature that uploads, renames, exports, migrates or indexes a business document, read:
 
 - `costa-gear-app/docs/DOCUMENT_NAMING_CONVENTION.md`
+- `costa-gear-app/docs/DOCUMENT_GOVERNANCE.md`
 - `costa-gear-app/src/domain/documentNaming.js`
 
 Do not create local/hard-coded filename conventions in components or services. Reuse the central naming helpers and update the policy, executable rules and regression tests together when a naming rule intentionally changes.
