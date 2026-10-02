@@ -1,3 +1,21 @@
+const SUPPLIER_NOISE = new Set([
+  "auto", "automotive", "accessary", "accessories", "company", "co", "corp", "corporation",
+  "danyang", "equipment", "factory", "guangzhou", "hainan", "inc", "information", "jiepai",
+  "lechang", "limited", "ltd", "manufacturing", "manufacturer", "parts", "technology", "trading",
+  "changzhou", "group",
+]);
+
+export function supplierShortName(name) {
+  const tokens = String(name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .match(/[A-Za-z0-9]+/g) || [];
+  const meaningful = tokens.filter(token => !SUPPLIER_NOISE.has(token.toLowerCase()));
+  const selected = (meaningful.length ? meaningful : tokens).slice(0, 2);
+  const joined = selected.map(token => token.replace(/[^A-Za-z0-9]+/g, "")).filter(Boolean).join("");
+  return joined || "Supplier";
+}
+
 export function cleanDocumentNamePart(value, fallback = "Document", maxLength = 56) {
   const cleaned = String(value || fallback)
     .normalize("NFKD")
@@ -12,15 +30,13 @@ export function cleanDocumentNamePart(value, fallback = "Document", maxLength = 
   return cleaned || fallback;
 }
 
-function digits(value) {
-  const matches = String(value ?? "").match(/\d+/g);
-  return matches ? matches.join("") : "";
-}
-
 function sequentialKey(family, value, width) {
-  const numeric = digits(value);
-  if (numeric) return family + numeric.padStart(width, "0").slice(-Math.max(width, numeric.length));
-  return family + cleanDocumentNamePart(value, "Record", 20);
+  const raw = String(value ?? "").trim();
+  const numeric = raw.match(/(?:^|[-_])(\d+)$/)?.[1] || (/^\d+$/.test(raw) ? raw : "");
+  if (numeric) return family + numeric.padStart(width, "0");
+  const cleaned = cleanDocumentNamePart(raw, "Record", 20)
+    .replace(new RegExp("^" + family + "[-_]?", "i"), "");
+  return family + cleaned;
 }
 
 export function supplierRecordKey(value) {
