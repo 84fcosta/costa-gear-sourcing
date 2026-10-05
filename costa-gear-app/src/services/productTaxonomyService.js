@@ -108,6 +108,14 @@ export async function updateProductType({ id, name, familyCode, active = true })
   return Array.isArray(data) ? data[0] : data;
 }
 
+export async function deleteProductType(id) {
+  const { data, error } = await supabase.rpc("delete_unused_product_type", {
+    p_id: id,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 export async function updateProductMaterial({ id, name, active = true }) {
   const { data, error } = await supabase.rpc("update_product_material_master", {
     p_id: id,

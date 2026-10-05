@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "../supabase";
 import {
   addProductCategory,
   addProductMaterial,
   addProductType,
+  deleteProductType,
   listAllProductCategories,
   listAllProductMaterials,
   listAllProductTypes,
@@ -145,9 +146,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
     }
     setBusy(true); setError(""); setMessage("");
     try {
-      if (tab === "types") {
-        await updateProductType({ id: row.id, name: row.name, familyCode: row.family_code, active: !row.active });
-      } else if (tab === "materials") {
+      if (tab === "materials") {
         await updateProductMaterial({ id: row.id, name: row.name, active: !row.active });
       } else {
         await updateProductCategory({ id: row.id, name: row.name, active: !row.active });
@@ -157,6 +156,31 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
       setMessage(`${row.name} ${row.active ? "deactivated" : "reactivated"}.`);
     } catch (e) {
       setError(e.message || "Unable to change active status.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeProductType = async row => {
+    const usage = usageFor(row);
+    if (usage > 0) {
+      setError(`This Product Type is used by ${usage} product(s). Reassign those products before deleting it.`);
+      return;
+    }
+    if (!window.confirm(`Delete Product Type "${row.name}"? This cannot be undone.`)) return;
+
+    setBusy(true); setError(""); setMessage("");
+    try {
+      await deleteProductType(row.id);
+      if (editing === row.id) {
+        setEditing(null);
+        setDraft({ name: "", familyCode: "" });
+      }
+      await load();
+      onChanged?.();
+      setMessage(`${row.name} deleted.`);
+    } catch (e) {
+      setError(e.message || "Unable to delete Product Type.");
     } finally {
       setBusy(false);
     }
@@ -214,7 +238,7 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
           <div style={{fontSize:12,color:"#647062"}}>
-            {tab === "types" ? "Renaming a used Product Type updates its products. Family Code is locked while the type is in use." :
+            {tab === "types" ? "Renaming a used Product Type updates its products. Family Code is locked while the type is in use. Unused Product Types can be deleted." :
              tab === "materials" ? "Renaming a Material updates every product using it and refreshes Auto Name." :
              "Renaming a Category updates every product using it."}
           </div>
@@ -256,12 +280,21 @@ export default function ProductTaxonomyManager({ open, onClose, onChanged }) {
                 </> : <button type="button" disabled={busy} style={styles.btn} onClick={()=>startEdit(row)}><Pencil size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Edit</button>}
               </div>
 
-              <button type="button" disabled={busy || (row.active && usage>0)}
-                title={row.active && usage>0 ? "Reassign products before deactivating this value." : ""}
-                style={{...styles.btn,minWidth:86,opacity:(row.active&&usage>0)?.45:1}}
-                onClick={()=>toggleActive(row)}>
-                {row.active?"Deactivate":"Reactivate"}
-              </button>
+              {tab === "types" ? (
+                <button type="button" disabled={busy || usage > 0}
+                  title={usage > 0 ? "Reassign products before deleting this Product Type." : "Delete unused Product Type"}
+                  style={{...styles.btn,minWidth:86,opacity:usage>0?.45:1,color:usage>0?"#647062":"#B65145"}}
+                  onClick={()=>removeProductType(row)}>
+                  <Trash2 size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Delete
+                </button>
+              ) : (
+                <button type="button" disabled={busy || (row.active && usage>0)}
+                  title={row.active && usage>0 ? "Reassign products before deactivating this value." : ""}
+                  style={{...styles.btn,minWidth:86,opacity:(row.active&&usage>0)?.45:1}}
+                  onClick={()=>toggleActive(row)}>
+                  {row.active?"Deactivate":"Reactivate"}
+                </button>
+              )}
             </div>;
           })}
         </div>
