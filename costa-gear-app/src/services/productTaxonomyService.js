@@ -28,9 +28,37 @@ export async function addProductMaterial(name) {
 }
 
 export async function addProductType({ name, familyCode }) {
+  const cleanName = String(name || "").trim();
+  const cleanFamilyCode = String(familyCode || "").trim().toUpperCase();
+
+  const { data: existingNames, error: nameError } = await supabase
+    .from("product_types")
+    .select("id,name,family_code,active")
+    .ilike("name", cleanName)
+    .limit(1);
+  if (nameError) throw nameError;
+
+  if (!(existingNames || []).length) {
+    const { data: familyMatches, error: familyError } = await supabase
+      .from("product_types")
+      .select("id,name,family_code,active")
+      .eq("family_code", cleanFamilyCode)
+      .order("active", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (familyError) throw familyError;
+
+    const conflict = (familyMatches || [])[0];
+    if (conflict) {
+      throw new Error(
+        `Family Code ${cleanFamilyCode} is already assigned to Product Type "${conflict.name}". Choose a different Family Code.`
+      );
+    }
+  }
+
   const { data, error } = await supabase.rpc("add_product_type", {
-    p_name: String(name || "").trim(),
-    p_family_code: String(familyCode || "").trim(),
+    p_name: cleanName,
+    p_family_code: cleanFamilyCode,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
