@@ -282,7 +282,7 @@ function ProductLightbox({ images, initialIndex = 0, productName, onClose }) {
       onTouchCancel={swipe.onTouchCancel}
     >
       <div className="cg-mf-lightbox-scroll" style={{ touchAction: zoom === 1 ? "pan-y" : "pan-x pan-y pinch-zoom" }}>
-        <LightboxImage itemId={current.itemId} alt={current.alt || productName} zoom={zoom}/>
+        <LightboxImage key={current.itemId} itemId={current.itemId} alt={current.alt || productName} zoom={zoom}/>
       </div>
 
       {images.length > 1 ? <>
