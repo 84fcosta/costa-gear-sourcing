@@ -29,6 +29,37 @@ const writeCatalogSession = (key, value) => {
   try { window.sessionStorage.setItem(key, String(value)); } catch (_) {}
 };
 
+function useHorizontalSwipe({ enabled = true, onSwipeLeft, onSwipeRight, threshold = 44 }) {
+  const startRef = useRef(null);
+  const suppressClickUntilRef = useRef(0);
+
+  const onTouchStart = event => {
+    if (!enabled || !event.touches?.length) return;
+    const touch = event.touches[0];
+    startRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const onTouchEnd = event => {
+    const start = startRef.current;
+    startRef.current = null;
+    if (!enabled || !start || !event.changedTouches?.length) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < threshold || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
+
+    suppressClickUntilRef.current = Date.now() + 350;
+    if (deltaX < 0) onSwipeLeft?.();
+    else onSwipeRight?.();
+  };
+
+  const onTouchCancel = () => { startRef.current = null; };
+  const shouldSuppressClick = () => Date.now() < suppressClickUntilRef.current;
+
+  return { onTouchStart, onTouchEnd, onTouchCancel, shouldSuppressClick };
+}
+
 function searchRelevance(row, needle, fitmentEntries = []) {
   if (!needle) return 0;
 
@@ -113,6 +144,58 @@ function ProductImage({ itemId, alt, className = "" }) {
   if (!url) return <div ref={frameRef} className={`cg-mf-product-image loading ${className}`}><span>{shouldLoad ? "Loading photo..." : "Photo"}</span></div>;
   return <img ref={frameRef} className={`cg-mf-product-image ${className}`} src={url} alt={alt || "Costa Gear product"} loading="lazy"/>;
 }
+
+function ProductDetailCarousel({ images, productName, onOpen }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => { setIndex(0); }, [productName]);
+
+  const current = images[index] || null;
+  const move = direction => setIndex(value => Math.min(images.length - 1, Math.max(0, value + direction)));
+  const swipe = useHorizontalSwipe({
+    enabled: images.length > 1,
+    onSwipeLeft: () => move(1),
+    onSwipeRight: () => move(-1),
+  });
+
+  const openCurrent = () => {
+    if (swipe.shouldSuppressClick()) return;
+    if (current) onOpen?.(index);
+  };
+
+  if (!current) {
+    return <div className="cg-mf-detail-carousel">
+      <ProductImage itemId={null} alt={productName} className="detail"/>
+    </div>;
+  }
+
+  return <div className="cg-mf-detail-carousel">
+    <button
+      type="button"
+      className="cg-mf-product-detail-image-button"
+      onClick={openCurrent}
+      onTouchStart={swipe.onTouchStart}
+      onTouchEnd={swipe.onTouchEnd}
+      onTouchCancel={swipe.onTouchCancel}
+      aria-label={images.length > 1 ? `Open product photo ${index + 1} of ${images.length}. Swipe left or right to browse photos.` : "Open product photo"}
+    >
+      <ProductImage key={current.itemId} itemId={current.itemId} alt={current.alt || productName} className="detail carousel"/>
+      <span className="cg-mf-enlarge-hint">Tap to enlarge</span>
+      {images.length > 1 ? <span className="cg-mf-swipe-hint">Swipe</span> : null}
+    </button>
+
+    {images.length > 1 ? <div className="cg-mf-carousel-dots" aria-label={`Photo ${index + 1} of ${images.length}`}>
+      {images.map((image, dotIndex) => <button
+        type="button"
+        key={image.itemId}
+        className={dotIndex === index ? "active" : ""}
+        onClick={() => setIndex(dotIndex)}
+        aria-label={`Show photo ${dotIndex + 1}`}
+        aria-current={dotIndex === index ? "true" : undefined}
+      />)}
+    </div> : null}
+  </div>;
+}
 function LightboxImage({ itemId, alt, zoom }) {
   const [url, setUrl] = useState(() => imageUrlCache.get(itemId) || "");
   const [failed, setFailed] = useState(false);
@@ -176,6 +259,11 @@ function ProductLightbox({ images, initialIndex = 0, productName, onClose }) {
     setIndex(value => Math.min(images.length - 1, Math.max(0, value + direction)));
     setZoom(1);
   };
+  const swipe = useHorizontalSwipe({
+    enabled: zoom === 1 && images.length > 1,
+    onSwipeLeft: () => move(1),
+    onSwipeRight: () => move(-1),
+  });
   const zoomIn = () => setZoom(value => Math.min(3, Number((value + .5).toFixed(1))));
   const zoomOut = () => setZoom(value => Math.max(1, Number((value - .5).toFixed(1))));
 
@@ -187,8 +275,13 @@ function ProductLightbox({ images, initialIndex = 0, productName, onClose }) {
       <button type="button" onClick={onClose} aria-label="Close photo viewer"><X size={23}/></button>
     </div>
 
-    <div className="cg-mf-lightbox-stage">
-      <div className="cg-mf-lightbox-scroll">
+    <div
+      className="cg-mf-lightbox-stage"
+      onTouchStart={swipe.onTouchStart}
+      onTouchEnd={swipe.onTouchEnd}
+      onTouchCancel={swipe.onTouchCancel}
+    >
+      <div className="cg-mf-lightbox-scroll" style={{ touchAction: zoom === 1 ? "pan-y" : "pan-x pan-y pinch-zoom" }}>
         <LightboxImage itemId={current.itemId} alt={current.alt || productName} zoom={zoom}/>
       </div>
 
@@ -409,10 +502,7 @@ export default function MobileProductCatalog({
       </div>
 
       <section className="cg-mf-product-detail">
-        <button type="button" className="cg-mf-product-detail-image-button" onClick={() => detailImages.length && openPhoto(0)} aria-label="Open product photo">
-          <ProductImage itemId={selected.product.main_image_item_id} alt={selected.product.name} className="detail"/>
-          {selected.product.main_image_item_id ? <span>Tap to enlarge</span> : null}
-        </button>
+        <ProductDetailCarousel images={detailImages} productName={selected.product.name} onOpen={openPhoto}/>
         <div className="cg-mf-product-detail-body">
           <span className="cg-mf-sku">{selected.product.sku_id}</span>
           <h2>{selected.product.name}</h2>
