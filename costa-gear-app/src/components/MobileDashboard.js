@@ -45,16 +45,16 @@ function periodLabel(period) {
   return "All history";
 }
 
-function MobileSalesProfitChart({ series, period }) {
+function MobileSalesProfitChart({ series }) {
   const [windowEnd, setWindowEnd] = useState(series.length);
 
   useEffect(() => {
     setWindowEnd(series.length);
-  }, [period, series.length]);
+  }, [series.length]);
 
   if (!series.length) return <div className="cg-mf-empty-inline">Completed sales will populate this chart.</div>;
 
-  const safeEnd = Math.min(series.length, Math.max(1, windowEnd));
+  const safeEnd = Math.min(series.length, Math.max(3, windowEnd));
   const start = Math.max(0, safeEnd - 3);
   const visible = series.slice(start, safeEnd);
   const canPrev = start > 0;
@@ -68,9 +68,9 @@ function MobileSalesProfitChart({ series, period }) {
     <div className="cg-mf-chart-toolbar">
       <div className="cg-mf-chart-legend"><span><i className="sales"/>Sales</span><span><i className="profit"/>Gross Profit</span></div>
       <div className="cg-mf-chart-window">
-        <button type="button" disabled={!canPrev} onClick={() => setWindowEnd(end => Math.max(1, end - 3))} aria-label="Previous three months"><ChevronLeft size={16}/></button>
+        <button type="button" disabled={!canPrev} onClick={() => setWindowEnd(end => Math.max(3, end - 1))} aria-label="Previous month"><ChevronLeft size={16}/></button>
         <strong>{range}</strong>
-        <button type="button" disabled={!canNext} onClick={() => setWindowEnd(end => Math.min(series.length, end + 3))} aria-label="Next three months"><ChevronRight size={16}/></button>
+        <button type="button" disabled={!canNext} onClick={() => setWindowEnd(end => Math.min(series.length, end + 1))} aria-label="Next month"><ChevronRight size={16}/></button>
       </div>
     </div>
     <div className="cg-mf-chart-bars">
@@ -127,10 +127,12 @@ export default function MobileDashboard({ onNavigate }) {
       .filter(row => row.date)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    const earliest = completedOrders[0]?.date || new Date();
-    const chartStart = period === "All"
-      ? new Date(earliest.getFullYear(), earliest.getMonth(), 1)
-      : new Date(start.getFullYear(), start.getMonth(), 1);
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const minimumThreeMonthStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const earliest = completedOrders[0]?.date || null;
+    const earliestMonthStart = earliest ? new Date(earliest.getFullYear(), earliest.getMonth(), 1) : minimumThreeMonthStart;
+    const chartStart = earliestMonthStart < minimumThreeMonthStart ? earliestMonthStart : minimumThreeMonthStart;
 
     const aggregate = (rangeStart, rangeEnd) => {
       let revenue = 0;
@@ -174,8 +176,7 @@ export default function MobileDashboard({ onNavigate }) {
 
     const trend = [];
     const cursor = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1);
-    const finalMonth = new Date();
-    finalMonth.setDate(1);
+    const finalMonth = currentMonthStart;
     while (cursor <= finalMonth) {
       const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
       const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
@@ -230,8 +231,8 @@ export default function MobileDashboard({ onNavigate }) {
     </section>
 
     <section className="cg-mf-section">
-      <div className="cg-mf-section-head"><div><span>{periodLabel(period)}</span><h3>Sales & Gross Profit</h3></div></div>
-      <MobileSalesProfitChart series={view.trend} period={period}/>
+      <div className="cg-mf-section-head"><div><span>Rolling 3-month view</span><h3>Sales & Gross Profit</h3></div></div>
+      <MobileSalesProfitChart series={view.trend}/>
     </section>
 
     <section className="cg-mf-section">

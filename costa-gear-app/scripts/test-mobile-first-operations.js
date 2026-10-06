@@ -22,7 +22,11 @@ assert.match(mobileDashboard, /\["6M", "6M"\]/);
 assert.match(mobileDashboard, /\["YTD", "YTD"\]/);
 assert.match(mobileDashboard, /\["All", "All"\]/);
 assert.match(mobileDashboard, /Sales & Gross Profit/);
-assert.match(mobileDashboard, /Previous three months/);
+assert.match(mobileDashboard, /Previous month/);
+assert.match(mobileDashboard, /Next month/);
+assert.match(mobileDashboard, /Rolling 3-month view/);
+assert.match(mobileDashboard, /end - 1/);
+assert.match(mobileDashboard, /end \+ 1/);
 assert.match(mobileDashboard, /Gross Margin/);
 
 const products = read("src/components/MobileProductCatalog.js");
