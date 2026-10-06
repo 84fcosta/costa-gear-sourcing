@@ -17,7 +17,24 @@ export async function listSupplierQuotationLines(quotationId) {
     .eq("quotation_id", quotationId)
     .order("line_no", { ascending: true });
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  if (!rows.length) return rows;
+
+  const { data: variantRows, error: variantError } = await supabase
+    .from("supplier_quotation_line_variants")
+    .select("*")
+    .in("line_id", rows.map(row => row.id))
+    .order("supplier_variant", { ascending: true });
+  if (variantError) throw variantError;
+
+  const byLine = new Map();
+  for (const variant of variantRows || []) {
+    if (!byLine.has(variant.line_id)) byLine.set(variant.line_id, []);
+    byLine.get(variant.line_id).push(variant);
+  }
+
+  return rows.map(row => ({ ...row, variants: byLine.get(row.id) || [] }));
 }
 
 export async function importSupplierQuotation({ supplierId, header, lines }) {
@@ -34,6 +51,19 @@ export async function mapSupplierQuotationLine(lineId, productId) {
   const { data, error } = await supabase.rpc("map_supplier_quotation_line", {
     p_line_id: lineId,
     p_product_id: productId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setSupplierQuotationLineVariants(lineId, variants) {
+  const { data, error } = await supabase.rpc("set_supplier_quotation_line_variants", {
+    p_line_id: lineId,
+    p_variants: (variants || []).map(row => ({
+      supplierVariant: String(row.supplierVariant || "").trim(),
+      quantity: Number(row.quantity),
+      productId: row.productId,
+    })),
   });
   if (error) throw error;
   return data;
