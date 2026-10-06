@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ImageOff, Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Check, ChevronLeft, ChevronRight, ExternalLink, ImageOff, Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
 import { buildProductFitmentMap, productMatchesYearSearch } from "../domain/structuredFitmentFilter";
 import { loadOperationalDashboardData } from "../services/dashboardRepository";
@@ -8,6 +8,53 @@ import { supabase } from "../supabase";
 import "../mobile-first.css";
 
 const imageUrlCache = new Map();
+const SORT_OPTIONS = [
+  ["name", "Product A-Z"],
+  ["sku", "SKU A-Z"],
+  ["stockAsc", "Stock: Low to High"],
+  ["stockDesc", "Stock: High to Low"],
+  ["recent", "Recently Updated"],
+];
+const textValue = value => String(value || "").trim().toLowerCase();
+const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "en", { numeric: true, sensitivity: "base" });
+
+function searchRelevance(row, needle, fitmentEntries = []) {
+  if (!needle) return 0;
+
+  const sku = textValue(row.product.sku_id);
+  const name = textValue(row.product.name);
+  const type = textValue(row.product.product_type);
+  const category = textValue(row.product.category);
+  const fitment = textValue(row.product.fitment);
+  const fitmentNotes = textValue(row.product.fitment_notes);
+  const supplierTerms = (row.supplierTerms || []).map(textValue);
+
+  let score = 0;
+  if (sku === needle) score = Math.max(score, 1200);
+  else if (sku.startsWith(needle)) score = Math.max(score, 1100);
+  else if (sku.includes(needle)) score = Math.max(score, 1000);
+
+  if (name === needle) score = Math.max(score, 980);
+  else if (name.startsWith(needle)) score = Math.max(score, 940);
+  else if (name.split(/\s+/).some(word => word.startsWith(needle))) score = Math.max(score, 900);
+  else if (name.includes(needle)) score = Math.max(score, 860);
+
+  if (type === needle) score = Math.max(score, 820);
+  else if (type.startsWith(needle)) score = Math.max(score, 790);
+  else if (type.includes(needle)) score = Math.max(score, 760);
+
+  if (supplierTerms.some(value => value === needle)) score = Math.max(score, 740);
+  else if (supplierTerms.some(value => value.startsWith(needle))) score = Math.max(score, 710);
+  else if (supplierTerms.some(value => value.includes(needle))) score = Math.max(score, 680);
+
+  if (productMatchesYearSearch(fitmentEntries, needle)) score = Math.max(score, 660);
+  if (fitment.includes(needle)) score = Math.max(score, 640);
+  if (category.startsWith(needle)) score = Math.max(score, 600);
+  else if (category.includes(needle)) score = Math.max(score, 570);
+  if (fitmentNotes.includes(needle)) score = Math.max(score, 520);
+
+  return score;
+}
 const money = value => value === null || value === undefined || value === "" || Number.isNaN(Number(value))
   ? "N/A"
   : Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -162,6 +209,8 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   const [vehicleFitments, setVehicleFitments] = useState([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("stock");
+  const [sortMode, setSortMode] = useState("name");
+  const [sortOpen, setSortOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(initialProductId || "");
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -244,7 +293,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return catalog.filter(row => {
+    const filtered = catalog.filter(row => {
       if (filter === "stock" && row.available <= 0) return false;
       if (filter === "low" && !(Number(row.product.reorder_point || 0) > 0 && row.available <= Number(row.product.reorder_point || 0))) return false;
       if (!needle) return true;
@@ -265,11 +314,40 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
       );
 
       return directTextMatch || yearFitmentMatch;
-    }).sort((a, b) => {
-      if (b.available !== a.available) return b.available - a.available;
-      return a.product.sku_id.localeCompare(b.product.sku_id);
     });
-  }, [catalog, filter, query, fitmentsByProduct]);
+
+    if (needle) {
+      return filtered.sort((a, b) => {
+        const scoreA = searchRelevance(a, needle, fitmentsByProduct.get(a.product.id) || []);
+        const scoreB = searchRelevance(b, needle, fitmentsByProduct.get(b.product.id) || []);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        const nameCompare = compareText(a.product.name, b.product.name);
+        if (nameCompare !== 0) return nameCompare;
+        return compareText(a.product.sku_id, b.product.sku_id);
+      });
+    }
+
+    return filtered.sort((a, b) => {
+      if (sortMode === "sku") return compareText(a.product.sku_id, b.product.sku_id);
+      if (sortMode === "stockAsc") {
+        if (a.available !== b.available) return a.available - b.available;
+        return compareText(a.product.name, b.product.name);
+      }
+      if (sortMode === "stockDesc") {
+        if (b.available !== a.available) return b.available - a.available;
+        return compareText(a.product.name, b.product.name);
+      }
+      if (sortMode === "recent") {
+        const updatedA = new Date(a.product.updated_at || a.product.created_at || 0).getTime();
+        const updatedB = new Date(b.product.updated_at || b.product.created_at || 0).getTime();
+        if (updatedB !== updatedA) return updatedB - updatedA;
+        return compareText(a.product.name, b.product.name);
+      }
+      const nameCompare = compareText(a.product.name, b.product.name);
+      if (nameCompare !== 0) return nameCompare;
+      return compareText(a.product.sku_id, b.product.sku_id);
+    });
+  }, [catalog, filter, query, fitmentsByProduct, sortMode]);
 
   const selected = catalog.find(row => row.product.id === selectedId) || null;
   const selectedImages = selected ? images.filter(image => image.product_id === selected.product.id) : [];
@@ -340,9 +418,33 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
       <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search SKU, product, fitment or supplier SKU"/>
     </div>
 
-    <div className="cg-mf-filter-row">
-      {[["all","All"],["stock","In Stock"],["low","Low Stock"]].map(([id,label]) => <button key={id} className={filter === id ? "active" : ""} onClick={() => setFilter(id)}>{label}</button>)}
+    <div className="cg-mf-product-controls">
+      <div className="cg-mf-filter-row">
+        {[["all","All"],["stock","In Stock"],["low","Low Stock"]].map(([id,label]) => <button key={id} className={filter === id ? "active" : ""} onClick={() => setFilter(id)}>{label}</button>)}
+      </div>
+      <button
+        type="button"
+        className={`cg-mf-sort-button ${sortOpen ? "active" : ""}`}
+        disabled={Boolean(query.trim())}
+        onClick={() => setSortOpen(value => !value)}
+      >
+        <ArrowUpDown size={15}/>
+        <span>{query.trim() ? "Relevance" : "Sort"}</span>
+      </button>
     </div>
+
+    {sortOpen && !query.trim() ? <div className="cg-mf-sort-menu">
+      <div><span>Sort products</span><button type="button" onClick={() => setSortOpen(false)}><X size={16}/></button></div>
+      {SORT_OPTIONS.map(([id,label]) => <button
+        type="button"
+        key={id}
+        className={sortMode === id ? "active" : ""}
+        onClick={() => { setSortMode(id); setSortOpen(false); }}
+      >
+        <span>{label}</span>
+        {sortMode === id ? <Check size={17}/> : null}
+      </button>)}
+    </div> : null}
 
     <div className="cg-mf-product-list">
       {visible.map(row => <article key={row.product.id} className="cg-mf-product-card" onClick={() => setSelectedId(row.product.id)}>
