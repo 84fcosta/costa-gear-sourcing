@@ -15,6 +15,16 @@ assert.match(app, />Sell<\/span>/);
 assert.match(app, />Expenses<\/span>/);
 assert.match(app, /Install Costa Gear/);
 
+const mobileDashboard = read("src/components/MobileDashboard.js");
+assert.match(mobileDashboard, /\["month", "Month"\]/);
+assert.match(mobileDashboard, /\["3M", "3M"\]/);
+assert.match(mobileDashboard, /\["6M", "6M"\]/);
+assert.match(mobileDashboard, /\["YTD", "YTD"\]/);
+assert.match(mobileDashboard, /\["All", "All"\]/);
+assert.match(mobileDashboard, /Sales & Gross Profit/);
+assert.match(mobileDashboard, /Previous three months/);
+assert.match(mobileDashboard, /Gross Margin/);
+
 const products = read("src/components/MobileProductCatalog.js");
 assert.match(products, /main_image_item_id/);
 assert.match(products, /market_reference_cad/);
