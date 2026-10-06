@@ -48,7 +48,8 @@ assert.match(products, /Stock: Low to High/);
 assert.match(products, /Stock: High to Low/);
 assert.match(products, /Recently Updated/);
 assert.match(products, /searchRelevance/);
-assert.match(products, /sortMode, setSortMode.*"name"/);
+assert.match(products, /cg:mobile-products-sort/);
+assert.match(products, /readCatalogSession\("cg:mobile-products-sort", "name"\)/);
 assert.match(products, /query\.trim\(\) \? "Relevance" : "Sort"/);
 
 const sale = read("src/components/MobileQuickSale.js");
