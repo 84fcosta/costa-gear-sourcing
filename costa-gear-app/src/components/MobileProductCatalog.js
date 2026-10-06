@@ -415,7 +415,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
 
     <div className="cg-mf-search">
       <Search size={18}/>
-      <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search SKU, product, fitment or supplier SKU"/>
+      <input value={query} onChange={event => { setQuery(event.target.value); setSortOpen(false); }} placeholder="Search SKU, product, fitment or supplier SKU"/>
     </div>
 
     <div className="cg-mf-product-controls">
