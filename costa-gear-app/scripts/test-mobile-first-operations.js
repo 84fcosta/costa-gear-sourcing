@@ -35,6 +35,13 @@ assert.match(products, /market_reference_cad/);
 assert.match(products, /target_sell_price_cad/);
 assert.match(products, /Landed Cost/);
 assert.match(products, /Sell This Product/);
+assert.match(products, /ProductLightbox/);
+assert.match(products, /Tap to enlarge/);
+assert.match(products, /Zoom in/);
+assert.match(products, /Zoom out/);
+assert.match(products, /Previous photo/);
+assert.match(products, /Next photo/);
+assert.match(products, /role="dialog"/);
 
 const sale = read("src/components/MobileQuickSale.js");
 assert.match(sale, /Complete Sale/);
