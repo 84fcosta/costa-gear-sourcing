@@ -285,7 +285,22 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const newProductAutoName=buildProductName(newProductForm.productType,newProductForm.variantName,newProductForm.material);
 
   const mapLine=async(lineId,productId)=>{if(!productId)return;setBusy(true);setError("");try{await mapSupplierQuotationLine(lineId,productId);setLines(await listSupplierQuotationLines(selectedId));setMessage("Product match confirmed. Supplier SKU mapping saved for future quotations.");}catch(e){setError(e.message||"Unable to save product match.");}finally{setBusy(false);}};
-  const openSplit=line=>{setError("");setMessage("");setSplitLine(line);setSplitRows((line.variants||[]).length?(line.variants||[]).map(v=>({supplierVariant:v.supplier_variant,quantity:String(v.quantity),productId:v.product_id})):[{supplierVariant:"",quantity:"",productId:""},{supplierVariant:"",quantity:"",productId:""}]);};
+  const openSplit=async line=>{
+    setError("");setMessage("");setSplitLine(line);
+    if((line.variants||[]).length){
+      setSplitRows((line.variants||[]).map(v=>({supplierVariant:v.supplier_variant,quantity:String(v.quantity),productId:v.product_id})));
+      return;
+    }
+    if(selected?.supplier_id&&line.supplier_sku){
+      const {data,error}=await supabase.from("supplier_product_variant_mappings").select("supplier_variant,product_id").eq("supplier_id",selected.supplier_id).eq("supplier_sku",line.supplier_sku).order("supplier_variant");
+      if(error){setError(error.message||"Unable to load previous variant mappings.");setSplitRows([{supplierVariant:"",quantity:"",productId:""},{supplierVariant:"",quantity:"",productId:""}]);return;}
+      if((data||[]).length>=2){
+        setSplitRows(data.map(v=>({supplierVariant:v.supplier_variant,quantity:"",productId:v.product_id})));
+        return;
+      }
+    }
+    setSplitRows([{supplierVariant:"",quantity:"",productId:""},{supplierVariant:"",quantity:"",productId:""}]);
+  };
   const closeSplit=()=>{if(busy)return;setSplitLine(null);setSplitRows([]);};
   const saveSplit=async()=>{if(!splitLine)return;setBusy(true);setError("");try{await setSupplierQuotationLineVariants(splitLine.id,splitRows);setLines(await listSupplierQuotationLines(selectedId));setSplitLine(null);setSplitRows([]);setMessage("Supplier line split saved. The original supplier SKU and quantity were preserved; each variant now maps to its own Costa Gear SKU.");}catch(e){setError(e.message||"Unable to save variant split.");}finally{setBusy(false);}};
   const setIgnored=async(line,ignoredState)=>{
