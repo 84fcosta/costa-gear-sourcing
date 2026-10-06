@@ -821,6 +821,43 @@
     font-size: 9px;
   }
 
+  .cg-mf-drive-warning {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #efd9ae;
+    border-radius: 13px;
+    padding: 10px;
+    background: #fff8e8;
+    color: #805a18;
+  }
+
+  .cg-mf-drive-warning span {
+    display: grid;
+    gap: 2px;
+  }
+
+  .cg-mf-drive-warning strong {
+    font-size: 11px;
+  }
+
+  .cg-mf-drive-warning small {
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  .cg-mf-drive-warning button {
+    min-height: 34px;
+    border: 1px solid #d8b86e;
+    border-radius: 9px;
+    background: #fff;
+    color: #805a18;
+    padding: 0 9px;
+    font-size: 10px;
+    font-weight: 850;
+  }
+
   .cg-mf-receipt-actions {
     display: grid;
     grid-template-columns: repeat(2,minmax(0,1fr));
