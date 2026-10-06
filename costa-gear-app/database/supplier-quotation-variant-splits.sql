@@ -73,6 +73,13 @@ where quotation_line_variant_id is not null;
 alter table public.purchase_order_items
   add column if not exists supplier_variant text;
 
+alter table public.supplier_quotation_lines
+  drop constraint if exists supplier_quotation_lines_match_ck;
+
+alter table public.supplier_quotation_lines
+  add constraint supplier_quotation_lines_match_ck
+  check (match_status = any(array['MATCHED','REVIEW','UNMATCHED','NEW PRODUCT','IGNORED','SPLIT']));
+
 create or replace function public.set_supplier_quotation_line_variants(
   p_line_id uuid,
   p_variants jsonb
