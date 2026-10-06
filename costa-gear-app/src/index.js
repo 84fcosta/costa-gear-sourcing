@@ -19,4 +19,10 @@ if (window.location.hostname === LEGACY_HOST) {
       </AuthGate>
     </React.StrictMode>
   );
+
+  if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
 }
