@@ -9,6 +9,7 @@ import {
   listSupplierQuotations,
   mapSupplierQuotationLine,
   setSupplierQuotationLineIgnored,
+  setSupplierQuotationLineVariants,
 } from "../services/supplierQuotationRepository";
 import { QuotationDocumentsPanel } from "./SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "../services/productTaxonomyService";
@@ -27,7 +28,7 @@ const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,
 const btn=(primary=false)=>({border:primary?0:`1px solid ${C.border}`,background:primary?"linear-gradient(180deg,#929A44,#747B31)":"#fff",color:primary?"#fff":C.ink,borderRadius:9,padding:"8px 11px",fontWeight:800,fontSize:11.5,cursor:"pointer"});
 const money=(v,currency="USD")=>{if(v===null||v===undefined||v==="")return"—";const code=["USD","CAD","EUR","CNY"].includes(currency)?currency:"USD";return Number(v).toLocaleString(code==="CAD"?"en-CA":"en-US",{style:"currency",currency:code,maximumFractionDigits:2});};
 const Field=({label,children})=><label style={{display:"grid",gap:5,fontSize:11,fontWeight:750,color:C.muted}}>{label}{children}</label>;
-const badge=(status)=>{const map={PASS:[C.green,"#EDF7EE"],MATCHED:[C.green,"#EDF7EE"],RESOLVED:[C.green,"#EDF7EE"],IGNORED:[C.muted,"#EEF0EC"],REVIEW:[C.amber,"#FFF7E5"],Finalized:[C.green,"#EDF7EE"],Converted:[C.oliveDark,"#F1F4DD"],Imported:[C.amber,"#FFF7E5"],"REVIEW REQUIRED":[C.red,"#FFF1EF"],UNMATCHED:[C.red,"#FFF1EF"]};const [color,bg]=map[status]||[C.muted,"#F3F4EF"];return <span style={{display:"inline-flex",padding:"3px 7px",borderRadius:999,fontSize:10.5,fontWeight:850,color,background:bg}}>{status||"—"}</span>};
+const badge=(status)=>{const map={PASS:[C.green,"#EDF7EE"],MATCHED:[C.green,"#EDF7EE"],SPLIT:[C.green,"#EDF7EE"],RESOLVED:[C.green,"#EDF7EE"],IGNORED:[C.muted,"#EEF0EC"],REVIEW:[C.amber,"#FFF7E5"],Finalized:[C.green,"#EDF7EE"],Converted:[C.oliveDark,"#F1F4DD"],Imported:[C.amber,"#FFF7E5"],"REVIEW REQUIRED":[C.red,"#FFF1EF"],UNMATCHED:[C.red,"#FFF1EF"]};const [color,bg]=map[status]||[C.muted,"#F3F4EF"];return <span style={{display:"inline-flex",padding:"3px 7px",borderRadius:999,fontSize:10.5,fontWeight:850,color,background:bg}}>{status||"—"}</span>};
 
 const cleanNumber=value=>{const n=Number(value);return Number.isFinite(n)&&n>0?n:null;};
 const productOptionLabel=product=>[product.sku_id,product.product_type||product.name,product.material||"Material TBD",product.fitment||"Fitment TBD"].filter(Boolean).join(" · ");
@@ -85,7 +86,59 @@ const QuotationFitmentEditor=({catalog,value,onChange,notes,onNotesChange})=>{
   </div>;
 };
 
-const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,onIgnore})=>{
+const VariantSplitModal=({line,products,rows,setRows,busy,onClose,onSave})=>{
+  if(!line)return null;
+  const total=rows.reduce((sum,row)=>sum+(Number(row.quantity)||0),0);
+  const valid=rows.length>=2&&rows.every(row=>String(row.supplierVariant||"").trim()&&Number(row.quantity)>0&&Number.isInteger(Number(row.quantity))&&row.productId)&&total===Number(line.quantity);
+  const update=(index,key,value)=>setRows(current=>current.map((row,i)=>i===index?{...row,[key]:value}:row));
+  const remove=index=>setRows(current=>current.filter((_,i)=>i!==index));
+  return <div style={{position:"fixed",inset:0,zIndex:1300,background:"rgba(9,10,8,.58)",display:"grid",placeItems:"center",padding:20}} onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)onClose();}}>
+    <div style={{width:"min(900px,96vw)",maxHeight:"90vh",overflow:"auto",background:"#fff",borderRadius:16,border:"1px solid "+C.border,boxShadow:"0 26px 80px rgba(9,10,8,.28)"}}>
+      <div style={{background:C.ink,color:"#fff",padding:"15px 18px"}}><div style={{fontSize:17,fontWeight:900}}>Split Supplier Line into Variants</div><div style={{fontSize:11,color:"#C9CFC4",marginTop:3}}>Keep supplier SKU {line.supplier_sku||"—"} and original Qty {line.quantity}. Create operational variants for Product Matching, Buying, Inventory and Sales.</div></div>
+      <div style={{padding:18,display:"grid",gap:12}}>
+        <div style={{background:"#F8F9F5",borderRadius:9,padding:10,fontSize:11,color:C.muted}}>The supplier quotation line is not changed. Variant quantities must add up exactly to <b style={{color:C.ink}}>{line.quantity}</b>.</div>
+        <div style={{display:"grid",gap:8}}>
+          {rows.map((row,index)=><div key={index} style={{display:"grid",gridTemplateColumns:"1fr 100px 1.7fr auto",gap:8,alignItems:"end",border:"1px solid "+C.border,borderRadius:10,padding:10}}>
+            <Field label="Supplier Variant"><input style={input} value={row.supplierVariant||""} onChange={e=>update(index,"supplierVariant",e.target.value)} placeholder="e.g. White Beam"/></Field>
+            <Field label="Qty"><input style={input} type="number" min="1" step="1" value={row.quantity||""} onChange={e=>update(index,"quantity",e.target.value)} /></Field>
+            <Field label="Costa Gear Product"><select style={input} value={row.productId||""} onChange={e=>update(index,"productId",e.target.value)}><option value="">Select product</option>{products.map(product=><option key={product.id} value={product.id}>{productOptionLabel(product)}</option>)}</select></Field>
+            <button type="button" disabled={busy||rows.length<=2} style={{...btn(),color:C.red,opacity:rows.length<=2?.45:1}} onClick={()=>remove(index)}>Remove</button>
+          </div>)}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <button type="button" disabled={busy} style={btn()} onClick={()=>setRows(current=>[...current,{supplierVariant:"",quantity:"",productId:""}])}>+ Add Variant</button>
+          <div style={{fontSize:11,fontWeight:850,color:total===Number(line.quantity)?C.green:C.red}}>Variant Qty {total} / Supplier Qty {line.quantity}</div>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+          <button type="button" disabled={busy} style={btn()} onClick={onClose}>Cancel</button>
+          <button type="button" disabled={busy||!valid} style={{...btn(true),opacity:(busy||!valid)?.45:1}} onClick={onSave}>{busy?"Saving...":"Save Variant Split"}</button>
+        </div>
+      </div>
+    </div>
+  </div>;
+};
+
+const BuyingSelectionRow=({line,products,selected,editable,onToggle})=>{
+  const selectedStyle={border:`1px solid ${selected?C.olive:C.border}`,borderRadius:8,background:selected?"#F8FAF0":"#fff"};
+  if(line.match_status==="SPLIT"){
+    return <div style={{...selectedStyle,padding:8}}>
+      <label style={{display:"grid",gridTemplateColumns:"24px 120px 1fr 90px 120px",gap:8,alignItems:"center",cursor:editable?"pointer":"default"}}>
+        <input type="checkbox" disabled={!editable} checked={selected} onChange={onToggle}/>
+        <b style={{fontFamily:"monospace"}}>{line.supplier_sku||"—"}</b>
+        <span style={{fontWeight:800}}>Split supplier line, {(line.variants||[]).length} variants</span>
+        <span>{line.quantity} {line.unit||""}</span>
+        <b>{money(line.unit_price,"USD")}/unit</b>
+      </label>
+      <div style={{display:"grid",gap:4,margin:"7px 0 0 32px"}}>
+        {(line.variants||[]).map(variant=>{const product=products.find(p=>p.id===variant.product_id);return <div key={variant.id} style={{display:"grid",gridTemplateColumns:"110px 1fr 70px",gap:8,fontSize:10.5,color:C.muted}}><b style={{fontFamily:"monospace",color:C.oliveDark}}>{product?.sku_id||"—"}</b><span>{variant.supplier_variant} · {product?.name||"Product"}</span><span>Qty {variant.quantity}</span></div>;})}
+      </div>
+    </div>;
+  }
+  const product=products.find(p=>p.id===line.product_id);
+  return <label style={{...selectedStyle,display:"grid",gridTemplateColumns:"24px 90px 1fr 90px 120px",gap:8,alignItems:"center",padding:8,cursor:editable?"pointer":"default"}}><input type="checkbox" disabled={!editable} checked={selected} onChange={onToggle}/><b style={{fontFamily:"monospace"}}>{product?.sku_id}</b><span>{product?.name}</span><span>{line.quantity} {line.unit||""}</span><b>{money(line.unit_price,"USD")}/unit</b></label>;
+};
+
+const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,onIgnore,onSplit})=>{
   const [open,setOpen]=useState(false);
   const [query,setQuery]=useState("");
   const [candidateId,setCandidateId]=useState(line.match_status==="REVIEW"&&line.product_id?line.product_id:"");
@@ -114,6 +167,13 @@ const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,o
   const choose=id=>{setCandidateId(id);setReviewAck(false);setOpen(false);};
   const clearCandidate=()=>{setCandidateId("");setReviewAck(false);setOpen(true);};
 
+  if(line.match_status==="SPLIT"){
+    return <div style={{border:"1px solid rgba(77,125,87,.22)",background:"#F7FBF6",borderRadius:9,padding:9}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}><div><div style={{fontSize:11.5,fontWeight:850}}>Supplier line split into {(line.variants||[]).length} variants</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Original supplier SKU and quantity remain unchanged.</div></div>{editable&&<button type="button" style={{...btn(),padding:"5px 8px"}} onClick={()=>onSplit(line)}>Edit Split</button>}</div>
+      <div style={{display:"grid",gap:5,marginTop:7}}>{(line.variants||[]).map(variant=>{const product=products.find(p=>p.id===variant.product_id);return <div key={variant.id} style={{display:"grid",gridTemplateColumns:"130px 55px 1fr",gap:8,fontSize:10.5,padding:"5px 7px",background:"#fff",borderRadius:7}}><b>{variant.supplier_variant}</b><span>Qty {variant.quantity}</span><span><b style={{color:C.oliveDark}}>{product?.sku_id||"—"}</b> · {product?.name||"Product not found"}</span></div>;})}</div>
+    </div>;
+  }
+
   if(confirmed&&!candidateId){
     return <div>
       <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
@@ -121,7 +181,7 @@ const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,o
         {editable&&<button type="button" style={{...btn(),padding:"5px 8px"}} onClick={()=>setOpen(v=>!v)}>Change Match</button>}
       </div>
       {current&&<ProductComparison line={line} product={current} currency={currency}/>}
-      {editable&&<div style={{display:"flex",gap:6,marginTop:6}}><button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button></div>}
+      {editable&&<div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}><button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.oliveDark}} onClick={()=>onSplit(line)}>Split Variants</button><button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button></div>}
       {open&&<div style={{marginTop:7,border:"1px solid "+C.border,borderRadius:9,padding:8,background:"#fff"}}>
         <input autoFocus style={input} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search SKU, product, type, material or fitment"/>
         <div style={{display:"grid",gap:5,maxHeight:290,overflowY:"auto",marginTop:7}}>
@@ -172,6 +232,7 @@ const ProductMatchCell=({line,products,status,currency,busy,onConfirm,onCreate,o
 
     {!candidate&&editable&&<div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
       <button type="button" style={{...btn(),padding:"6px 9px",color:C.oliveDark,borderColor:"rgba(133,140,56,.35)"}} onClick={()=>onCreate(line)}>+ Create New Product</button>
+      <button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.oliveDark}} onClick={()=>onSplit(line)}>Split Variants</button>
       <button type="button" disabled={busy} style={{...btn(),padding:"6px 9px",color:C.muted}} onClick={()=>onIgnore(line,true)}>Ignore Item</button>
     </div>}
 
@@ -196,31 +257,52 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
   const[finalizeForm,setFinalizeForm]=useState({usdCadRate:"",allocationMethod:"value",dutyRatePct:""});
   const[selectedLines,setSelectedLines]=useState([]);
   const[newProductLine,setNewProductLine]=useState(null);
+  const[splitLine,setSplitLine]=useState(null),[splitRows,setSplitRows]=useState([]);
   const[newProductForm,setNewProductForm]=useState({productType:"",variantName:"",category:"",material:"",fitments:[],fitmentNotes:"",length:"",width:"",height:"",weight:"",notes:""});
   const[addingMaterial,setAddingMaterial]=useState(false),[newMaterialName,setNewMaterialName]=useState(""),[materialError,setMaterialError]=useState("");
 
   const load=async()=>{setLoading(true);setError("");try{const[q,{data:s,error:se},{data:p,error:pe},{data:o,error:oe},{data:pt,error:pte},categoryRows,{data:pm,error:pme},{data:vf,error:vfe}]=await Promise.all([listSupplierQuotations(),supabase.from("suppliers").select("*").order("sup_id"),supabase.from("products").select("*").order("sku_id"),supabase.from("purchase_orders").select("id,po_ref,status"),supabase.from("product_types").select("*").eq("active",true).order("name"),listProductCategories(),supabase.from("product_materials").select("*").eq("active",true).order("name"),supabase.from("vehicle_fitments").select("*").eq("active",true).order("sort_order")]);if(se||pe||oe||pte||pme||vfe)throw(se||pe||oe||pte||pme||vfe);setQuotations(q);setSuppliers(s||[]);setProducts(p||[]);setOrders(o||[]);setProductTypes(pt||[]);setCategories(categoryRows||[]);setMaterials(pm||[]);setVehicleFitments(vf||[]);}catch(e){setError(e.message||"Unable to load supplier quotations.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
   useEffect(()=>{if(initialQuotationId&&quotations.some(q=>q.id===initialQuotationId))setSelectedId(initialQuotationId);},[initialQuotationId,quotations]);
-  useEffect(()=>{if(!selectedId){setLines([]);setSelectedLines([]);return;}const q=quotations.find(x=>x.id===selectedId);if(q)setFinalizeForm({usdCadRate:q.usd_cad_rate==null?"":String(q.usd_cad_rate),allocationMethod:q.allocation_method||"value",dutyRatePct:q.duty_rate_pct==null?"":String(q.duty_rate_pct)});listSupplierQuotationLines(selectedId).then(rows=>{setLines(rows);setSelectedLines(q?.status==="Finalized"?rows.filter(r=>r.quote_id).map(r=>r.id):[]);}).catch(e=>setError(e.message));},[selectedId,quotations]);
+  useEffect(()=>{if(!selectedId){setLines([]);setSelectedLines([]);return;}const q=quotations.find(x=>x.id===selectedId);if(q)setFinalizeForm({usdCadRate:q.usd_cad_rate==null?"":String(q.usd_cad_rate),allocationMethod:q.allocation_method||"value",dutyRatePct:q.duty_rate_pct==null?"":String(q.duty_rate_pct)});listSupplierQuotationLines(selectedId).then(rows=>{setLines(rows);setSelectedLines(q?.status==="Finalized"?rows.filter(r=>r.quote_id||(r.variants||[]).some(v=>v.quote_id)).map(r=>r.id):[]);}).catch(e=>setError(e.message));},[selectedId,quotations]);
 
   const selected=quotations.find(q=>q.id===selectedId)||null;
   const supplierById=id=>suppliers.find(s=>s.id===id);
   const productById=id=>products.find(p=>p.id===id);
   const orderById=id=>orders.find(o=>o.id===id);
   const matched=lines.filter(l=>l.match_status==="MATCHED"&&l.product_id).length;
+  const splitResolved=lines.filter(l=>l.match_status==="SPLIT"&&(l.variants||[]).length>=2&&(l.variants||[]).every(v=>v.product_id)&&((l.variants||[]).reduce((sum,v)=>sum+Number(v.quantity||0),0)===Number(l.quantity))).length;
   const reviewing=lines.filter(l=>l.match_status==="REVIEW").length;
   const ignored=lines.filter(l=>l.match_status==="IGNORED").length;
-  const resolved=matched+ignored;
+  const resolved=matched+splitResolved+ignored;
+  const operationalMatches=matched+lines.filter(l=>l.match_status==="SPLIT").reduce((sum,l)=>sum+(l.variants||[]).length,0);
   const validationProblems=lines.filter(l=>l.line_validation==="REVIEW REQUIRED").length+(selected?.validation_status==="REVIEW REQUIRED"?1:0);
   const totalReview=quotationTotalReview(selected,lines);
   const allResolved=lines.length>0&&resolved===lines.length;
-  const canFinalize=selected&&selected.status!=="Cancelled"&&allResolved&&matched>0&&validationProblems===0&&Number(finalizeForm.usdCadRate)>0;
+  const canFinalize=selected&&selected.status!=="Cancelled"&&allResolved&&operationalMatches>0&&validationProblems===0&&Number(finalizeForm.usdCadRate)>0;
   const canBuy=selected?.status==="Finalized"&&selectedLines.length>0&&!selected.purchase_order_id;
   const categoryOptions=useMemo(()=>categories.map(c=>c.name),[categories]);
   const newProductAutoName=buildProductName(newProductForm.productType,newProductForm.variantName,newProductForm.material);
 
   const mapLine=async(lineId,productId)=>{if(!productId)return;setBusy(true);setError("");try{await mapSupplierQuotationLine(lineId,productId);setLines(await listSupplierQuotationLines(selectedId));setMessage("Product match confirmed. Supplier SKU mapping saved for future quotations.");}catch(e){setError(e.message||"Unable to save product match.");}finally{setBusy(false);}};
+  const openSplit=async line=>{
+    setError("");setMessage("");setSplitLine(line);
+    if((line.variants||[]).length){
+      setSplitRows((line.variants||[]).map(v=>({supplierVariant:v.supplier_variant,quantity:String(v.quantity),productId:v.product_id})));
+      return;
+    }
+    if(selected?.supplier_id&&line.supplier_sku){
+      const {data,error}=await supabase.from("supplier_product_variant_mappings").select("supplier_variant,product_id").eq("supplier_id",selected.supplier_id).eq("supplier_sku",line.supplier_sku).order("supplier_variant");
+      if(error){setError(error.message||"Unable to load previous variant mappings.");setSplitRows([{supplierVariant:"",quantity:"",productId:""},{supplierVariant:"",quantity:"",productId:""}]);return;}
+      if((data||[]).length>=2){
+        setSplitRows(data.map(v=>({supplierVariant:v.supplier_variant,quantity:"",productId:v.product_id})));
+        return;
+      }
+    }
+    setSplitRows([{supplierVariant:"",quantity:"",productId:""},{supplierVariant:"",quantity:"",productId:""}]);
+  };
+  const closeSplit=()=>{if(busy)return;setSplitLine(null);setSplitRows([]);};
+  const saveSplit=async()=>{if(!splitLine)return;setBusy(true);setError("");try{await setSupplierQuotationLineVariants(splitLine.id,splitRows);setLines(await listSupplierQuotationLines(selectedId));setSplitLine(null);setSplitRows([]);setMessage("Supplier line split saved. The original supplier SKU and quantity were preserved; each variant now maps to its own Costa Gear SKU.");}catch(e){setError(e.message||"Unable to save variant split.");}finally{setBusy(false);}};
   const setIgnored=async(line,ignoredState)=>{
     if(ignoredState&&!window.confirm("Ignore this supplier item for Costa Gear? The original quotation line will be preserved, but it will not create a Product Master record, comparable quote or Buying Draft line."))return;
     setBusy(true);setError("");
@@ -302,7 +384,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
     }
   };
   const toggleLine=id=>setSelectedLines(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const selectAll=()=>setSelectedLines(lines.filter(l=>l.quote_id).map(l=>l.id));
+  const selectAll=()=>setSelectedLines(lines.filter(l=>l.quote_id||(l.variants||[]).some(v=>v.quote_id)).map(l=>l.id));
 
   return <div className="cg-supplier-quotation-workspace" style={{minHeight:"100vh",background:C.soft,color:C.ink}}>
     <div className="cg-supplier-quotation-titlebar" style={{background:"#20251F",color:"#fff",padding:"20px 28px",display:"flex",justifyContent:"space-between",gap:14,alignItems:"center",flexWrap:"wrap"}}><div><h1 style={{margin:0,fontSize:25}}>Supplier Quotations</h1><div style={{color:"#C9CFC4",fontSize:12,marginTop:4}}>Review quotation lines, complete Product Matching, finalize costs and create the Buying Draft.</div></div><button type="button" onClick={onOpenIntake} style={{...btn(true),background:"linear-gradient(180deg,#9AA34A,#7B8433)",minHeight:36}}>New Supplier Intake</button></div>
@@ -331,8 +413,8 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
           <QuotationDocumentsPanel quotation={selected} supplier={supplierById(selected.supplier_id)} />
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14,overflowX:"auto"}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:9}}><div><strong>Product Matching</strong><div style={{fontSize:10.5,color:C.muted}}>Select a candidate first, review supplier vs Costa Gear details, then confirm the match. Dimensional discrepancies require explicit acknowledgement. Ignored lines remain in the original quotation but are excluded from Product Master, Decision Lab and Buying Drafts.</div></div><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:10.5,color:C.muted}}>{matched} matched · {reviewing} review · {ignored} ignored</span>{allResolved&&badge("RESOLVED")}</div></div>
-            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1360,fontSize:11.5}}><thead><tr style={{background:"#F5F7F1"}}>{["Line","Supplier SKU","Supplier Description","Qty","Unit Price","Line Total","Validation","Costa Gear Product / Comparison","Match"].map(h=><th key={h} style={{textAlign:"left",padding:8,color:C.muted,borderBottom:"1px solid "+C.border}}>{h}</th>)}</tr></thead><tbody>{lines.map(l=>{const isIgnored=l.match_status==="IGNORED";return <tr key={l.id} style={{background:isIgnored?"#F7F8F5":"#fff"}}><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{l.line_no}</td><td style={{padding:8,borderBottom:"1px solid "+C.border,fontFamily:"monospace",fontWeight:800}}>{l.supplier_sku||"—"}</td><td style={{padding:8,borderBottom:"1px solid "+C.border,minWidth:240}}>{l.supplier_description||"—"}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{l.quantity} {l.unit||""}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{money(l.unit_price,selected.currency)}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{money(l.supplier_line_total??l.calculated_line_total,selected.currency)}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{badge(l.line_validation)}</td><td style={{padding:6,borderBottom:"1px solid "+C.border,minWidth:560}}>{isIgnored?<div style={{border:"1px solid "+C.border,borderRadius:9,padding:9,background:"#F3F4EF"}}><div style={{fontSize:11.5,fontWeight:850}}>Ignored for Costa Gear catalog</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>This line remains part of the supplier quotation and mathematical validation.</div>{selected.status==="Imported"&&<button type="button" disabled={busy} style={{...btn(),marginTop:6,padding:"6px 9px"}} onClick={()=>setIgnored(l,false)}>Restore / Reconsider</button>}</div>:<ProductMatchCell line={l} products={products} status={selected.status} currency={selected.currency} busy={busy} onConfirm={mapLine} onCreate={openCreateProduct} onIgnore={setIgnored}/>}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{badge(l.match_status||"UNMATCHED")}</td></tr>})}</tbody></table>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:9}}><div><strong>Product Matching</strong><div style={{fontSize:10.5,color:C.muted}}>Match one supplier line to one Costa Gear product, or use Split Variants when one supplier SKU contains multiple sellable versions. The original supplier line remains unchanged. Ignored lines stay in quotation history but are excluded from Product Master, Decision Lab and Buying Drafts.</div></div><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:10.5,color:C.muted}}>{matched} matched · {splitResolved} split · {reviewing} review · {ignored} ignored</span>{allResolved&&badge("RESOLVED")}</div></div>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1360,fontSize:11.5}}><thead><tr style={{background:"#F5F7F1"}}>{["Line","Supplier SKU","Supplier Description","Qty","Unit Price","Line Total","Validation","Costa Gear Product / Comparison","Match"].map(h=><th key={h} style={{textAlign:"left",padding:8,color:C.muted,borderBottom:"1px solid "+C.border}}>{h}</th>)}</tr></thead><tbody>{lines.map(l=>{const isIgnored=l.match_status==="IGNORED";return <tr key={l.id} style={{background:isIgnored?"#F7F8F5":"#fff"}}><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{l.line_no}</td><td style={{padding:8,borderBottom:"1px solid "+C.border,fontFamily:"monospace",fontWeight:800}}>{l.supplier_sku||"—"}</td><td style={{padding:8,borderBottom:"1px solid "+C.border,minWidth:240}}>{l.supplier_description||"—"}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{l.quantity} {l.unit||""}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{money(l.unit_price,selected.currency)}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{money(l.supplier_line_total??l.calculated_line_total,selected.currency)}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{badge(l.line_validation)}</td><td style={{padding:6,borderBottom:"1px solid "+C.border,minWidth:560}}>{isIgnored?<div style={{border:"1px solid "+C.border,borderRadius:9,padding:9,background:"#F3F4EF"}}><div style={{fontSize:11.5,fontWeight:850}}>Ignored for Costa Gear catalog</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>This line remains part of the supplier quotation and mathematical validation.</div>{selected.status==="Imported"&&<button type="button" disabled={busy} style={{...btn(),marginTop:6,padding:"6px 9px"}} onClick={()=>setIgnored(l,false)}>Restore / Reconsider</button>}</div>:<ProductMatchCell line={l} products={products} status={selected.status} currency={selected.currency} busy={busy} onConfirm={mapLine} onCreate={openCreateProduct} onIgnore={setIgnored} onSplit={openSplit}/>}</td><td style={{padding:8,borderBottom:"1px solid "+C.border}}>{badge(l.match_status||"UNMATCHED")}</td></tr>})}</tbody></table>
           </div>
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
@@ -344,7 +426,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
               <button disabled={!canFinalize||busy||selected.status==="Converted"} onClick={finalize} style={{...btn(true),opacity:(!canFinalize||busy||selected.status==="Converted")?0.45:1,height:35}}>{busy?"Working...":selected.status==="Finalized"?"Recalculate Quotes":"Finalize Quotes"}</button>
             </div>
             {!allResolved&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Resolve all {lines.length-resolved} remaining item(s) by matching, creating or ignoring them before finalizing.</div>}
-            {allResolved&&matched===0&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>At least one item must be matched to a Costa Gear product before finalizing.</div>}
+            {allResolved&&operationalMatches===0&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>At least one item must be matched to a Costa Gear product before finalizing.</div>}
             {ignored>0&&<div style={{fontSize:10.5,color:C.muted,marginTop:7}}>{ignored} ignored item(s) will remain in the quotation history and validation, but will not create comparable quotes or Buying Draft lines.</div>}
             {validationProblems>0&&<div role="alert" style={{fontSize:10.5,color:C.red,marginTop:8,padding:"9px 10px",border:"1px solid rgba(182,81,69,.24)",background:"#FFF8F7",borderRadius:8,lineHeight:1.5}}>
                <strong>Finalization blocked by quotation validation.</strong>
@@ -353,17 +435,19 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
                {lines.some(l=>l.line_validation==="REVIEW REQUIRED")&&<div>At least one supplier line total differs from Qty × Unit Price. Verify the affected line(s) in the workbook.</div>}
                <div>Open the Costa Gear Import File above and retain a corrected copy. Then delete this Imported draft and re-import the corrected workbook through Supplier Intake. Editing the OneDrive file alone does not update the imported quotation. Do not bypass the financial validation.</div>
              </div>}
-             {allResolved&&matched>0&&!(Number(finalizeForm.usdCadRate)>0)&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Enter the actual USD/CAD rate. This is also required before finalizing.</div>}
+             {allResolved&&operationalMatches>0&&!(Number(finalizeForm.usdCadRate)>0)&&<div style={{fontSize:10.5,color:C.amber,marginTop:7}}>Enter the actual USD/CAD rate. This is also required before finalizing.</div>}
           </div>
 
           {(selected.status==="Finalized"||selected.status==="Converted")&&<div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}><div><div style={{fontWeight:850}}>Create one Buying Draft from this quotation</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>Select only the items Costa Gear is actually buying. They will become lines of one PO, not separate POs.</div></div>{selected.status==="Finalized"&&<div style={{display:"flex",gap:6}}><button style={btn()} onClick={selectAll}>Select all</button><button style={btn()} onClick={()=>setSelectedLines([])}>Clear</button></div>}</div>
-            <div style={{display:"grid",gap:5,marginTop:10}}>{lines.filter(l=>l.quote_id).map(l=>{const p=productById(l.product_id);const selectedForPO=selectedLines.includes(l.id);return <label key={l.id} style={{display:"grid",gridTemplateColumns:"24px 90px 1fr 90px 120px",gap:8,alignItems:"center",padding:8,border:`1px solid ${selectedForPO?C.olive:C.border}`,borderRadius:8,background:selectedForPO?"#F8FAF0":"#fff",cursor:selected.status==="Finalized"?"pointer":"default"}}><input type="checkbox" disabled={selected.status!=="Finalized"} checked={selectedForPO} onChange={()=>toggleLine(l.id)}/><b style={{fontFamily:"monospace"}}>{p?.sku_id}</b><span>{p?.name}</span><span>{l.quantity} {l.unit||""}</span><b>{money(l.unit_price,"USD")}/unit</b></label>})}</div>
+            <div style={{display:"grid",gap:5,marginTop:10}}>{lines.filter(l=>l.quote_id||(l.variants||[]).some(v=>v.quote_id)).map(l=><BuyingSelectionRow key={l.id} line={l} products={products} selected={selectedLines.includes(l.id)} editable={selected.status==="Finalized"} onToggle={()=>toggleLine(l.id)}/>)}</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginTop:11}}><div style={{fontSize:11,color:C.muted}}>{selected.purchase_order_id?`Buying Draft already created: ${orderById(selected.purchase_order_id)?.po_ref||selected.purchase_order_id}`:`${selectedLines.length} line(s) selected`}</div><button disabled={!canBuy||busy} onClick={createPO} style={{...btn(true),opacity:(!canBuy||busy)?0.45:1}}>{busy?"Creating...":`Create One Buying Draft (${selectedLines.length})`}</button></div>
           </div>}
         </>:<div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:28,color:C.muted}}>Import or select a supplier quotation to continue.</div>}</div>
       </div>}
     </div>
+
+    <VariantSplitModal line={splitLine} products={products} rows={splitRows} setRows={setSplitRows} busy={busy} onClose={closeSplit} onSave={saveSplit}/>
 
     {newProductLine&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(9,10,8,.56)",display:"grid",placeItems:"center",padding:20}} onMouseDown={e=>{if(e.target===e.currentTarget)closeCreateProduct();}}>
       <div style={{width:"min(860px,96vw)",maxHeight:"92vh",background:"#fff",borderRadius:16,border:`1px solid ${C.border}`,boxShadow:"0 26px 80px rgba(9,10,8,.28)",overflow:"auto"}}>
