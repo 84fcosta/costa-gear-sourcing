@@ -84,7 +84,7 @@ function LightboxImage({ itemId, alt, zoom }) {
     className="cg-mf-lightbox-image"
     src={url}
     alt={alt || "Costa Gear product"}
-    style={{ width: `${zoom * 100}%` }}
+    style={{ width: `${zoom * 100}%`, maxHeight: zoom === 1 ? "calc(100dvh - 170px)" : "none" }}
   />;
 }
 
@@ -96,6 +96,21 @@ function ProductLightbox({ images, initialIndex = 0, productName, onClose }) {
     setIndex(initialIndex);
     setZoom(1);
   }, [initialIndex]);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKey = event => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") setIndex(value => Math.max(0, value - 1));
+      if (event.key === "ArrowRight") setIndex(value => Math.min(images.length - 1, value + 1));
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [images.length, onClose]);
 
   const current = images[index] || null;
   const move = direction => {
