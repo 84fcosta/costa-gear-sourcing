@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, CheckCircle2, FileUp, ReceiptText, RefreshCw } from "lucide-react";
+import { Camera, CheckCircle2, Cloud, FileUp, ReceiptText, RefreshCw } from "lucide-react";
 import { EXPENSE_CATEGORIES, makeEmptyExpense, money } from "../domain/expenseTracking";
 import { createExpenseDocument, loadExpenseWorkspaceData, saveBusinessExpense } from "../services/expenseRepository";
 import { testOneDriveConnection, uploadBusinessDocument } from "../services/oneDriveAppFolderService";
 import "../mobile-first.css";
 
-export default function MobileExpenseWorkspace() {
+export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth, oneDriveBusy = false }) {
   const year = new Date().getFullYear();
   const [form, setForm] = useState(() => makeEmptyExpense(year));
   const [file, setFile] = useState(null);
@@ -129,6 +129,11 @@ export default function MobileExpenseWorkspace() {
     </div>
 
     <form className="cg-mf-form-card" onSubmit={save}>
+      {!driveReady ? <div className="cg-mf-drive-warning">
+        <Cloud size={18}/>
+        <span><strong>Receipt upload needs OneDrive</strong><small>{oneDriveAuth?.needsConsent ? "Reconnect Microsoft access to attach photos." : "Connect the Costa Gear document repository to attach photos."}</small></span>
+        <button type="button" disabled={oneDriveBusy || !oneDriveAuth?.configured} onClick={onConnectOneDrive}>{oneDriveBusy ? "Connecting..." : oneDriveAuth?.needsConsent ? "Reconnect" : "Connect"}</button>
+      </div> : null}
       <div className="cg-mf-receipt-actions">
         <button type="button" disabled={!driveReady} onClick={() => cameraRef.current?.click()}><Camera size={21}/><span><strong>Take Photo</strong><small>{driveReady ? "Use phone camera" : "Connect OneDrive first"}</small></span></button>
         <button type="button" disabled={!driveReady} onClick={() => fileRef.current?.click()}><FileUp size={21}/><span><strong>Attach File</strong><small>Photo or PDF</small></span></button>
