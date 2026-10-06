@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Boxes,
   Cloud,
@@ -38,6 +38,8 @@ import { syncOneDriveDocumentIndex } from "./services/oneDriveDocumentIndexServi
 import "./brand.css";
 import "./legacy-overrides.css";
 import "./mobile.css";
+
+const MOBILE_MAIN_WORKSPACES = new Set(["dashboard", "products", "sell", "expenses"]);
 
 const primaryNav = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -103,6 +105,7 @@ function useMobileBreakpoint() {
 
 export default function App() {
   const mobile = useMobileBreakpoint();
+  const pendingMainNavigationRef = useRef(null);
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [sourcingView, setSourcingView] = useState(() => {
     const stored = readSessionValue("cg:sourcing-view", "master", ["intake", "master", "quotations", "analysis"]);
@@ -166,6 +169,7 @@ export default function App() {
 
   useEffect(() => {
     if (!mobile || typeof window === "undefined") {
+      pendingMainNavigationRef.current = null;
       setMobileOverlay(null);
       setMobileMoreOpen(false);
       return undefined;
@@ -192,11 +196,13 @@ export default function App() {
       }
     };
 
-    const currentState = window.history.state;
-    if (!currentState?.cgMobile) {
+    const initializeMobileHistory = () => {
+      const topLevel = MOBILE_MAIN_WORKSPACES.has(workspace) && !handoff;
       const currentRoute = {
         cgMobile: true,
         root: workspace === "dashboard" && !handoff,
+        topLevel,
+        depth: workspace === "dashboard" && !handoff ? 0 : 1,
         workspace,
         sourcingView,
         logisticsView,
@@ -208,29 +214,52 @@ export default function App() {
       const rootRoute = {
         ...currentRoute,
         root: true,
+        topLevel: true,
+        depth: 0,
         workspace: "dashboard",
         context: null,
         overlay: null,
         scrollY: 0,
       };
 
-      if (workspace === "dashboard" && !handoff) {
+      if (currentRoute.root) {
         window.history.replaceState(rootRoute, "");
       } else {
         window.history.replaceState(rootRoute, "");
         window.history.pushState({ ...currentRoute, root: false }, "");
       }
+    };
+
+    const currentState = window.history.state;
+    if (!currentState?.cgMobile || !Number.isFinite(Number(currentState.depth))) {
+      initializeMobileHistory();
     } else {
       restoreRoute(currentState, false);
     }
 
     const handlePopState = event => {
-      if (!event.state?.cgMobile) return;
+      if (!event.state?.cgMobile) {
+        pendingMainNavigationRef.current = null;
+        return;
+      }
+
+      const pending = pendingMainNavigationRef.current;
+      if (pending && Number(event.state.depth) === pending.targetDepth) {
+        pendingMainNavigationRef.current = null;
+        window.history.replaceState(pending.state, "");
+        restoreRoute(pending.state, false);
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+        });
+        return;
+      }
+
       restoreRoute(event.state, true);
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => {
+      pendingMainNavigationRef.current = null;
       window.removeEventListener("popstate", handlePopState);
       if ("scrollRestoration" in window.history) window.history.scrollRestoration = previousScrollRestoration;
     };
@@ -342,9 +371,70 @@ export default function App() {
     if (mobile && typeof window !== "undefined") {
       const current = window.history.state;
       const nextContext = context || null;
+      const currentDepth = Number.isFinite(Number(current?.depth)) ? Number(current.depth) : 0;
+      const topLevelDestination = MOBILE_MAIN_WORKSPACES.has(resolved.nextWorkspace) && !nextContext;
+      const targetDepth = topLevelDestination
+        ? (resolved.nextWorkspace === "dashboard" ? 0 : 1)
+        : null;
+
+      if (current?.cgMobile) {
+        window.history.replaceState({ ...current, scrollY: window.scrollY }, "");
+      }
+
+      const sameRoute = current?.cgMobile
+        && !current.overlay
+        && current.workspace === resolved.nextWorkspace
+        && current.sourcingView === resolved.nextSourcingView
+        && current.logisticsView === resolved.nextLogisticsView
+        && current.salesView === resolved.nextSalesView
+        && JSON.stringify(current.context || null) === JSON.stringify(nextContext);
+
+      if (sameRoute && (!topLevelDestination || current.topLevel === true)) {
+        applyRoute({ ...resolved, context: nextContext, overlay: null });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (topLevelDestination) {
+        const nextState = {
+          cgMobile: true,
+          root: targetDepth === 0,
+          topLevel: true,
+          depth: targetDepth,
+          workspace: resolved.nextWorkspace,
+          sourcingView: resolved.nextSourcingView,
+          logisticsView: resolved.nextLogisticsView,
+          salesView: resolved.nextSalesView,
+          context: null,
+          overlay: null,
+          scrollY: 0,
+        };
+
+        if (currentDepth > targetDepth) {
+          pendingMainNavigationRef.current = { targetDepth, state: nextState };
+          window.history.go(targetDepth - currentDepth);
+          return;
+        }
+
+        pendingMainNavigationRef.current = null;
+        if (currentDepth === targetDepth) {
+          window.history.replaceState(nextState, "");
+        } else {
+          window.history.pushState(nextState, "");
+        }
+
+        applyRoute({ ...resolved, context: null, overlay: null });
+        window.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
+
+      const replaceOverlayEntry = current?.cgMobile && current.overlay?.type === "more";
+      const nextDepth = replaceOverlayEntry ? currentDepth : currentDepth + 1;
       const nextState = {
         cgMobile: true,
         root: false,
+        topLevel: false,
+        depth: nextDepth,
         workspace: resolved.nextWorkspace,
         sourcingView: resolved.nextSourcingView,
         logisticsView: resolved.nextLogisticsView,
@@ -354,25 +444,7 @@ export default function App() {
         scrollY: 0,
       };
 
-      if (current?.cgMobile) {
-        window.history.replaceState({ ...current, scrollY: window.scrollY }, "");
-      }
-
-      const sameRoute = current?.cgMobile
-        && !current.overlay
-        && current.workspace === nextState.workspace
-        && current.sourcingView === nextState.sourcingView
-        && current.logisticsView === nextState.logisticsView
-        && current.salesView === nextState.salesView
-        && JSON.stringify(current.context || null) === JSON.stringify(nextContext);
-
-      if (sameRoute) {
-        applyRoute({ ...resolved, context: nextContext, overlay: null });
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        return;
-      }
-
-      const replaceOverlayEntry = current?.cgMobile && current.overlay?.type === "more";
+      pendingMainNavigationRef.current = null;
       if (replaceOverlayEntry) window.history.replaceState(nextState, "");
       else window.history.pushState(nextState, "");
 
@@ -398,9 +470,17 @@ export default function App() {
     if (!current?.cgMobile) return;
     if (current.overlay?.type === type) return;
 
+    const currentDepth = Number.isFinite(Number(current.depth)) ? Number(current.depth) : 0;
     window.history.replaceState({ ...current, scrollY: window.scrollY }, "");
     const overlay = { type, ...payload };
-    window.history.pushState({ ...current, root: false, overlay, scrollY: window.scrollY }, "");
+    window.history.pushState({
+      ...current,
+      root: false,
+      topLevel: false,
+      depth: currentDepth + 1,
+      overlay,
+      scrollY: window.scrollY,
+    }, "");
     setMobileOverlay(overlay);
     setMobileMoreOpen(type === "more");
   };
