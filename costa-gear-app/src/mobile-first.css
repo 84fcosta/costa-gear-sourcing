@@ -7,6 +7,11 @@
     padding: 10px 10px 96px !important;
   }
 
+  .cg-mobile-focused .cg-mobile-more-sheet {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   .cg-mobile-first {
     display: grid;
     gap: 14px;
