@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, ImageOff, Search, ShoppingBag, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ImageOff, Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
 import { loadOperationalDashboardData } from "../services/dashboardRepository";
 import { getOneDriveItemDownloadUrl } from "../services/oneDriveAppFolderService";
@@ -54,6 +54,98 @@ function ProductImage({ itemId, alt, className = "" }) {
   if (!url) return <div ref={frameRef} className={`cg-mf-product-image loading ${className}`}><span>{shouldLoad ? "Loading photo..." : "Photo"}</span></div>;
   return <img ref={frameRef} className={`cg-mf-product-image ${className}`} src={url} alt={alt || "Costa Gear product"} loading="lazy"/>;
 }
+function LightboxImage({ itemId, alt, zoom }) {
+  const [url, setUrl] = useState(() => imageUrlCache.get(itemId) || "");
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    const cached = imageUrlCache.get(itemId);
+    if (cached) {
+      setUrl(cached);
+      return undefined;
+    }
+    setUrl("");
+    getOneDriveItemDownloadUrl(itemId)
+      .then(result => {
+        if (!active) return;
+        imageUrlCache.set(itemId, result.downloadUrl);
+        setUrl(result.downloadUrl);
+      })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [itemId]);
+
+  if (failed) return <div className="cg-mf-lightbox-state"><ImageOff size={34}/><span>Unable to load photo</span></div>;
+  if (!url) return <div className="cg-mf-lightbox-state"><span>Loading photo...</span></div>;
+
+  return <img
+    className="cg-mf-lightbox-image"
+    src={url}
+    alt={alt || "Costa Gear product"}
+    style={{ width: `${zoom * 100}%`, maxHeight: zoom === 1 ? "calc(100dvh - 170px)" : "none" }}
+  />;
+}
+
+function ProductLightbox({ images, initialIndex = 0, productName, onClose }) {
+  const [index, setIndex] = useState(initialIndex);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    setIndex(initialIndex);
+    setZoom(1);
+  }, [initialIndex]);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKey = event => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") setIndex(value => Math.max(0, value - 1));
+      if (event.key === "ArrowRight") setIndex(value => Math.min(images.length - 1, value + 1));
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [images.length, onClose]);
+
+  const current = images[index] || null;
+  const move = direction => {
+    setIndex(value => Math.min(images.length - 1, Math.max(0, value + direction)));
+    setZoom(1);
+  };
+  const zoomIn = () => setZoom(value => Math.min(3, Number((value + .5).toFixed(1))));
+  const zoomOut = () => setZoom(value => Math.max(1, Number((value - .5).toFixed(1))));
+
+  if (!current) return null;
+
+  return <div className="cg-mf-lightbox" role="dialog" aria-modal="true" aria-label={`${productName} photo viewer`}>
+    <div className="cg-mf-lightbox-top">
+      <div><strong>{productName}</strong><span>{index + 1} / {images.length}</span></div>
+      <button type="button" onClick={onClose} aria-label="Close photo viewer"><X size={23}/></button>
+    </div>
+
+    <div className="cg-mf-lightbox-stage">
+      <div className="cg-mf-lightbox-scroll">
+        <LightboxImage itemId={current.itemId} alt={current.alt || productName} zoom={zoom}/>
+      </div>
+
+      {images.length > 1 ? <>
+        <button type="button" className="cg-mf-lightbox-nav prev" disabled={index === 0} onClick={() => move(-1)} aria-label="Previous photo"><ChevronLeft size={24}/></button>
+        <button type="button" className="cg-mf-lightbox-nav next" disabled={index === images.length - 1} onClick={() => move(1)} aria-label="Next photo"><ChevronRight size={24}/></button>
+      </> : null}
+    </div>
+
+    <div className="cg-mf-lightbox-controls">
+      <button type="button" disabled={zoom <= 1} onClick={zoomOut} aria-label="Zoom out"><Minus size={18}/></button>
+      <strong>{Math.round(zoom * 100)}%</strong>
+      <button type="button" disabled={zoom >= 3} onClick={zoomIn} aria-label="Zoom in"><Plus size={18}/></button>
+    </div>
+  </div>;
+}
 
 function productUnitCost(metric, latestQuote) {
   if (metric?.availableUnits > 0 && Number(metric.inventoryValueCad || 0) > 0) return Number(metric.inventoryValueCad) / Number(metric.availableUnits);
@@ -68,6 +160,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("stock");
   const [selectedId, setSelectedId] = useState(initialProductId || "");
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -162,6 +255,12 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
 
   const selected = catalog.find(row => row.product.id === selectedId) || null;
   const selectedImages = selected ? images.filter(image => image.product_id === selected.product.id) : [];
+  const detailImages = selected ? [
+    ...(selected.product.main_image_item_id ? [{ itemId: selected.product.main_image_item_id, alt: selected.product.name, role: "Main" }] : []),
+    ...selectedImages
+      .filter(image => image.item_id && image.item_id !== selected.product.main_image_item_id)
+      .map(image => ({ itemId: image.item_id, alt: image.role || selected.product.name, role: image.role || "Photo" })),
+  ] : [];
 
   if (loading) return <div className="cg-mobile-empty">Loading products...</div>;
   if (error || !data) return <div className="cg-mobile-message error">{error || "Products unavailable."}</div>;
@@ -174,7 +273,10 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
       </div>
 
       <section className="cg-mf-product-detail">
-        <ProductImage itemId={selected.product.main_image_item_id} alt={selected.product.name} className="detail"/>
+        <button type="button" className="cg-mf-product-detail-image-button" onClick={() => detailImages.length && setLightboxIndex(0)} aria-label="Open product photo">
+          <ProductImage itemId={selected.product.main_image_item_id} alt={selected.product.name} className="detail"/>
+          {selected.product.main_image_item_id ? <span>Tap to enlarge</span> : null}
+        </button>
         <div className="cg-mf-product-detail-body">
           <span className="cg-mf-sku">{selected.product.sku_id}</span>
           <h2>{selected.product.name}</h2>
@@ -197,12 +299,16 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
         </div>
       </section>
 
-      {selectedImages.length > 1 ? <section className="cg-mf-section">
+      {detailImages.length > 1 ? <section className="cg-mf-section">
         <div className="cg-mf-section-head"><div><span>Product Media</span><h3>Photos</h3></div></div>
         <div className="cg-mf-gallery">
-          {selectedImages.map(image => <ProductImage key={image.id} itemId={image.item_id} alt={image.role || selected.product.name}/>)}
+          {detailImages.map((image, index) => <button type="button" key={image.itemId} className="cg-mf-gallery-button" onClick={() => setLightboxIndex(index)} aria-label={`Open photo ${index + 1}`}>
+            <ProductImage itemId={image.itemId} alt={image.alt}/>
+          </button>)}
         </div>
       </section> : null}
+
+      {lightboxIndex !== null ? <ProductLightbox images={detailImages} initialIndex={lightboxIndex} productName={selected.product.name} onClose={() => setLightboxIndex(null)}/> : null}
     </div>;
   }
 
