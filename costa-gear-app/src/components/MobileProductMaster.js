@@ -6,6 +6,7 @@ import {
   buildProductFitmentMap,
   modelYearOptions,
   productMatchesStructuredFitment,
+  productMatchesYearSearch,
   vehicleModelOptions,
 } from "../domain/structuredFitmentFilter";
 import "../mobile-product-master.css";
@@ -134,10 +135,13 @@ export default function MobileProductMaster({ active }) {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = enriched.filter(p => {
-      const matchesSearch = !q || [p.sku_id, p.name, p.product_type, p.material, p.fitment, p.category]
-        .some(value => String(value || "").toLowerCase().includes(q));
+      const structuredEntries = fitmentsByProduct.get(p.id) || [];
+      const matchesSearch = !q
+        || [p.sku_id, p.name, p.product_type, p.material, p.fitment, p.category]
+          .some(value => String(value || "").toLowerCase().includes(q))
+        || productMatchesYearSearch(structuredEntries, q);
       const fitmentMatch = productMatchesStructuredFitment(
-        fitmentsByProduct.get(p.id) || [],
+        structuredEntries,
         vehicleCode,
         modelYear
       );

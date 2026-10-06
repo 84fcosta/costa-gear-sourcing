@@ -6,6 +6,7 @@ import {
   buildProductFitmentMap,
   modelYearOptions,
   productMatchesStructuredFitment,
+  productMatchesYearSearch,
   vehicleModelOptions,
 } from "../domain/structuredFitmentFilter";
 import "../desktop-sourcing-overrides.css";
@@ -235,9 +236,11 @@ export default function DesktopProductMasterControls({ active = true }) {
               ...meta.supplierNames,
             ].map(normalize)
           : [normalize(card.textContent)];
-        const searchMatch = !query || haystack.some(value => value.includes(query));
-        const categoryMatch = !category || meta?.category === category;
         const structuredEntries = meta ? fitmentsByProduct.get(meta.productId) || [] : [];
+        const searchMatch = !query
+          || haystack.some(value => value.includes(query))
+          || productMatchesYearSearch(structuredEntries, query);
+        const categoryMatch = !category || meta?.category === category;
         const fitmentMatch = productMatchesStructuredFitment(structuredEntries, vehicleCode, modelYear);
         const visible = searchMatch && categoryMatch && fitmentMatch;
         card.style.display = visible ? "grid" : "none";

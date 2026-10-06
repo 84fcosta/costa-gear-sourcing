@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ImageOff, Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
+import { buildProductFitmentMap, productMatchesYearSearch } from "../domain/structuredFitmentFilter";
 import { loadOperationalDashboardData } from "../services/dashboardRepository";
 import { getOneDriveItemDownloadUrl } from "../services/oneDriveAppFolderService";
 import { supabase } from "../supabase";
@@ -157,6 +158,8 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   const [data, setData] = useState(null);
   const [images, setImages] = useState([]);
   const [supplierSearch, setSupplierSearch] = useState(new Map());
+  const [productFitments, setProductFitments] = useState([]);
+  const [vehicleFitments, setVehicleFitments] = useState([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("stock");
   const [selectedId, setSelectedId] = useState(initialProductId || "");
@@ -168,13 +171,15 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
     setLoading(true);
     setError("");
     try {
-      const [dashboard, imageResult, mappingResult, variantMappingResult] = await Promise.all([
+      const [dashboard, imageResult, mappingResult, variantMappingResult, productFitmentResult, vehicleFitmentResult] = await Promise.all([
         loadOperationalDashboardData(),
         supabase.from("product_images").select("*").order("sort_order").order("file_name"),
         supabase.from("supplier_product_mappings").select("product_id,supplier_sku"),
         supabase.from("supplier_product_variant_mappings").select("product_id,supplier_sku,supplier_variant"),
+        supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
+        supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
       ]);
-      const dbError = imageResult.error || mappingResult.error || variantMappingResult.error;
+      const dbError = imageResult.error || mappingResult.error || variantMappingResult.error || productFitmentResult.error || vehicleFitmentResult.error;
       if (dbError) throw dbError;
       const map = new Map();
       const add = (productId, value) => {
@@ -188,6 +193,8 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
         add(row.product_id, row.supplier_variant);
       }
       setSupplierSearch(map);
+      setProductFitments(productFitmentResult.data || []);
+      setVehicleFitments(vehicleFitmentResult.data || []);
       setImages(imageResult.data || []);
       setData(dashboard);
     } catch (e) {
@@ -230,15 +237,19 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
     });
   }, [data, supplierSearch]);
 
+  const fitmentsByProduct = useMemo(
+    () => buildProductFitmentMap(productFitments, vehicleFitments),
+    [productFitments, vehicleFitments]
+  );
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return catalog.filter(row => {
-      if (!needle) {
-        if (filter === "stock" && row.available <= 0) return false;
-        if (filter === "low" && !(Number(row.product.reorder_point || 0) > 0 && row.available <= Number(row.product.reorder_point || 0))) return false;
-        return true;
-      }
-      return [
+      if (filter === "stock" && row.available <= 0) return false;
+      if (filter === "low" && !(Number(row.product.reorder_point || 0) > 0 && row.available <= Number(row.product.reorder_point || 0))) return false;
+      if (!needle) return true;
+
+      const directTextMatch = [
         row.product.sku_id,
         row.product.name,
         row.product.product_type,
@@ -247,11 +258,18 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
         row.product.category,
         ...row.supplierTerms,
       ].some(value => String(value || "").toLowerCase().includes(needle));
+
+      const yearFitmentMatch = productMatchesYearSearch(
+        fitmentsByProduct.get(row.product.id) || [],
+        needle
+      );
+
+      return directTextMatch || yearFitmentMatch;
     }).sort((a, b) => {
       if (b.available !== a.available) return b.available - a.available;
       return a.product.sku_id.localeCompare(b.product.sku_id);
     });
-  }, [catalog, filter, query]);
+  }, [catalog, filter, query, fitmentsByProduct]);
 
   const selected = catalog.find(row => row.product.id === selectedId) || null;
   const selectedImages = selected ? images.filter(image => image.product_id === selected.product.id) : [];

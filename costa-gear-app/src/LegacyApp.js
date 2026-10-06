@@ -1356,6 +1356,7 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
     return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => start + i);
   };
   const modelRange = fitment => {
+    if (fitment.code === "UNIVERSAL") return "All vehicles · no model year";
     const start = fitment.model_year_start;
     const end = fitment.model_year_end;
     if (!start) return "";
@@ -1388,22 +1389,28 @@ function VehicleFitmentEditor({ catalog = [], value = [], onChange, notes = "", 
                 <span>{fitment.display_name}<span style={{ display:"block", fontSize:10.5, color:C.dgray, fontWeight:600, marginTop:1 }}>{modelRange(fitment)}</span></span>
               </label>
               {selected ? (
-                <>
-                  <select value={selected.yearFrom ?? ""} onChange={e => update(fitment.code, "yearFrom", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
-                    <option value="">Start year *</option>
-                    {yearsFor(fitment).map(y => <option key={y} value={String(y)}>{y}</option>)}
-                  </select>
-                  <select value={selected.yearTo ?? ""} onChange={e => update(fitment.code, "yearTo", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
-                    <option value="">{fitment.model_year_end ? "End year *" : "Current / ongoing"}</option>
-                    {yearsFor(fitment).filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
-                  </select>
-                </>
+                fitment.code === "UNIVERSAL" ? (
+                  <div style={{ gridColumn: "2 / 4", borderRadius: 9, padding: "9px 10px", background: "#F1F4DD", color: C.dgray, fontSize: 12, fontWeight: 700 }}>
+                    Applies without a vehicle-model or model-year restriction.
+                  </div>
+                ) : (
+                  <>
+                    <select value={selected.yearFrom ?? ""} onChange={e => update(fitment.code, "yearFrom", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
+                      <option value="">Start year *</option>
+                      {yearsFor(fitment).map(y => <option key={y} value={String(y)}>{y}</option>)}
+                    </select>
+                    <select value={selected.yearTo ?? ""} onChange={e => update(fitment.code, "yearTo", e.target.value)} style={{ ...inputStyle, padding: "8px 9px", fontSize: 13 }}>
+                      <option value="">{fitment.model_year_end ? "End year *" : "Current / ongoing"}</option>
+                      {yearsFor(fitment).filter(y => !selected.yearFrom || y >= Number(selected.yearFrom)).map(y => <option key={y} value={String(y)}>{y}</option>)}
+                    </select>
+                  </>
+                )
               ) : <><div /><div /></>}
             </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 11, color: C.dgray }}>Year options are limited to each vehicle's valid model-year range. Start year is required. Leave End Year as Current / ongoing only for platforms still in production.</div>
+      <div style={{ fontSize: 11, color: C.dgray }}>Year options are limited to each vehicle's valid model-year range. Start year is required for vehicle-specific fitments. Universal has no model-year restriction. Leave End Year as Current / ongoing only for platforms still in production.</div>
       <Input label="Fitment Notes / Restrictions" value={notes} onChange={onNotesChange} placeholder="e.g. Hard Top Only, Not for Wrangler 4xe" />
     </div>
   );
@@ -1461,7 +1468,9 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
   const hasDimensions = Number(form.length) > 0 && Number(form.width) > 0 && Number(form.height) > 0;
   const fitmentsValid = Array.isArray(form.fitments) && form.fitments.length > 0 && form.fitments.every(x => {
     const meta = vehicleFitments.find(v => v.code === x.code);
-    if (!x.code || !x.yearFrom || !meta) return false;
+    if (!x.code || !meta) return false;
+    if (x.code === "UNIVERSAL") return true;
+    if (!x.yearFrom) return false;
     if (meta.model_year_end && !x.yearTo) return false;
     return true;
   });
@@ -1644,7 +1653,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
           <Input label="Pricing Notes" value={form.pricingNotes} onChange={set("pricingNotes")} placeholder="Notes about market price, competitor, margin strategy..." />
         </div>
 
-        {!fitmentsValid && <div style={{ fontSize: 11.5, color: C.amber }}>Select at least one vehicle fitment. A start year is required for every selection, and discontinued platforms also require an end year.</div>}
+        {!fitmentsValid && <div style={{ fontSize: 11.5, color: C.amber }}>Select at least one fitment. Vehicle-specific selections require a start year, and discontinued platforms also require an end year. Universal does not require years.</div>}
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>

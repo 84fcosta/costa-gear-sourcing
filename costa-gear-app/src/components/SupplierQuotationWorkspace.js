@@ -67,6 +67,7 @@ const QuotationFitmentEditor=({catalog,value,onChange,notes,onNotesChange})=>{
     return Array.from({length:Math.max(0,end-start+1)},(_,i)=>start+i);
   };
   const modelRange=f=>{
+    if(f.code==="UNIVERSAL")return "All vehicles · no model year";
     if(!f.model_year_start)return "";
     return f.model_year_end?f.model_year_start+"-"+f.model_year_end:f.model_year_start+"+";
   };
@@ -78,10 +79,10 @@ const QuotationFitmentEditor=({catalog,value,onChange,notes,onNotesChange})=>{
     <div style={{border:"1px solid "+C.border,borderRadius:9,overflow:"hidden"}}>
       {catalog.map((f,index)=>{const row=selected.get(f.code);return <div key={f.code} style={{display:"grid",gridTemplateColumns:"minmax(210px,1.4fr) 125px 135px",gap:7,alignItems:"center",padding:8,borderTop:index?"1px solid "+C.border:0,background:row?"#F8FAF0":"#fff"}}>
         <label style={{display:"flex",gap:7,alignItems:"center",fontSize:11.5,fontWeight:row?800:650,cursor:"pointer"}}><input type="checkbox" checked={Boolean(row)} onChange={()=>toggle(f.code)}/><span>{f.display_name}<span style={{display:"block",fontSize:9.5,color:C.muted,fontWeight:600,marginTop:1}}>{modelRange(f)}</span></span></label>
-        {row?<><select style={input} value={row.yearFrom??""} onChange={e=>update(f.code,"yearFrom",e.target.value)}><option value="">Start year *</option>{yearsFor(f).map(y=><option key={y} value={String(y)}>{y}</option>)}</select><select style={input} value={row.yearTo??""} onChange={e=>update(f.code,"yearTo",e.target.value)}><option value="">{f.model_year_end?"End year *":"Current / ongoing"}</option>{yearsFor(f).filter(y=>!row.yearFrom||y>=Number(row.yearFrom)).map(y=><option key={y} value={String(y)}>{y}</option>)}</select></>:<><div/><div/></>}
+        {row?(f.code==="UNIVERSAL"?<div style={{gridColumn:"2 / 4",borderRadius:8,padding:"9px 10px",background:"#F1F4DD",color:C.muted,fontSize:10.5,fontWeight:750}}>Applies without a vehicle-model or model-year restriction.</div>:<><select style={input} value={row.yearFrom??""} onChange={e=>update(f.code,"yearFrom",e.target.value)}><option value="">Start year *</option>{yearsFor(f).map(y=><option key={y} value={String(y)}>{y}</option>)}</select><select style={input} value={row.yearTo??""} onChange={e=>update(f.code,"yearTo",e.target.value)}><option value="">{f.model_year_end?"End year *":"Current / ongoing"}</option>{yearsFor(f).filter(y=>!row.yearFrom||y>=Number(row.yearFrom)).map(y=><option key={y} value={String(y)}>{y}</option>)}</select></>):<><div/><div/></>}
       </div>})}
     </div>
-    <div style={{fontSize:10.5,color:C.muted}}>Year options are limited to each vehicle's valid model-year range. Start year is required. Use Current / ongoing only for platforms still in production.</div>
+    <div style={{fontSize:10.5,color:C.muted}}>Year options are limited to each vehicle's valid model-year range. Vehicle-specific fitments require a start year. Universal has no model-year restriction.</div>
     <Field label="Fitment Notes / Restrictions"><input style={input} value={notes||""} onChange={e=>onNotesChange(e.target.value)} placeholder="e.g. Hard Top Only, Not for Wrangler 4xe"/></Field>
   </div>;
 };
@@ -320,7 +321,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
     if(!newProductForm.productType)return setError("Select a Product Type before creating the Product Master record.");
     if(!newProductForm.category)return setError("Select a Product Category before creating the Product Master record.");
     if(!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0))return setError("Length, Width and Height are required.");
-    if(!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);}))return setError("Select at least one vehicle fitment. A start year is required for every selection, and discontinued platforms also require an end year.");
+    if(!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);if(!meta)return true;if(x.code==="UNIVERSAL")return false;return !x.yearFrom||(meta.model_year_end&&!x.yearTo);}))return setError("Select at least one fitment. Vehicle-specific selections require a start year, and discontinued platforms also require an end year. Universal does not require years.");
     setBusy(true);setError("");
     try{
       const result=await createProductFromQuotationLine({lineId:newProductLine.id,...newProductForm});
@@ -489,7 +490,7 @@ export default function SupplierQuotationWorkspace({onNavigate,initialQuotationI
           />
 
           <Field label="Notes (optional)"><input style={input} value={newProductForm.notes} onChange={e=>setNewProductForm(f=>({...f,notes:e.target.value}))} placeholder="Anything useful for Product Master"/></Field>
-          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);})} style={{...btn(true),opacity:(busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);return !x.yearFrom||!meta||(meta.model_year_end&&!x.yearTo);}))?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:2}}><button type="button" disabled={busy} style={btn()} onClick={closeCreateProduct}>Cancel</button><button type="button" disabled={busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);if(!meta)return true;if(x.code==="UNIVERSAL")return false;return !x.yearFrom||(meta.model_year_end&&!x.yearTo);})} style={{...btn(true),opacity:(busy||!newProductForm.productType||!newProductForm.category||!(Number(newProductForm.length)>0&&Number(newProductForm.width)>0&&Number(newProductForm.height)>0)||!newProductForm.fitments.length||newProductForm.fitments.some(x=>{const meta=vehicleFitments.find(v=>v.code===x.code);if(!meta)return true;if(x.code==="UNIVERSAL")return false;return !x.yearFrom||(meta.model_year_end&&!x.yearTo);}))?.45:1}} onClick={createProduct}>{busy?"Creating...":"Create Product & Match"}</button></div>
         </div>
       </div>
     </div>}
