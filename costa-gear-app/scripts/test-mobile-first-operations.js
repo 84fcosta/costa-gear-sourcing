@@ -32,11 +32,11 @@ assert.match(expense, /capture="environment"/);
 assert.match(expense, /uploadBusinessDocument/);
 assert.match(expense, /Save Expense/);
 
-const manifest = JSON.parse(read("../public/site.webmanifest"));
+const manifest = JSON.parse(read("public/site.webmanifest"));
 assert.strictEqual(manifest.display, "standalone");
 assert.ok(Array.isArray(manifest.shortcuts) && manifest.shortcuts.length >= 3);
 
-const sw = read("../public/sw.js");
+const sw = read("public/sw.js");
 assert.match(sw, /costa-gear-shell-v1/);
 
 process.stdout.write("Mobile-first Costa Gear operations guard passed.\n");
