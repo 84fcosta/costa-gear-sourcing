@@ -371,10 +371,23 @@
     font-size: 14px;
   }
 
+  .cg-mf-product-controls {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+
   .cg-mf-filter-row {
     display: flex;
     gap: 7px;
     overflow-x: auto;
+    min-width: 0;
+    scrollbar-width: none;
+  }
+
+  .cg-mf-filter-row::-webkit-scrollbar {
+    display: none;
   }
 
   .cg-mf-filter-row button {
@@ -392,6 +405,95 @@
   .cg-mf-filter-row button.active {
     border-color: #747b31;
     background: #eff2df;
+    color: #606626;
+  }
+
+  .cg-mf-sort-button {
+    min-height: 36px;
+    border: 1px solid #dce1d8;
+    border-radius: 999px;
+    padding: 0 11px;
+    background: #fff;
+    color: #626b60;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .cg-mf-sort-button.active {
+    border-color: #747b31;
+    background: #eff2df;
+    color: #606626;
+  }
+
+  .cg-mf-sort-button:disabled {
+    opacity: .72;
+    background: #f5f6f2;
+  }
+
+  .cg-mf-sort-menu {
+    overflow: hidden;
+    border: 1px solid #dce1d8;
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(25,31,23,.09);
+  }
+
+  .cg-mf-sort-menu > div {
+    min-height: 42px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #edf0ea;
+  }
+
+  .cg-mf-sort-menu > div > span {
+    color: #626b60;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  .cg-mf-sort-menu > div > button {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #697166;
+    display: grid;
+    place-items: center;
+  }
+
+  .cg-mf-sort-menu > button {
+    width: 100%;
+    min-height: 46px;
+    border: 0;
+    border-top: 1px solid #f0f2ed;
+    padding: 0 12px;
+    background: #fff;
+    color: #20251f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .cg-mf-sort-menu > button:first-of-type {
+    border-top: 0;
+  }
+
+  .cg-mf-sort-menu > button.active {
+    background: #f4f6e9;
     color: #606626;
   }
 
