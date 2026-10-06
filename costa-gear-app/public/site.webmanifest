@@ -1,20 +1,47 @@
 {
   "name": "Costa Gear Operations",
-  "short_name": "Costa Gear Ops",
-  "description": "Costa Gear Operations portal for sourcing, buying, logistics, inventory, sales and expenses.",
+  "short_name": "Costa Gear",
+  "description": "Costa Gear mobile operations for products, sales, inventory and expenses.",
+  "start_url": "/?workspace=dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#20251f",
+  "background_color": "#20251f",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "theme_color": "#070807",
-  "background_color": "#070807",
-  "display": "standalone"
+  "shortcuts": [
+    {
+      "name": "Products",
+      "short_name": "Products",
+      "url": "/?workspace=products",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New Sale",
+      "short_name": "Sell",
+      "url": "/?workspace=sell",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Add Expense",
+      "short_name": "Expense",
+      "url": "/?workspace=expenses",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }

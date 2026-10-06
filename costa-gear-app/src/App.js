@@ -3,17 +3,24 @@ import {
   Boxes,
   Cloud,
   DollarSign,
+  Download,
+  Home,
   LayoutDashboard,
   Menu,
   PackageSearch,
   ReceiptText,
   ShieldCheck,
+  ShoppingBag,
   ShoppingCart,
   Truck,
 } from "lucide-react";
 import BuyingDecisionWorkspace from "./components/BuyingDecisionWorkspace";
 import ReceivingInventoryWorkspace from "./components/ResponsiveInventoryWorkspace";
 import OperationalDashboard from "./components/OperationalDashboard";
+import MobileDashboard from "./components/MobileDashboard";
+import MobileProductCatalog from "./components/MobileProductCatalog";
+import MobileQuickSale from "./components/MobileQuickSale";
+import MobileExpenseWorkspace from "./components/MobileExpenseWorkspace";
 import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
@@ -43,6 +50,8 @@ const primaryNav = [
 
 const pageMeta = {
   dashboard: ["Business Dashboard", "See sales, profit, inventory health and the few actions that need attention."],
+  products: ["Products", "Fast product lookup with stock, photos, cost and selling price."],
+  sell: ["Quick Sale", "Record a sale with live inventory and landed-cost margin."],
   sourcing: ["Sourcing", "Step 1 · Products, suppliers, quotations and sourcing decisions."],
   buying: ["Buying Decisions & Purchase Orders", "Step 2 · Convert sourcing decisions into planned and ordered purchases."],
   logistics: ["Logistics & Landed Cost", "Step 3 · Shipments, freight allocation, duty and import costs."],
@@ -67,6 +76,8 @@ function readSessionValue(key, fallback, allowedValues = null) {
 function initialWorkspace() {
   if (typeof window === "undefined") return "dashboard";
   try {
+    const requested = new URLSearchParams(window.location.search).get("workspace");
+    if (requested && Object.prototype.hasOwnProperty.call(pageMeta, requested)) return requested;
     const pending = window.sessionStorage.getItem("cg:return-workspace");
     if (pending === "expenses") {
       window.sessionStorage.removeItem("cg:return-workspace");
@@ -77,7 +88,21 @@ function initialWorkspace() {
   return stored === "migration" ? "governance" : stored;
 }
 
+function useMobileBreakpoint() {
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 680px)").matches);
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const query = window.matchMedia("(max-width: 680px)");
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+  return mobile;
+}
+
 export default function App() {
+  const mobile = useMobileBreakpoint();
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [sourcingView, setSourcingView] = useState(() => {
     const stored = readSessionValue("cg:sourcing-view", "master", ["intake", "master", "quotations", "analysis"]);
@@ -87,6 +112,7 @@ export default function App() {
   const [salesView, setSalesView] = useState(() => readSessionValue("cg:sales-view", "orders", ["orders", "performance", "planning", "pricing"]));
   const [handoff, setHandoff] = useState(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
   const [oneDriveVersion, setOneDriveVersion] = useState(0);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [oneDriveMessage, setOneDriveMessage] = useState("");
@@ -98,8 +124,32 @@ export default function App() {
   }));
 
   useEffect(() => {
+    const captureInstallPrompt = event => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const installed = () => setInstallPrompt(null);
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    window.addEventListener("appinstalled", installed);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+      window.removeEventListener("appinstalled", installed);
+    };
+  }, []);
+
+  useEffect(() => {
     try { window.sessionStorage.setItem("cg:workspace", workspace); } catch (_) {}
   }, [workspace]);
+
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("workspace")) {
+        url.searchParams.delete("workspace");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      }
+    } catch (_) {}
+  }, []);
 
   useEffect(() => {
     try { window.sessionStorage.setItem("cg:sourcing-view", sourcingView); } catch (_) {}
@@ -169,6 +219,7 @@ export default function App() {
   const navigate = (destination, context = null) => {
     setMobileMoreOpen(false);
     if (context) setHandoff(context);
+    else if (destination === "products" || destination === "sell") setHandoff(null);
 
     if (destination === "operations") {
       setSourcingView("master");
@@ -219,11 +270,19 @@ export default function App() {
     }
   };
 
-  const [title, subtitle] = pageMeta[workspace];
-  const showOneDriveControl = workspace === "expenses" || workspace === "governance";
-  const mobileMoreActive = ["buying", "logistics", "expenses", "governance"].includes(workspace);
+  const installMobileApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    setInstallPrompt(null);
+    setMobileMoreOpen(false);
+  };
 
-  return <div className="cg-app-shell">
+  const [title, subtitle] = pageMeta[workspace] || pageMeta.dashboard;
+  const showOneDriveControl = workspace === "expenses" || workspace === "governance";
+  const mobileMoreActive = !["dashboard", "products", "sell", "expenses"].includes(workspace);
+
+  return <div className={`cg-app-shell ${mobile ? "cg-mobile-focused" : ""}`}>
     <header className="cg-topbar" style={{ height: 96 }}>
       <div className="cg-topbar-inner">
         <button className="cg-logo-button" onClick={() => navigate("dashboard")} aria-label="Costa Gear dashboard">
@@ -287,22 +346,24 @@ export default function App() {
 
       <div className="cg-page-content">
         {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
-        {workspace === "dashboard" ? <div className="cg-module-embedded cg-dashboard-embedded"><OperationalDashboard onNavigate={navigate} /></div>
+        {workspace === "dashboard" ? (mobile ? <MobileDashboard onNavigate={navigate} /> : <div className="cg-module-embedded cg-dashboard-embedded"><OperationalDashboard onNavigate={navigate} /></div>)
+          : workspace === "products" ? (mobile ? <MobileProductCatalog initialProductId={handoff?.productId || null} onNavigate={navigate} /> : <SourcingWorkspace initialView="master" onNavigate={navigate} />)
+          : workspace === "sell" ? (mobile ? <MobileQuickSale initialProductId={handoff?.productId || null} onNavigate={navigate} /> : <CommercialWorkspace initialView="orders" onNavigate={navigate} />)
           : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : workspace === "expenses" ? <ExpenseWorkspace key={oneDriveVersion} />
+          : workspace === "expenses" ? (mobile ? <MobileExpenseWorkspace key={oneDriveVersion} onConnectOneDrive={connectOneDrive} oneDriveAuth={oneDriveAuth} oneDriveBusy={oneDriveBusy} /> : <ExpenseWorkspace key={oneDriveVersion} />)
           : workspace === "governance" ? <DocumentGovernanceWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
     </main>
 
     <nav className="cg-mobile-bottom-nav" aria-label="Mobile navigation">
-      <button className={workspace === "dashboard" ? "active" : ""} onClick={() => navigate("dashboard")}><LayoutDashboard size={21}/><span>Dashboard</span></button>
-      <button className={workspace === "sourcing" ? "active" : ""} onClick={() => navigate("sourcing")}><PackageSearch size={21}/><span>Sourcing</span></button>
-      <button className={workspace === "receiving" ? "active" : ""} onClick={() => navigate("receiving")}><Boxes size={21}/><span>Inventory</span></button>
-      <button className={workspace === "sales" ? "active" : ""} onClick={() => navigate("sales")}><DollarSign size={21}/><span>Sales</span></button>
+      <button className={workspace === "dashboard" ? "active" : ""} onClick={() => navigate("dashboard")}><Home size={21}/><span>Home</span></button>
+      <button className={workspace === "products" ? "active" : ""} onClick={() => navigate("products")}><PackageSearch size={21}/><span>Products</span></button>
+      <button className={workspace === "sell" ? "active" : ""} onClick={() => navigate("sell")}><ShoppingBag size={21}/><span>Sell</span></button>
+      <button className={workspace === "expenses" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={21}/><span>Expenses</span></button>
       <button className={mobileMoreActive || mobileMoreOpen ? "active" : ""} onClick={() => setMobileMoreOpen(true)} aria-expanded={mobileMoreOpen}><Menu size={21}/><span>More</span></button>
     </nav>
 
@@ -311,10 +372,13 @@ export default function App() {
         <div className="cg-mobile-sheet-handle" aria-hidden="true"/>
         <div className="cg-mobile-sheet-head"><div><strong>More</strong><span>Operations and administration</span></div><button onClick={() => setMobileMoreOpen(false)}>Close</button></div>
         <div className="cg-mobile-sheet-links">
+          <button className={workspace === "receiving" ? "active" : ""} onClick={() => navigate("receiving")}><Boxes size={22}/><span><strong>Inventory & Receiving</strong><small>Stock position and incoming goods</small></span></button>
+          <button className={workspace === "sales" ? "active" : ""} onClick={() => navigate("sales")}><DollarSign size={22}/><span><strong>Sales History</strong><small>Review and edit sales records</small></span></button>
+          <button className={workspace === "sourcing" ? "active" : ""} onClick={() => navigate("sourcing")}><PackageSearch size={22}/><span><strong>Sourcing</strong><small>Products, suppliers and quotations</small></span></button>
           <button className={workspace === "buying" ? "active" : ""} onClick={() => navigate("buying")}><ShoppingCart size={22}/><span><strong>Buying</strong><small>Purchase decisions and POs</small></span></button>
           <button className={workspace === "logistics" ? "active" : ""} onClick={() => navigate("logistics")}><Truck size={22}/><span><strong>Logistics</strong><small>Shipments and landed cost</small></span></button>
-          <button className={workspace === "expenses" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={22}/><span><strong>Expenses</strong><small>Receipts, assets and tax</small></span></button>
           <button className={workspace === "governance" ? "active" : ""} onClick={() => navigate("governance")}><ShieldCheck size={22}/><span><strong>Document Governance</strong><small>Repository compliance and naming</small></span></button>
+          {installPrompt ? <button onClick={installMobileApp}><Download size={22}/><span><strong>Install Costa Gear</strong><small>Add the app to this Android device</small></span></button> : null}
         </div>
       </section>
     </div> : null}
