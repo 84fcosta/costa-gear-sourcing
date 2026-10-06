@@ -112,6 +112,7 @@ export default function App() {
   const [salesView, setSalesView] = useState(() => readSessionValue("cg:sales-view", "orders", ["orders", "performance", "planning", "pricing"]));
   const [handoff, setHandoff] = useState(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileOverlay, setMobileOverlay] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [oneDriveVersion, setOneDriveVersion] = useState(0);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
@@ -146,7 +147,7 @@ export default function App() {
       const url = new URL(window.location.href);
       if (url.searchParams.has("workspace")) {
         url.searchParams.delete("workspace");
-        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+        window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
       }
     } catch (_) {}
   }, []);
@@ -162,6 +163,78 @@ export default function App() {
   useEffect(() => {
     try { window.sessionStorage.setItem("cg:sales-view", salesView); } catch (_) {}
   }, [salesView]);
+
+  useEffect(() => {
+    if (!mobile || typeof window === "undefined") {
+      setMobileOverlay(null);
+      setMobileMoreOpen(false);
+      return undefined;
+    }
+
+    const previousScrollRestoration = window.history.scrollRestoration;
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+
+    const restoreRoute = (state, restoreScroll = true) => {
+      if (!state?.cgMobile) return;
+      setWorkspace(state.workspace || "dashboard");
+      setSourcingView(state.sourcingView || "master");
+      setLogisticsView(state.logisticsView || "shipments");
+      setSalesView(state.salesView || "orders");
+      setHandoff(state.context || null);
+      setMobileOverlay(state.overlay || null);
+      setMobileMoreOpen(state.overlay?.type === "more");
+
+      if (restoreScroll) {
+        const top = Number(state.scrollY || 0);
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => window.scrollTo({ top, behavior: "auto" }));
+        });
+      }
+    };
+
+    const currentState = window.history.state;
+    if (!currentState?.cgMobile) {
+      const currentRoute = {
+        cgMobile: true,
+        root: workspace === "dashboard" && !handoff,
+        workspace,
+        sourcingView,
+        logisticsView,
+        salesView,
+        context: handoff || null,
+        overlay: null,
+        scrollY: 0,
+      };
+      const rootRoute = {
+        ...currentRoute,
+        root: true,
+        workspace: "dashboard",
+        context: null,
+        overlay: null,
+        scrollY: 0,
+      };
+
+      if (workspace === "dashboard" && !handoff) {
+        window.history.replaceState(rootRoute, "");
+      } else {
+        window.history.replaceState(rootRoute, "");
+        window.history.pushState({ ...currentRoute, root: false }, "");
+      }
+    } else {
+      restoreRoute(currentState, false);
+    }
+
+    const handlePopState = event => {
+      if (!event.state?.cgMobile) return;
+      restoreRoute(event.state, true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      if ("scrollRestoration" in window.history) window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, [mobile]);
 
   const finalizeOneDriveConnection = async (state, activeCheck = () => true) => {
     const setup = await initializeSharedOneDriveRepository({ microsoftAccount: state?.username || null });
@@ -216,41 +289,137 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  const navigate = (destination, context = null) => {
-    setMobileMoreOpen(false);
-    if (context) setHandoff(context);
-    else if (destination === "products" || destination === "sell") setHandoff(null);
+  const resolveDestination = destination => {
+    let nextWorkspace = destination;
+    let nextSourcingView = sourcingView;
+    let nextLogisticsView = logisticsView;
+    let nextSalesView = salesView;
 
     if (destination === "operations") {
-      setSourcingView("master");
-      setWorkspace("sourcing");
+      nextWorkspace = "sourcing";
+      nextSourcingView = "master";
     } else if (destination === "intelligence") {
-      setSourcingView("analysis");
-      setWorkspace("sourcing");
+      nextWorkspace = "sourcing";
+      nextSourcingView = "analysis";
     } else if (destination === "shipments") {
-      setLogisticsView("shipments");
-      setWorkspace("logistics");
+      nextWorkspace = "logistics";
+      nextLogisticsView = "shipments";
     } else if (destination === "importcosts") {
-      setLogisticsView("costs");
-      setWorkspace("logistics");
+      nextWorkspace = "logistics";
+      nextLogisticsView = "costs";
     } else if (destination === "performance") {
-      setSalesView("performance");
-      setWorkspace("sales");
+      nextWorkspace = "sales";
+      nextSalesView = "performance";
     } else if (destination === "planning") {
-      setSalesView("planning");
-      setWorkspace("sales");
+      nextWorkspace = "sales";
+      nextSalesView = "planning";
     } else if (destination === "pricing") {
-      setSalesView("pricing");
-      setWorkspace("sales");
+      nextWorkspace = "sales";
+      nextSalesView = "pricing";
     } else if (destination === "sales") {
-      setSalesView("orders");
-      setWorkspace("sales");
+      nextWorkspace = "sales";
+      nextSalesView = "orders";
     } else if (destination === "migration") {
-      setWorkspace("governance");
-    } else {
-      setWorkspace(destination);
+      nextWorkspace = "governance";
     }
+
+    return { nextWorkspace, nextSourcingView, nextLogisticsView, nextSalesView };
+  };
+
+  const applyRoute = ({ nextWorkspace, nextSourcingView, nextLogisticsView, nextSalesView, context = null, overlay = null }) => {
+    setWorkspace(nextWorkspace);
+    setSourcingView(nextSourcingView);
+    setLogisticsView(nextLogisticsView);
+    setSalesView(nextSalesView);
+    setHandoff(context || null);
+    setMobileOverlay(overlay);
+    setMobileMoreOpen(overlay?.type === "more");
+  };
+
+  const navigate = (destination, context = null) => {
+    const resolved = resolveDestination(destination);
+
+    if (mobile && typeof window !== "undefined") {
+      const current = window.history.state;
+      const nextContext = context || null;
+      const nextState = {
+        cgMobile: true,
+        root: false,
+        workspace: resolved.nextWorkspace,
+        sourcingView: resolved.nextSourcingView,
+        logisticsView: resolved.nextLogisticsView,
+        salesView: resolved.nextSalesView,
+        context: nextContext,
+        overlay: null,
+        scrollY: 0,
+      };
+
+      if (current?.cgMobile) {
+        window.history.replaceState({ ...current, scrollY: window.scrollY }, "");
+      }
+
+      const sameRoute = current?.cgMobile
+        && !current.overlay
+        && current.workspace === nextState.workspace
+        && current.sourcingView === nextState.sourcingView
+        && current.logisticsView === nextState.logisticsView
+        && current.salesView === nextState.salesView
+        && JSON.stringify(current.context || null) === JSON.stringify(nextContext);
+
+      if (sameRoute) {
+        applyRoute({ ...resolved, context: nextContext, overlay: null });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      const replaceOverlayEntry = current?.cgMobile && current.overlay?.type === "more";
+      if (replaceOverlayEntry) window.history.replaceState(nextState, "");
+      else window.history.pushState(nextState, "");
+
+      applyRoute({ ...resolved, context: nextContext, overlay: null });
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    setMobileMoreOpen(false);
+    setMobileOverlay(null);
+    if (context) setHandoff(context);
+    else if (destination === "products" || destination === "sell") setHandoff(null);
+    setSourcingView(resolved.nextSourcingView);
+    setLogisticsView(resolved.nextLogisticsView);
+    setSalesView(resolved.nextSalesView);
+    setWorkspace(resolved.nextWorkspace);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const openMobileOverlay = (type, payload = {}) => {
+    if (!mobile || typeof window === "undefined") return;
+    const current = window.history.state;
+    if (!current?.cgMobile) return;
+    if (current.overlay?.type === type) return;
+
+    window.history.replaceState({ ...current, scrollY: window.scrollY }, "");
+    const overlay = { type, ...payload };
+    window.history.pushState({ ...current, root: false, overlay, scrollY: window.scrollY }, "");
+    setMobileOverlay(overlay);
+    setMobileMoreOpen(type === "more");
+  };
+
+  const closeMobileOverlay = () => {
+    if (mobile && window.history.state?.cgMobile && window.history.state?.overlay) {
+      window.history.back();
+      return;
+    }
+    setMobileOverlay(null);
+    setMobileMoreOpen(false);
+  };
+
+  const mobileBack = () => {
+    if (mobile && window.history.state?.cgMobile) {
+      window.history.back();
+      return;
+    }
+    navigate("dashboard");
   };
 
   const connectOneDrive = async () => {
@@ -275,7 +444,7 @@ export default function App() {
     await installPrompt.prompt();
     await installPrompt.userChoice.catch(() => null);
     setInstallPrompt(null);
-    setMobileMoreOpen(false);
+    closeMobileOverlay();
   };
 
   const [title, subtitle] = pageMeta[workspace] || pageMeta.dashboard;
@@ -347,7 +516,7 @@ export default function App() {
       <div className="cg-page-content">
         {workspace === "buying" && <WorkflowHandoffNotice handoff={handoff} onDismiss={() => setHandoff(null)} />}
         {workspace === "dashboard" ? (mobile ? <MobileDashboard onNavigate={navigate} /> : <div className="cg-module-embedded cg-dashboard-embedded"><OperationalDashboard onNavigate={navigate} /></div>)
-          : workspace === "products" ? (mobile ? <MobileProductCatalog initialProductId={handoff?.productId || null} onNavigate={navigate} /> : <SourcingWorkspace initialView="master" onNavigate={navigate} />)
+          : workspace === "products" ? (mobile ? <MobileProductCatalog initialProductId={handoff?.productId || null} mobileOverlay={mobileOverlay} onNavigate={navigate} onBack={mobileBack} onOpenOverlay={openMobileOverlay} onCloseOverlay={closeMobileOverlay} /> : <SourcingWorkspace initialView="master" onNavigate={navigate} />)
           : workspace === "sell" ? (mobile ? <MobileQuickSale initialProductId={handoff?.productId || null} onNavigate={navigate} /> : <CommercialWorkspace initialView="orders" onNavigate={navigate} />)
           : workspace === "sourcing" ? <SourcingWorkspace key={sourcingView} initialView={sourcingView} onNavigate={navigate} />
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
@@ -364,13 +533,13 @@ export default function App() {
       <button className={workspace === "products" ? "active" : ""} onClick={() => navigate("products")}><PackageSearch size={21}/><span>Products</span></button>
       <button className={workspace === "sell" ? "active" : ""} onClick={() => navigate("sell")}><ShoppingBag size={21}/><span>Sell</span></button>
       <button className={workspace === "expenses" ? "active" : ""} onClick={() => navigate("expenses")}><ReceiptText size={21}/><span>Expenses</span></button>
-      <button className={mobileMoreActive || mobileMoreOpen ? "active" : ""} onClick={() => setMobileMoreOpen(true)} aria-expanded={mobileMoreOpen}><Menu size={21}/><span>More</span></button>
+      <button className={mobileMoreActive || mobileMoreOpen ? "active" : ""} onClick={() => openMobileOverlay("more")} aria-expanded={mobileMoreOpen}><Menu size={21}/><span>More</span></button>
     </nav>
 
-    {mobileMoreOpen ? <div className="cg-mobile-more-backdrop" onClick={() => setMobileMoreOpen(false)}>
+    {mobileMoreOpen ? <div className="cg-mobile-more-backdrop" onClick={closeMobileOverlay}>
       <section className="cg-mobile-more-sheet" role="dialog" aria-modal="true" aria-label="More Costa Gear modules" onClick={event => event.stopPropagation()}>
         <div className="cg-mobile-sheet-handle" aria-hidden="true"/>
-        <div className="cg-mobile-sheet-head"><div><strong>More</strong><span>Operations and administration</span></div><button onClick={() => setMobileMoreOpen(false)}>Close</button></div>
+        <div className="cg-mobile-sheet-head"><div><strong>More</strong><span>Operations and administration</span></div><button onClick={closeMobileOverlay}>Close</button></div>
         <div className="cg-mobile-sheet-links">
           <button className={workspace === "receiving" ? "active" : ""} onClick={() => navigate("receiving")}><Boxes size={22}/><span><strong>Inventory & Receiving</strong><small>Stock position and incoming goods</small></span></button>
           <button className={workspace === "sales" ? "active" : ""} onClick={() => navigate("sales")}><DollarSign size={22}/><span><strong>Sales History</strong><small>Review and edit sales records</small></span></button>
