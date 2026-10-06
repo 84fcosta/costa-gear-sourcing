@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, ImageOff, Search, ShoppingBag, X } from "lucide-react";
 import { buildPerformanceAnalytics } from "../domain/performanceAnalytics";
 import { loadOperationalDashboardData } from "../services/dashboardRepository";
@@ -13,12 +13,33 @@ const money = value => value === null || value === undefined || value === "" || 
 const pct = value => value === null || value === undefined || Number.isNaN(Number(value)) ? "N/A" : `${Number(value).toFixed(1)}%`;
 
 function ProductImage({ itemId, alt, className = "" }) {
+  const frameRef = useRef(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [url, setUrl] = useState(() => imageUrlCache.get(itemId) || "");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!itemId || url) {
+      setShouldLoad(Boolean(url));
+      return undefined;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      setShouldLoad(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setShouldLoad(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "220px 0px" });
+    if (frameRef.current) observer.observe(frameRef.current);
+    return () => observer.disconnect();
+  }, [itemId, url]);
+
+  useEffect(() => {
     let active = true;
-    if (!itemId || url) return undefined;
+    if (!itemId || !shouldLoad || url) return undefined;
     getOneDriveItemDownloadUrl(itemId)
       .then(result => {
         if (!active) return;
@@ -27,11 +48,11 @@ function ProductImage({ itemId, alt, className = "" }) {
       })
       .catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [itemId, url]);
+  }, [itemId, shouldLoad, url]);
 
-  if (!itemId || failed) return <div className={`cg-mf-product-image placeholder ${className}`}><ImageOff size={28}/><span>No photo</span></div>;
-  if (!url) return <div className={`cg-mf-product-image loading ${className}`}><span>Loading photo...</span></div>;
-  return <img className={`cg-mf-product-image ${className}`} src={url} alt={alt || "Costa Gear product"} loading="lazy"/>;
+  if (!itemId || failed) return <div ref={frameRef} className={`cg-mf-product-image placeholder ${className}`}><ImageOff size={28}/><span>No photo</span></div>;
+  if (!url) return <div ref={frameRef} className={`cg-mf-product-image loading ${className}`}><span>{shouldLoad ? "Loading photo..." : "Photo"}</span></div>;
+  return <img ref={frameRef} className={`cg-mf-product-image ${className}`} src={url} alt={alt || "Costa Gear product"} loading="lazy"/>;
 }
 
 function productUnitCost(metric, latestQuote) {
@@ -45,7 +66,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   const [images, setImages] = useState([]);
   const [supplierSearch, setSupplierSearch] = useState(new Map());
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("stock");
   const [selectedId, setSelectedId] = useState(initialProductId || "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -119,9 +140,11 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return catalog.filter(row => {
-      if (filter === "stock" && row.available <= 0) return false;
-      if (filter === "low" && !(Number(row.product.reorder_point || 0) > 0 && row.available <= Number(row.product.reorder_point || 0))) return false;
-      if (!needle) return true;
+      if (!needle) {
+        if (filter === "stock" && row.available <= 0) return false;
+        if (filter === "low" && !(Number(row.product.reorder_point || 0) > 0 && row.available <= Number(row.product.reorder_point || 0))) return false;
+        return true;
+      }
       return [
         row.product.sku_id,
         row.product.name,
