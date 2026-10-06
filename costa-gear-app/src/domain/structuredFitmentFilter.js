@@ -35,12 +35,12 @@ export function buildProductFitmentMap(productFitments = [], vehicleFitments = [
     const platformEnd = vehicle.model_year_end == null ? horizon : Number(vehicle.model_year_end);
 
     const yearFrom = row.year_from == null
-      ? platformStart
+      ? null
       : (platformStart == null ? Number(row.year_from) : Math.max(platformStart, Number(row.year_from)));
     const rawEnd = row.year_to == null ? platformEnd : Number(row.year_to);
     const yearTo = Math.min(platformEnd, rawEnd);
 
-    if (!Number.isFinite(yearFrom) || !Number.isFinite(yearTo) || yearFrom > yearTo) return;
+    if (yearFrom != null && (!Number.isFinite(yearFrom) || !Number.isFinite(yearTo) || yearFrom > yearTo)) return;
 
     entries.push({
       fitmentCode: row.fitment_code,
