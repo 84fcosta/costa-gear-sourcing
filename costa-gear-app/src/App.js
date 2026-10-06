@@ -142,6 +142,16 @@ export default function App() {
   }, [workspace]);
 
   useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("workspace")) {
+        url.searchParams.delete("workspace");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
     try { window.sessionStorage.setItem("cg:sourcing-view", sourcingView); } catch (_) {}
   }, [sourcingView]);
 
