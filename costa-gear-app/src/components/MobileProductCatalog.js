@@ -17,6 +17,17 @@ const SORT_OPTIONS = [
 ];
 const textValue = value => String(value || "").trim().toLowerCase();
 const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "en", { numeric: true, sensitivity: "base" });
+const readCatalogSession = (key, fallback) => {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (_) {
+    return fallback;
+  }
+};
+const writeCatalogSession = (key, value) => {
+  try { window.sessionStorage.setItem(key, String(value)); } catch (_) {}
+};
 
 function searchRelevance(row, needle, fitmentEntries = []) {
   if (!needle) return 0;
@@ -201,18 +212,25 @@ function productUnitCost(metric, latestQuote) {
   return null;
 }
 
-export default function MobileProductCatalog({ initialProductId = null, onNavigate }) {
+export default function MobileProductCatalog({
+  initialProductId = null,
+  mobileOverlay = null,
+  onNavigate,
+  onBack,
+  onOpenOverlay,
+  onCloseOverlay,
+}) {
   const [data, setData] = useState(null);
   const [images, setImages] = useState([]);
   const [supplierSearch, setSupplierSearch] = useState(new Map());
   const [productFitments, setProductFitments] = useState([]);
   const [vehicleFitments, setVehicleFitments] = useState([]);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("stock");
-  const [sortMode, setSortMode] = useState("name");
-  const [sortOpen, setSortOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState(initialProductId || "");
-  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [query, setQuery] = useState(() => readCatalogSession("cg:mobile-products-query", ""));
+  const [filter, setFilter] = useState(() => readCatalogSession("cg:mobile-products-filter", "stock"));
+  const [sortMode, setSortMode] = useState(() => readCatalogSession("cg:mobile-products-sort", "name"));
+  const selectedId = initialProductId || "";
+  const sortOpen = mobileOverlay?.type === "product-sort";
+  const lightboxIndex = mobileOverlay?.type === "product-photo" ? Number(mobileOverlay.index || 0) : null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -254,7 +272,29 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   };
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (initialProductId) setSelectedId(initialProductId); }, [initialProductId]);
+
+  useEffect(() => { writeCatalogSession("cg:mobile-products-query", query); }, [query]);
+  useEffect(() => { writeCatalogSession("cg:mobile-products-filter", filter); }, [filter]);
+  useEffect(() => { writeCatalogSession("cg:mobile-products-sort", sortMode); }, [sortMode]);
+
+  useEffect(() => {
+    if (loading || selectedId) return;
+    const saved = Number(readCatalogSession("cg:mobile-products-scroll", "0")) || 0;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: "auto" }));
+    });
+  }, [loading, selectedId]);
+
+  const rememberListScroll = () => writeCatalogSession("cg:mobile-products-scroll", window.scrollY || 0);
+  const openProduct = productId => {
+    rememberListScroll();
+    onNavigate?.("products", { productId });
+  };
+  const openPhoto = index => onOpenOverlay?.("product-photo", { index });
+  const toggleSort = () => {
+    if (sortOpen) onCloseOverlay?.();
+    else onOpenOverlay?.("product-sort");
+  };
 
   const catalog = useMemo(() => {
     if (!data) return [];
@@ -364,12 +404,12 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
   if (selected) {
     return <div className="cg-mobile-first">
       <div className="cg-mf-detail-head">
-        <button onClick={() => setSelectedId("")}><ArrowLeft size={19}/> Products</button>
-        <button className="cg-mf-close" onClick={() => setSelectedId("")}><X size={18}/></button>
+        <button onClick={onBack}><ArrowLeft size={19}/> Products</button>
+        <button className="cg-mf-close" onClick={onBack}><X size={18}/></button>
       </div>
 
       <section className="cg-mf-product-detail">
-        <button type="button" className="cg-mf-product-detail-image-button" onClick={() => detailImages.length && setLightboxIndex(0)} aria-label="Open product photo">
+        <button type="button" className="cg-mf-product-detail-image-button" onClick={() => detailImages.length && openPhoto(0)} aria-label="Open product photo">
           <ProductImage itemId={selected.product.main_image_item_id} alt={selected.product.name} className="detail"/>
           {selected.product.main_image_item_id ? <span>Tap to enlarge</span> : null}
         </button>
@@ -398,13 +438,13 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
       {detailImages.length > 1 ? <section className="cg-mf-section">
         <div className="cg-mf-section-head"><div><span>Product Media</span><h3>Photos</h3></div></div>
         <div className="cg-mf-gallery">
-          {detailImages.map((image, index) => <button type="button" key={image.itemId} className="cg-mf-gallery-button" onClick={() => setLightboxIndex(index)} aria-label={`Open photo ${index + 1}`}>
+          {detailImages.map((image, index) => <button type="button" key={image.itemId} className="cg-mf-gallery-button" onClick={() => openPhoto(index)} aria-label={`Open photo ${index + 1}`}>
             <ProductImage itemId={image.itemId} alt={image.alt}/>
           </button>)}
         </div>
       </section> : null}
 
-      {lightboxIndex !== null ? <ProductLightbox images={detailImages} initialIndex={lightboxIndex} productName={selected.product.name} onClose={() => setLightboxIndex(null)}/> : null}
+      {lightboxIndex !== null ? <ProductLightbox images={detailImages} initialIndex={lightboxIndex} productName={selected.product.name} onClose={onCloseOverlay}/> : null}
     </div>;
   }
 
@@ -415,7 +455,10 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
 
     <div className="cg-mf-search">
       <Search size={18}/>
-      <input value={query} onChange={event => { setQuery(event.target.value); setSortOpen(false); }} placeholder="Search SKU, product, fitment or supplier SKU"/>
+      <input value={query} onChange={event => {
+        if (sortOpen) onCloseOverlay?.();
+        setQuery(event.target.value);
+      }} placeholder="Search SKU, product, fitment or supplier SKU"/>
     </div>
 
     <div className="cg-mf-product-controls">
@@ -426,7 +469,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
         type="button"
         className={`cg-mf-sort-button ${sortOpen ? "active" : ""}`}
         disabled={Boolean(query.trim())}
-        onClick={() => setSortOpen(value => !value)}
+        onClick={toggleSort}
       >
         <ArrowUpDown size={15}/>
         <span>{query.trim() ? "Relevance" : "Sort"}</span>
@@ -434,12 +477,12 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
     </div>
 
     {sortOpen && !query.trim() ? <div className="cg-mf-sort-menu">
-      <div><span>Sort products</span><button type="button" onClick={() => setSortOpen(false)}><X size={16}/></button></div>
+      <div><span>Sort products</span><button type="button" onClick={onCloseOverlay}><X size={16}/></button></div>
       {SORT_OPTIONS.map(([id,label]) => <button
         type="button"
         key={id}
         className={sortMode === id ? "active" : ""}
-        onClick={() => { setSortMode(id); setSortOpen(false); }}
+        onClick={() => { setSortMode(id); onCloseOverlay?.(); }}
       >
         <span>{label}</span>
         {sortMode === id ? <Check size={17}/> : null}
@@ -447,7 +490,7 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
     </div> : null}
 
     <div className="cg-mf-product-list">
-      {visible.map(row => <article key={row.product.id} className="cg-mf-product-card" onClick={() => setSelectedId(row.product.id)}>
+      {visible.map(row => <article key={row.product.id} className="cg-mf-product-card" onClick={() => openProduct(row.product.id)}>
         <ProductImage itemId={row.product.main_image_item_id} alt={row.product.name}/>
         <div className="cg-mf-product-card-body">
           <div className="cg-mf-product-card-title"><div><span className="cg-mf-sku">{row.product.sku_id}</span><h3>{row.product.name}</h3></div><div className={`cg-mf-stock ${row.available > 0 ? "good" : "bad"}`}><strong>{row.available}</strong><span>stock</span></div></div>
@@ -458,8 +501,8 @@ export default function MobileProductCatalog({ initialProductId = null, onNaviga
             <div><span>Margin</span><strong>{pct(row.margin)}</strong></div>
           </div>
           <div className="cg-mf-card-actions">
-            <button type="button" onClick={event => { event.stopPropagation(); setSelectedId(row.product.id); }}>Details</button>
-            <button type="button" disabled={row.available <= 0} onClick={event => { event.stopPropagation(); onNavigate?.("sell", { productId: row.product.id }); }}><ShoppingBag size={15}/> Sell</button>
+            <button type="button" onClick={event => { event.stopPropagation(); openProduct(row.product.id); }}>Details</button>
+            <button type="button" disabled={row.available <= 0} onClick={event => { event.stopPropagation(); rememberListScroll(); onNavigate?.("sell", { productId: row.product.id }); }}><ShoppingBag size={15}/> Sell</button>
           </div>
         </div>
       </article>)}
