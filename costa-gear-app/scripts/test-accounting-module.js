@@ -47,7 +47,9 @@ assert.match(repository, /onConflict: "forecast_year,scenario,month,line_code"/)
 
 assert.match(sql, /enable row level security/);
 assert.match(sql, /to authenticated/);
+assert.match(sql, /revoke all on public\.accounting_forecast_months from anon, authenticated/);
 assert.match(sql, /grant select, insert, update, delete on public\.accounting_forecast_months to authenticated/);
+assert.match(sql, /revoke all on public\.accounting_owner_transactions from anon, authenticated/);
 assert.match(sql, /grant select, insert, update, delete on public\.accounting_owner_transactions to authenticated/);
 assert.match(sql, /app_members/);
 assert.match(sql, /unique \(forecast_year, scenario, month, line_code\)/);
