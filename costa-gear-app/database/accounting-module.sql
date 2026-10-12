@@ -43,8 +43,9 @@ with check (
   )
 );
 
+revoke all on public.accounting_forecast_months from anon, authenticated;
 grant select, insert, update, delete on public.accounting_forecast_months to authenticated;
-grant select, insert, update, delete on public.accounting_forecast_months to service_role;
+grant all on public.accounting_forecast_months to service_role;
 
 create table if not exists public.accounting_owner_transactions (
   id uuid primary key default gen_random_uuid(),
@@ -83,7 +84,8 @@ with check (
   )
 );
 
+revoke all on public.accounting_owner_transactions from anon, authenticated;
 grant select, insert, update, delete on public.accounting_owner_transactions to authenticated;
-grant select, insert, update, delete on public.accounting_owner_transactions to service_role;
+grant all on public.accounting_owner_transactions to service_role;
 
 commit;
