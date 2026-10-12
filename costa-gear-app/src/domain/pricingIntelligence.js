@@ -41,6 +41,15 @@ function targetFloor(cost, targetMarginPct) {
   return Number(cost) / (1 - margin / 100);
 }
 
+export function calculateGrossMarginPct(price, cost) {
+  return marginPct(price, cost);
+}
+
+export function calculateSellPriceForMargin(cost, grossMarginPct) {
+  const value = targetFloor(cost, grossMarginPct);
+  return value === null ? null : roundMoney(value);
+}
+
 function recommendationFor({ currentPrice, marketPrice, unitCost, targetMarginPct, performanceStatus, marketAgeDays }) {
   const floor = targetFloor(unitCost, targetMarginPct);
   const currentMargin = marginPct(currentPrice, unitCost);
