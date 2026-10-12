@@ -6,6 +6,7 @@ import {
   calcDeductible,
   calcEstimatedCca,
 } from "./expenseTracking";
+import { dispositionCost, dispositionTypeMeta } from "./inventoryDisposition";
 
 export const ACCOUNTING_SCENARIO = "Baseline";
 export const MONTHS = [
@@ -23,7 +24,17 @@ export const MONTHS = [
   { number: 12, key: "dec", short: "Dec", label: "December" },
 ];
 
-const OPERATING_EXPENSE_LINES = EXPENSE_CATEGORIES.map(category => ({
+export const DISPOSITION_EXPENSE_CATEGORIES = [
+  "Prototype / Product Development",
+  "Inventory Write-off / Loss",
+];
+
+export const ACCOUNTING_EXPENSE_CATEGORIES = [
+  ...EXPENSE_CATEGORIES,
+  ...DISPOSITION_EXPENSE_CATEGORIES,
+];
+
+const OPERATING_EXPENSE_LINES = ACCOUNTING_EXPENSE_CATEGORIES.map(category => ({
   code: `expense:${category}`,
   label: category,
   group: "Operating Expenses",
@@ -68,7 +79,7 @@ function blankMonth(month) {
     missingCostUnits: 0,
     directSellingCosts: 0,
     operatingExpenses: 0,
-    expensesByCategory: Object.fromEntries(EXPENSE_CATEGORIES.map(category => [category, 0])),
+    expensesByCategory: Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [category, 0])),
     inventoryPurchases: 0,
     inventoryPurchaseCostComplete: true,
     capitalAssets: 0,
@@ -243,6 +254,82 @@ export function buildAccountingModel(data, year, now = new Date()) {
     ));
   }
 
+  let dispositionCapitalAssetCount = 0;
+  let dispositionCapitalAssetValue = 0;
+
+  for (const disposition of operational.inventoryDispositions || []) {
+    if (disposition.status !== "Posted") continue;
+    const dateValue = disposition.disposition_date || disposition.created_at;
+    if (yearOf(dateValue) !== Number(year)) continue;
+    const month = monthMap.get(monthOf(dateValue));
+    if (!month) continue;
+
+    const totalCost = round2(dispositionCost(disposition));
+    const recovery = Math.min(totalCost, Math.max(0, num(disposition.recovery_amount_cad)));
+    const netCost = round2(totalCost - recovery);
+    const ref = disposition.disposition_ref || disposition.id;
+    const reason = dispositionTypeMeta(disposition.disposition_type).label;
+
+    if (disposition.accounting_treatment === "expense_now") {
+      const category = "Prototype / Product Development";
+      month.operatingExpenses += netCost;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
+      if (netCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · ${disposition.quantity} unit${Number(disposition.quantity) === 1 ? "" : "s"}`,
+          `Operating Expense · ${category}`,
+          "Inventory",
+          netCost,
+          ref
+        ));
+      }
+    } else if (disposition.accounting_treatment === "capital_asset") {
+      month.capitalAssets += totalCost;
+      dispositionCapitalAssetCount += 1;
+      dispositionCapitalAssetValue += totalCost;
+      if (totalCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · reclassified to capital asset`,
+          "Capital Assets",
+          "Inventory",
+          totalCost,
+          ref
+        ));
+      }
+    } else {
+      const category = "Inventory Write-off / Loss";
+      month.operatingExpenses += netCost;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
+      if (netCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · ${disposition.quantity} unit${Number(disposition.quantity) === 1 ? "" : "s"}`,
+          `Operating Expense · ${category}`,
+          "Inventory",
+          netCost,
+          ref
+        ));
+      }
+    }
+
+    if (recovery > 0) {
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Inventory Recovery",
+        `${reason} · supplier / recovery value`,
+        "Business Cash / Supplier Recovery",
+        "Inventory",
+        recovery,
+        ref
+      ));
+    }
+  }
+
   for (const transaction of ownerTransactions) {
     const dateValue = transaction.transaction_date || transaction.created_at;
     if (yearOf(dateValue) !== Number(year)) continue;
@@ -307,7 +394,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     ? null
     : round2(derivedOwnerFunding + manualOwnerContributions + netBusinessIncome - ownerDraws);
 
-  const expenseCategoryTotals = Object.fromEntries(EXPENSE_CATEGORIES.map(category => [
+  const expenseCategoryTotals = Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [
     category,
     round2(monthly.reduce((total, row) => total + num(row.expensesByCategory[category]), 0)),
   ]));
@@ -345,7 +432,9 @@ export function buildAccountingModel(data, year, now = new Date()) {
       regularExpenseCount: regularExpenses.length,
       taxReadyExpenses,
       missingReceiptExpenses,
-      assetCount: assets.length,
+      assetCount: assets.length + dispositionCapitalAssetCount,
+      dispositionCapitalAssetCount,
+      dispositionCapitalAssetValue: round2(dispositionCapitalAssetValue),
       estimatedCca,
     },
     expenseCategoryTotals,
