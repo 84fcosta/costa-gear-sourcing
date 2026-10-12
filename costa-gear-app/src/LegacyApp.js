@@ -5,6 +5,8 @@ import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, 
 import { SupplierDocumentsDialog } from "./components/SupplierDocuments";
 import { addProductCategory, addProductType, listProductCategories } from "./services/productTaxonomyService";
 import { buildProductName } from "./domain/productNaming";
+import { buildPricingIntelligence, calculateGrossMarginPct, calculateSellPriceForMargin } from "./domain/pricingIntelligence";
+import { loadPricingData } from "./services/pricingRepository";
 import ProductTaxonomyManager from "./components/ProductTaxonomyManager";
 
 // ── Palette ─────────────────────────────────────────────────────
@@ -1245,7 +1247,7 @@ function ProductDetail({ id, products, quotes, suppliers, onClose, onOpenSupplie
                 <div style={{ fontSize: 16, fontWeight: 800, color: C.accent2, marginTop: 2 }}>{hasValue(product.targetSellPriceCad) ? formatCad(product.targetSellPriceCad) : "—"}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Target Margin</div>
+                <div style={{ fontSize: 12, color: C.dgray, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Margin Floor</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: C.teal, marginTop: 2 }}>{product.targetMarginPct ? `${product.targetMarginPct}%` : "—"}</div>
               </div>
             </div>
@@ -1451,6 +1453,54 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
   const [newMaterial,setNewMaterial] = useState("");
   const [materialBusy,setMaterialBusy] = useState(false);
   const [materialError,setMaterialError] = useState("");
+  const [pricingContext,setPricingContext] = useState({
+    loading: Boolean(editing?.id),
+    error: "",
+    unitCost: null,
+    costSource: "",
+    availableUnits: 0,
+  });
+  const [linkedGrossMargin,setLinkedGrossMargin] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (!editing?.id) {
+      setPricingContext({ loading: false, error: "", unitCost: null, costSource: "", availableUnits: 0 });
+      setLinkedGrossMargin("");
+      return () => { active = false; };
+    }
+
+    setPricingContext(current => ({ ...current, loading: true, error: "" }));
+    loadPricingData()
+      .then(data => {
+        if (!active) return;
+        const row = buildPricingIntelligence(data).rows.find(item => item.product.id === editing.id);
+        const unitCost = row?.unitCost ?? null;
+        setPricingContext({
+          loading: false,
+          error: "",
+          unitCost,
+          costSource: row?.costSource || "",
+          availableUnits: Number(row?.availableUnits || 0),
+        });
+        const initialPrice = editing.targetSellPriceCad ?? editing.target_sell_price_cad;
+        const margin = calculateGrossMarginPct(initialPrice, unitCost);
+        setLinkedGrossMargin(margin === null ? "" : margin.toFixed(1));
+      })
+      .catch(error => {
+        if (!active) return;
+        setPricingContext({
+          loading: false,
+          error: error?.message || "Unable to load landed cost.",
+          unitCost: null,
+          costSource: "",
+          availableUnits: 0,
+        });
+        setLinkedGrossMargin("");
+      });
+
+    return () => { active = false; };
+  }, [editing?.id]);
 
   const set = (k) => (v) => {
     setForm(f => {
@@ -1460,6 +1510,31 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
       }
       return u;
     });
+  };
+
+  const pricingCostAvailable = pricingContext.unitCost !== null
+    && pricingContext.unitCost !== undefined
+    && Number.isFinite(Number(pricingContext.unitCost))
+    && Number(pricingContext.unitCost) >= 0;
+
+  const updateTargetSellPrice = value => {
+    setForm(current => ({ ...current, targetSellPriceCad: value }));
+    if (!pricingCostAvailable || value === "" || !Number.isFinite(Number(value)) || Number(value) <= 0) {
+      setLinkedGrossMargin("");
+      return;
+    }
+    const margin = calculateGrossMarginPct(value, pricingContext.unitCost);
+    setLinkedGrossMargin(margin === null ? "" : margin.toFixed(1));
+  };
+
+  const updateLinkedGrossMargin = value => {
+    setLinkedGrossMargin(value);
+    if (!pricingCostAvailable || value === "" || !Number.isFinite(Number(value))) return;
+    const margin = Number(value);
+    if (margin < 0 || margin >= 100) return;
+    const price = calculateSellPriceForMargin(pricingContext.unitCost, margin);
+    if (price === null) return;
+    setForm(current => ({ ...current, targetSellPriceCad: price.toFixed(2) }));
   };
 
   const autoName = buildProductName(form.productType, form.variantName, form.material);
@@ -1639,13 +1714,78 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
 
         <Input label="Notes" value={form.notes} onChange={set("notes")} placeholder="Optional notes" />
 
-        <div style={{ border: "1px solid rgba(132,140,56,0.25)", background: "#F7F9ED", borderRadius: 14, padding: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: C.navy, marginBottom: 10 }}>Pricing Reference</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
-            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={set("targetSellPriceCad")} type="number" placeholder="e.g. 249.99" />
-            <Input label="Target Margin %" value={form.targetMarginPct} onChange={set("targetMarginPct")} type="number" placeholder="e.g. 35" />
+        <div style={{ border: "1px solid rgba(132,140,56,0.28)", background: "#F7F9ED", borderRadius: 14, padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 850, color: C.navy }}>Pricing Strategy</div>
+              <div style={{ fontSize: 11, color: C.dgray, marginTop: 3, lineHeight: 1.4 }}>Target Sell Price and Gross Margin are linked through the operational landed cost. Margin Floor remains an independent pricing guardrail.</div>
+            </div>
+            <div style={{ borderRadius: 999, padding: "5px 9px", background: pricingCostAvailable ? "#EDF7EE" : "#FFF8E8", color: pricingCostAvailable ? C.green : "#835C14", fontSize: 10.5, fontWeight: 850 }}>
+              {pricingContext.loading ? "Loading cost..." : pricingCostAvailable ? "Cost linked" : "Cost unavailable"}
+            </div>
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+            <div style={{ background: "#fff", border: "1px solid " + C.mgray, borderRadius: 10, padding: "9px 10px" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 850, color: C.dgray, textTransform: "uppercase", letterSpacing: .4 }}>Landed Cost Base</div>
+              <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900, color: C.navy }}>{pricingCostAvailable ? formatCad(pricingContext.unitCost) : "—"}</div>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid " + C.mgray, borderRadius: 10, padding: "9px 10px" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 850, color: C.dgray, textTransform: "uppercase", letterSpacing: .4 }}>Target Sell</div>
+              <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900, color: C.amber }}>{form.targetSellPriceCad !== "" && form.targetSellPriceCad != null ? formatCad(form.targetSellPriceCad) : "—"}</div>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid " + C.mgray, borderRadius: 10, padding: "9px 10px" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 850, color: C.dgray, textTransform: "uppercase", letterSpacing: .4 }}>Gross Margin</div>
+              <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900, color: C.green }}>{linkedGrossMargin !== "" ? `${linkedGrossMargin}%` : "—"}</div>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid " + C.mgray, borderRadius: 10, padding: "9px 10px" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 850, color: C.dgray, textTransform: "uppercase", letterSpacing: .4 }}>Margin Floor</div>
+              <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900, color: C.blue }}>{form.targetMarginPct !== "" && form.targetMarginPct != null ? `${form.targetMarginPct}%` : "—"}</div>
+            </div>
+          </div>
+
+          <div style={{ borderRadius: 10, padding: "9px 10px", marginBottom: 12, background: pricingCostAvailable ? "rgba(77,125,87,.08)" : "rgba(168,120,24,.08)", color: pricingCostAvailable ? "#3F7049" : "#835C14", fontSize: 10.5, lineHeight: 1.45 }}>
+            {pricingContext.loading
+              ? "Loading the operational cost basis..."
+              : pricingCostAvailable
+                ? <><strong>Margin based on Landed Cost: {formatCad(pricingContext.unitCost)}</strong> · {pricingContext.costSource || "Operational landed cost"}{pricingContext.availableUnits > 0 ? ` · ${pricingContext.availableUnits} unit${pricingContext.availableUnits === 1 ? "" : "s"} available` : ""}. Edit Target Sell Price or Gross Margin and the other value updates automatically.</>
+                : <><strong>No reliable landed cost is available yet.</strong> Target Sell Price and Margin Floor can still be saved, but Gross Margin will remain unavailable until a cost basis exists.{pricingContext.error ? ` ${pricingContext.error}` : ""}</>}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 12 }}>
+            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
+            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={updateTargetSellPrice} type="number" placeholder="e.g. 249.99" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 140 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Gross Margin %</label>
+              <input
+                type="number"
+                min="0"
+                max="99.9"
+                step="0.1"
+                value={linkedGrossMargin}
+                disabled={!pricingCostAvailable}
+                onChange={e => updateLinkedGrossMargin(e.target.value)}
+                placeholder={pricingCostAvailable ? "e.g. 40" : "Need landed cost"}
+                style={{ ...inputStyle, background: pricingCostAvailable ? "#fff" : C.lgray, color: pricingCostAvailable ? C.navy : C.dgray }}
+              />
+              <div style={{ fontSize: 9.5, color: C.dgray }}>Linked to Target Sell Price.</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 140 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Margin Floor %</label>
+              <input
+                type="number"
+                min="0"
+                max="95"
+                step="0.1"
+                value={form.targetMarginPct ?? ""}
+                onChange={e => set("targetMarginPct")(e.target.value)}
+                placeholder="e.g. 35"
+                style={inputStyle}
+              />
+              <div style={{ fontSize: 9.5, color: C.dgray }}>Independent minimum used by Pricing Intelligence.</div>
+            </div>
+          </div>
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
             <Input label="Competitor Reference" value={form.competitorReference} onChange={set("competitorReference")} placeholder="e.g. Amazon, DV8, Extreme Terrain" />
             <Input label="Competitor URL" value={form.competitorUrl} onChange={set("competitorUrl")} placeholder="Product link" />
