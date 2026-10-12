@@ -6,6 +6,7 @@ import {
   Download,
   Home,
   LayoutDashboard,
+  Landmark,
   Menu,
   PackageSearch,
   ReceiptText,
@@ -25,6 +26,7 @@ import SourcingWorkspace from "./components/SourcingWorkspace";
 import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
 import ExpenseWorkspace from "./components/ExpenseWorkspace";
+import AccountingWorkspace from "./components/AccountingWorkspace";
 import DocumentGovernanceWorkspace from "./components/DocumentGovernanceWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import {
@@ -60,6 +62,7 @@ const pageMeta = {
   receiving: ["Receiving & Inventory", "Step 4 · Receive goods, confirm exceptions and make sellable stock available."],
   sales: ["Sales", "Step 5 · Record sales and measure realized revenue, profit and margin."],
   expenses: ["Expenses", "Administrative module for business expenses, receipts, assets and tax reporting."],
+  accounting: ["Accounting", "Integrated management accounting, P&L, inventory/COGS, owner equity and annual baseline forecasting."],
   governance: ["Document Governance", "Monitor active document compliance and repository health."],
 };
 
@@ -548,6 +551,10 @@ export default function App() {
             <ReceiptText size={18} strokeWidth={1.9} />
             <span className="cg-nav-label"><span>Expenses</span></span>
           </button>
+          <button className={`cg-nav-button cg-nav-admin ${workspace === "accounting" ? "active" : ""}`} onClick={() => navigate("accounting")} aria-label="Administrative module: Accounting">
+            <Landmark size={18} strokeWidth={1.9} />
+            <span className="cg-nav-label"><span>Accounting</span></span>
+          </button>
           <span className="cg-nav-divider" aria-hidden="true" />
           <button className={`cg-nav-button cg-nav-admin ${workspace === "governance" ? "active" : ""}`} onClick={() => navigate("governance")} aria-label="Document Governance module">
             <ShieldCheck size={18} strokeWidth={1.9} />
@@ -603,6 +610,7 @@ export default function App() {
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
           : workspace === "expenses" ? (mobile ? <MobileExpenseWorkspace key={oneDriveVersion} onConnectOneDrive={connectOneDrive} oneDriveAuth={oneDriveAuth} oneDriveBusy={oneDriveBusy} /> : <ExpenseWorkspace key={oneDriveVersion} />)
+          : workspace === "accounting" ? <AccountingWorkspace onNavigate={navigate} />
           : workspace === "governance" ? <DocumentGovernanceWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
@@ -626,6 +634,7 @@ export default function App() {
           <button className={workspace === "sourcing" ? "active" : ""} onClick={() => navigate("sourcing")}><PackageSearch size={22}/><span><strong>Sourcing</strong><small>Products, suppliers and quotations</small></span></button>
           <button className={workspace === "buying" ? "active" : ""} onClick={() => navigate("buying")}><ShoppingCart size={22}/><span><strong>Buying</strong><small>Purchase decisions and POs</small></span></button>
           <button className={workspace === "logistics" ? "active" : ""} onClick={() => navigate("logistics")}><Truck size={22}/><span><strong>Logistics</strong><small>Shipments and landed cost</small></span></button>
+          <button className={workspace === "accounting" ? "active" : ""} onClick={() => navigate("accounting")}><Landmark size={22}/><span><strong>Accounting</strong><small>P&L, forecast, inventory/COGS and owner equity</small></span></button>
           <button className={workspace === "governance" ? "active" : ""} onClick={() => navigate("governance")}><ShieldCheck size={22}/><span><strong>Document Governance</strong><small>Repository compliance and naming</small></span></button>
           {installPrompt ? <button onClick={installMobileApp}><Download size={22}/><span><strong>Install Costa Gear</strong><small>Add the app to this Android device</small></span></button> : null}
         </div>
