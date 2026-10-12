@@ -82,6 +82,9 @@ function blankMonth(month) {
     expensesByCategory: Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [category, 0])),
     inventoryPurchases: 0,
     inventoryPurchaseCostComplete: true,
+    inventoryDispositionCost: 0,
+    prototypeExpense: 0,
+    inventoryWriteoffExpense: 0,
     capitalAssets: 0,
     manualOwnerContributions: 0,
     ownerDraws: 0,
@@ -267,12 +270,14 @@ export function buildAccountingModel(data, year, now = new Date()) {
     const totalCost = round2(dispositionCost(disposition));
     const recovery = Math.min(totalCost, Math.max(0, num(disposition.recovery_amount_cad)));
     const netCost = round2(totalCost - recovery);
+    month.inventoryDispositionCost += totalCost;
     const ref = disposition.disposition_ref || disposition.id;
     const reason = dispositionTypeMeta(disposition.disposition_type).label;
 
     if (disposition.accounting_treatment === "expense_now") {
       const category = "Prototype / Product Development";
       month.operatingExpenses += netCost;
+      month.prototypeExpense += netCost;
       month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
       if (netCost > 0) {
         ledger.push(ledgerEntry(
@@ -303,6 +308,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     } else {
       const category = "Inventory Write-off / Loss";
       month.operatingExpenses += netCost;
+      month.inventoryWriteoffExpense += netCost;
       month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
       if (netCost > 0) {
         ledger.push(ledgerEntry(
@@ -367,6 +373,9 @@ export function buildAccountingModel(data, year, now = new Date()) {
     month.directSellingCosts = round2(month.directSellingCosts);
     month.operatingExpenses = round2(month.operatingExpenses);
     month.inventoryPurchases = round2(month.inventoryPurchases);
+    month.inventoryDispositionCost = round2(month.inventoryDispositionCost);
+    month.prototypeExpense = round2(month.prototypeExpense);
+    month.inventoryWriteoffExpense = round2(month.inventoryWriteoffExpense);
     month.capitalAssets = round2(month.capitalAssets);
     month.manualOwnerContributions = round2(month.manualOwnerContributions);
     month.ownerDraws = round2(month.ownerDraws);
@@ -419,6 +428,9 @@ export function buildAccountingModel(data, year, now = new Date()) {
       operatingExpenses: sum("operatingExpenses"),
       netBusinessIncome,
       inventoryPurchases: sum("inventoryPurchases"),
+      inventoryDispositionCost: sum("inventoryDispositionCost"),
+      prototypeExpense: sum("prototypeExpense"),
+      inventoryWriteoffExpense: sum("inventoryWriteoffExpense"),
       capitalAssets: sum("capitalAssets"),
       inventoryValue: round2(performance.summary.totalInventoryValueCad || 0),
       availableUnits: Number(performance.summary.totalAvailableUnits || 0),
