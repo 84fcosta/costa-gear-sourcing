@@ -404,12 +404,13 @@ export default function AccountingWorkspace({ onNavigate }) {
         <Kpi label="Current Inventory Value" value={money0(summary.inventoryValue)} sub={`${number(summary.availableUnits)} sellable units`} icon={Boxes}/>
         <Kpi label="Inventory Purchases" value={money0(summary.inventoryPurchases)} sub={`Posted sellable receipts in ${year}`} icon={WalletCards}/>
         <Kpi label="COGS" value={money0(summary.cogs)} sub="Completed sales" icon={Scale}/>
+        <Kpi label="Inventory Adjustments" value={money0(summary.inventoryDispositionCost)} sub={`${money0(summary.prototypeExpense)} internal use · ${money0(summary.inventoryWriteoffExpense)} write-offs`} icon={PackageMinus}/>
         <Kpi label="Uncosted Inventory" value={number(summary.uncostedInventoryUnits)} sub="Available units with no reliable landed cost" tone={summary.uncostedInventoryUnits ? "warn" : "good"} icon={AlertTriangle}/>
       </div>
-      <div className="cg-accounting-callout"><Boxes size={18}/><div><strong>Inventory is capitalized, not expensed when purchased.</strong><span>This view recognizes sellable posted receipts at actual landed cost when available, otherwise planned PO landed cost. COGS is recognized only when a completed sale has a unit cost.</span></div></div>
-      <Section eyebrow="Monthly inventory accounting" title={`Purchases vs COGS · ${year}`}>
-        <div className="cg-accounting-table-wrap"><table className="cg-accounting-table"><thead><tr><th>Month</th><th>Inventory Purchases</th><th>COGS</th><th>Cost Status</th></tr></thead><tbody>
-          {model.monthly.map((row, index) => <tr key={row.month}><td>{MONTHS[index].label}</td><td>{money(row.inventoryPurchases)}</td><td>{money(row.cogs)}</td><td>{row.cogsComplete && row.inventoryPurchaseCostComplete ? <span className="status good">Complete</span> : <span className="status warn">Review cost gaps</span>}</td></tr>)}
+      <div className="cg-accounting-callout"><Boxes size={18}/><div><strong>Inventory is capitalized, not expensed when purchased.</strong><span>Posted receipts establish inventory cost. Completed sales move cost to COGS. Permanent Inventory Adjustments reclassify the original landed cost to Prototype / Product Development expense, Inventory Write-off / Loss, or Capital Assets without creating a second Owner Contribution.</span></div></div>
+      <Section eyebrow="Monthly inventory accounting" title={`Purchases, COGS & Adjustments · ${year}`}>
+        <div className="cg-accounting-table-wrap"><table className="cg-accounting-table"><thead><tr><th>Month</th><th>Inventory Purchases</th><th>COGS</th><th>Internal Use</th><th>Write-offs</th><th>Inventory Removed</th><th>Cost Status</th></tr></thead><tbody>
+          {model.monthly.map((row, index) => <tr key={row.month}><td>{MONTHS[index].label}</td><td>{money(row.inventoryPurchases)}</td><td>{money(row.cogs)}</td><td>{money(row.prototypeExpense)}</td><td>{money(row.inventoryWriteoffExpense)}</td><td>{money(row.inventoryDispositionCost)}</td><td>{row.cogsComplete && row.inventoryPurchaseCostComplete ? <span className="status good">Complete</span> : <span className="status warn">Review cost gaps</span>}</td></tr>)}
         </tbody></table></div>
       </Section>
     </> : null}
