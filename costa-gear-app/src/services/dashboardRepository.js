@@ -13,12 +13,13 @@ export async function loadOperationalDashboardData() {
     supabase.from("suppliers").select("*").order("sup_id"),
     supabase.from("sales_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("sales_order_items").select("*").order("created_at"),
+    supabase.from("inventory_dispositions").select("*, inventory_disposition_lines(*)").order("disposition_date", { ascending: false }).order("created_at", { ascending: false }),
   ]);
 
   const error = queries.find(result => result.error)?.error;
   if (error) throw error;
 
-  const [products, quotes, purchaseOrders, purchaseOrderItems, shipments, shipmentItems, receipts, receiptItems, suppliers, salesOrders, salesOrderItems] = queries;
+  const [products, quotes, purchaseOrders, purchaseOrderItems, shipments, shipmentItems, receipts, receiptItems, suppliers, salesOrders, salesOrderItems, inventoryDispositions] = queries;
   return {
     products: products.data || [],
     quotes: quotes.data || [],
@@ -31,6 +32,7 @@ export async function loadOperationalDashboardData() {
     suppliers: suppliers.data || [],
     salesOrders: salesOrders.data || [],
     salesOrderItems: salesOrderItems.data || [],
+    inventoryDispositions: inventoryDispositions.data || [],
   };
 }
 
