@@ -1752,7 +1752,7 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
                 : <><strong>No reliable landed cost is available yet.</strong> Target Sell Price and Margin Floor can still be saved, but Gross Margin will remain unavailable until a cost basis exists.{pricingContext.error ? ` ${pricingContext.error}` : ""}</>}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 12 }}>
             <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
             <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={updateTargetSellPrice} type="number" placeholder="e.g. 249.99" />
             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 140 }}>
