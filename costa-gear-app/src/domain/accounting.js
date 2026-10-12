@@ -83,6 +83,7 @@ function blankMonth(month) {
     inventoryPurchases: 0,
     inventoryPurchaseCostComplete: true,
     inventoryDispositionCost: 0,
+    receivingDamageExpense: 0,
     prototypeExpense: 0,
     inventoryWriteoffExpense: 0,
     capitalAssets: 0,
@@ -232,29 +233,50 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (!month) continue;
 
     const sellableQty = Math.max(0, num(item.quantity_received) - num(item.quantity_damaged) - num(item.quantity_rejected));
-    if (!sellableQty) continue;
+    const damagedQty = Math.max(0, num(item.quantity_damaged));
     const plannedCost = poItemMap.get(item.purchase_order_item_id)?.landed_cost_per_unit_cad;
     const unitCost = finite(item.actual_landed_cost_per_unit_cad)
       ? Number(item.actual_landed_cost_per_unit_cad)
       : finite(plannedCost) ? Number(plannedCost) : null;
 
-    if (unitCost === null) {
+    if ((sellableQty > 0 || damagedQty > 0) && unitCost === null) {
       month.inventoryPurchaseCostComplete = false;
       continue;
     }
 
-    const amount = sellableQty * unitCost;
-    month.inventoryPurchases += amount;
-    month.derivedOwnerFunding += amount;
-    ledger.push(ledgerEntry(
-      String(dateValue || "").slice(0, 10),
-      "Receiving",
-      `${receipt.receipt_ref || "Posted receipt"} · ${sellableQty} sellable unit${sellableQty === 1 ? "" : "s"}`,
-      "Inventory",
-      "Owner Contributions",
-      amount,
-      receipt.receipt_ref || item.id
-    ));
+    if (sellableQty > 0) {
+      const amount = sellableQty * unitCost;
+      month.inventoryPurchases += amount;
+      month.derivedOwnerFunding += amount;
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Receiving",
+        `${receipt.receipt_ref || "Posted receipt"} · ${sellableQty} sellable unit${sellableQty === 1 ? "" : "s"}`,
+        "Inventory",
+        "Owner Contributions",
+        amount,
+        receipt.receipt_ref || item.id
+      ));
+    }
+
+    if (damagedQty > 0) {
+      const damagedAmount = damagedQty * unitCost;
+      const category = "Inventory Write-off / Loss";
+      month.operatingExpenses += damagedAmount;
+      month.receivingDamageExpense += damagedAmount;
+      month.inventoryWriteoffExpense += damagedAmount;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + damagedAmount;
+      month.derivedOwnerFunding += damagedAmount;
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Receiving Damage",
+        `${receipt.receipt_ref || "Posted receipt"} · ${damagedQty} damaged unit${damagedQty === 1 ? "" : "s"} recorded at receiving`,
+        `Operating Expense · ${category}`,
+        "Owner Contributions",
+        damagedAmount,
+        receipt.receipt_ref || item.id
+      ));
+    }
   }
 
   let dispositionCapitalAssetCount = 0;
@@ -374,6 +396,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     month.operatingExpenses = round2(month.operatingExpenses);
     month.inventoryPurchases = round2(month.inventoryPurchases);
     month.inventoryDispositionCost = round2(month.inventoryDispositionCost);
+    month.receivingDamageExpense = round2(month.receivingDamageExpense);
     month.prototypeExpense = round2(month.prototypeExpense);
     month.inventoryWriteoffExpense = round2(month.inventoryWriteoffExpense);
     month.capitalAssets = round2(month.capitalAssets);
@@ -429,6 +452,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
       netBusinessIncome,
       inventoryPurchases: sum("inventoryPurchases"),
       inventoryDispositionCost: sum("inventoryDispositionCost"),
+      receivingDamageExpense: sum("receivingDamageExpense"),
       prototypeExpense: sum("prototypeExpense"),
       inventoryWriteoffExpense: sum("inventoryWriteoffExpense"),
       capitalAssets: sum("capitalAssets"),
