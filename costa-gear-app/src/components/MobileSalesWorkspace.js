@@ -104,6 +104,17 @@ export default function MobileSalesWorkspace() {
         costQty.set(receiptItem.product_id, (costQty.get(receiptItem.product_id) || 0) + qty);
       }
     }
+    const disposedQty = new Map();
+    const disposedCost = new Map();
+    for (const disposition of data.inventoryDispositions || []) {
+      if (disposition.status !== "Posted") continue;
+      disposedQty.set(disposition.product_id, (disposedQty.get(disposition.product_id) || 0) + Number(disposition.quantity || 0));
+      const cost = (disposition.inventory_disposition_lines || []).reduce(
+        (sum, line) => sum + Number(line.quantity || 0) * Number(line.unit_cost_cad || 0),
+        0
+      );
+      disposedCost.set(disposition.product_id, (disposedCost.get(disposition.product_id) || 0) + cost);
+    }
     const activeOrderIds = new Set(data.salesOrders.filter(order => activeStatuses.has(order.status)).map(order => order.id));
     const committed = new Map();
     for (const item of data.salesOrderItems) {
@@ -112,8 +123,12 @@ export default function MobileSalesWorkspace() {
     const available = new Map();
     const cost = new Map();
     for (const product of data.products) {
-      available.set(product.id, Math.max(0, (gross.get(product.id) || 0) - (committed.get(product.id) || 0)));
-      cost.set(product.id, (costQty.get(product.id) || 0) > 0 ? (costValue.get(product.id) || 0) / costQty.get(product.id) : null);
+      const remainingQty = Math.max(0, (gross.get(product.id) || 0) - (disposedQty.get(product.id) || 0));
+      const remainingCostQty = Math.max(0, (costQty.get(product.id) || 0) - (disposedQty.get(product.id) || 0));
+      const remainingCostValue = Math.max(0, (costValue.get(product.id) || 0) - (disposedCost.get(product.id) || 0));
+      gross.set(product.id, remainingQty);
+      available.set(product.id, Math.max(0, remainingQty - (committed.get(product.id) || 0)));
+      cost.set(product.id, remainingCostQty > 0 ? remainingCostValue / remainingCostQty : null);
     }
     return { gross, committed, available, cost };
   }, [data]);
