@@ -1,4 +1,5 @@
 import { parseAppDate } from "./appDate";
+import { dispositionLineQuantityByReceiptItem, summarizeDispositionUnits } from "./inventoryDisposition";
 
 const DAY_MS = 86400000;
 
@@ -36,6 +37,12 @@ function emptyProductMetric(product) {
   return {
     product,
     receivedUnits: 0,
+    dispositionUnits: 0,
+    prototypeInternalUseUnits: 0,
+    displayDemoUnits: 0,
+    damagedDispositionUnits: 0,
+    lostMissingUnits: 0,
+    returnedSupplierUnits: 0,
     physicalOnHand: 0,
     openCommittedUnits: 0,
     availableUnits: 0,
@@ -84,6 +91,7 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
   const purchaseOrderItems = data?.purchaseOrderItems || [];
   const salesOrders = data?.salesOrders || [];
   const salesOrderItems = data?.salesOrderItems || [];
+  const inventoryDispositions = data?.inventoryDispositions || [];
 
   const metrics = new Map(products.map(product => [product.id, emptyProductMetric(product)]));
   const receiptMap = new Map(receipts.map(receipt => [receipt.id, receipt]));
@@ -91,6 +99,8 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
   const orderMap = new Map(salesOrders.map(order => [order.id, order]));
   const salesItemsByOrder = new Map();
   const lotsByProduct = new Map();
+  const dispositionSummaryByProduct = summarizeDispositionUnits(inventoryDispositions);
+  const disposedByReceiptItem = dispositionLineQuantityByReceiptItem(inventoryDispositions);
 
   for (const item of salesOrderItems) {
     if (!salesItemsByOrder.has(item.sales_order_id)) salesItemsByOrder.set(item.sales_order_id, []);
@@ -110,7 +120,7 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
     const rawCost = item.actual_landed_cost_per_unit_cad ?? plannedCost;
     const unitCost = rawCost === null || rawCost === undefined || rawCost === "" || !finite(rawCost) ? null : Number(rawCost);
 
-    const lot = { productId: item.product_id, qty, remaining: qty, date: receiptDate, unitCost };
+    const lot = { receiptItemId: item.id, productId: item.product_id, qty, remaining: qty, date: receiptDate, unitCost };
     if (!lotsByProduct.has(item.product_id)) lotsByProduct.set(item.product_id, []);
     lotsByProduct.get(item.product_id).push(lot);
 
@@ -180,9 +190,31 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
   for (const product of products) {
     const metric = metrics.get(product.id);
     const lots = [...(lotsByProduct.get(product.id) || [])].sort((a, b) => (dateValue(a.date)?.getTime() || 0) - (dateValue(b.date)?.getTime() || 0));
+    const dispositionSummary = dispositionSummaryByProduct.get(product.id) || {
+      total: 0,
+      prototype: 0,
+      display: 0,
+      damaged: 0,
+      lost: 0,
+      returned: 0,
+    };
+    metric.dispositionUnits = dispositionSummary.total;
+    metric.prototypeInternalUseUnits = dispositionSummary.prototype;
+    metric.displayDemoUnits = dispositionSummary.display;
+    metric.damagedDispositionUnits = dispositionSummary.damaged;
+    metric.lostMissingUnits = dispositionSummary.lost;
+    metric.returnedSupplierUnits = dispositionSummary.returned;
+
+    // Permanent dispositions are tied to their original receipt lot and leave inventory before sale availability is calculated.
+    for (const lot of lots) {
+      const disposed = Math.max(0, Number(disposedByReceiptItem.get(lot.receiptItemId) || 0));
+      if (!disposed) continue;
+      lot.remaining = Math.max(0, lot.remaining - Math.min(lot.remaining, disposed));
+    }
+
     let qtyToConsume = activeConsumedByProduct.get(product.id) || 0;
 
-    // FIFO: commercial commitments and completed sales consume the oldest sellable lots first.
+    // FIFO: commercial commitments and completed sales consume the oldest remaining sellable lots first.
     for (const lot of lots) {
       if (qtyToConsume <= 0) break;
       const used = Math.min(lot.remaining, qtyToConsume);
@@ -193,7 +225,7 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
     metric.openCommittedUnits = openCommittedByProduct.get(product.id) || 0;
     metric.completedUnits = completedByProduct.get(product.id) || 0;
     metric.completedUnits90 = completed90ByProduct.get(product.id) || 0;
-    metric.physicalOnHand = Math.max(0, metric.receivedUnits - metric.completedUnits);
+    metric.physicalOnHand = Math.max(0, metric.receivedUnits - metric.completedUnits - metric.dispositionUnits);
     metric.availableUnits = lots.reduce((sum, lot) => sum + lot.remaining, 0);
 
     let ageUnitDays = 0;
@@ -260,6 +292,9 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
   const slowMetrics = productMetrics.filter(metric => metric.performanceStatus === "Slow" || metric.performanceStatus === "Critical");
   const watchMetrics = productMetrics.filter(metric => metric.performanceStatus === "Watch");
   const totalAvailableUnits = productMetrics.reduce((sum, metric) => sum + metric.availableUnits, 0);
+  const totalDispositionUnits = productMetrics.reduce((sum, metric) => sum + metric.dispositionUnits, 0);
+  const totalPrototypeInternalUseUnits = productMetrics.reduce((sum, metric) => sum + metric.prototypeInternalUseUnits, 0);
+  const totalDamagedDispositionUnits = productMetrics.reduce((sum, metric) => sum + metric.damagedDispositionUnits, 0);
   const totalInventoryValueCad = productMetrics.reduce((sum, metric) => sum + metric.inventoryValueCad, 0);
   const totalUncostedUnits = productMetrics.reduce((sum, metric) => sum + metric.uncostedUnits, 0);
   const slowMovingUnits = slowMetrics.reduce((sum, metric) => sum + metric.availableUnits, 0);
@@ -279,6 +314,9 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
     agingBuckets: AGING_BUCKETS.map(bucket => totalAging[bucket.key]),
     summary: {
       totalAvailableUnits,
+      totalDispositionUnits,
+      totalPrototypeInternalUseUnits,
+      totalDamagedDispositionUnits,
       totalInventoryValueCad,
       totalUncostedUnits,
       weightedInventoryAgeDays: totalAgeUnits > 0 ? totalAgeUnitDays / totalAgeUnits : null,
