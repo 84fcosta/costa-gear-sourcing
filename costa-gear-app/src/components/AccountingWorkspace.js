@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Landmark,
   PlusCircle,
+  PackageMinus,
   RefreshCw,
   Save,
   Scale,
