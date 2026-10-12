@@ -47,11 +47,25 @@ export default function SalesWorkspace(){
       const unitCost=r.actual_landed_cost_per_unit_cad??planned;
       if(unitCost!==null&&unitCost!==undefined){costValue.set(r.product_id,(costValue.get(r.product_id)||0)+Number(unitCost)*qty);costQty.set(r.product_id,(costQty.get(r.product_id)||0)+qty);}
     }
+    const disposedQty=new Map(),disposedCost=new Map();
+    for(const disposition of data.inventoryDispositions||[]){
+      if(disposition.status!=="Posted")continue;
+      disposedQty.set(disposition.product_id,(disposedQty.get(disposition.product_id)||0)+Number(disposition.quantity||0));
+      const cost=(disposition.inventory_disposition_lines||[]).reduce((sum,line)=>sum+Number(line.quantity||0)*Number(line.unit_cost_cad||0),0);
+      disposedCost.set(disposition.product_id,(disposedCost.get(disposition.product_id)||0)+cost);
+    }
     const activeOrderIds=new Set(data.salesOrders.filter(o=>activeStatuses.has(o.status)).map(o=>o.id));
     const committed=new Map();
     for(const i of data.salesOrderItems){if(activeOrderIds.has(i.sales_order_id))committed.set(i.product_id,(committed.get(i.product_id)||0)+Number(i.quantity||0));}
     const available=new Map(),cost=new Map();
-    for(const p of data.products){available.set(p.id,Math.max(0,(gross.get(p.id)||0)-(committed.get(p.id)||0)));cost.set(p.id,(costQty.get(p.id)||0)>0?(costValue.get(p.id)||0)/costQty.get(p.id):null);}
+    for(const p of data.products){
+      const remainingQty=Math.max(0,(gross.get(p.id)||0)-(disposedQty.get(p.id)||0));
+      const remainingCostQty=Math.max(0,(costQty.get(p.id)||0)-(disposedQty.get(p.id)||0));
+      const remainingCostValue=Math.max(0,(costValue.get(p.id)||0)-(disposedCost.get(p.id)||0));
+      gross.set(p.id,remainingQty);
+      available.set(p.id,Math.max(0,remainingQty-(committed.get(p.id)||0)));
+      cost.set(p.id,remainingCostQty>0?remainingCostValue/remainingCostQty:null);
+    }
     return {gross,committed,available,cost};
   },[data]);
 
