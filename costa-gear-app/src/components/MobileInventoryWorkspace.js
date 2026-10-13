@@ -39,6 +39,14 @@ function Status({ value }) {
   return <span className={`cg-mobile-status ${cls}`}>{value || "Draft"}</span>;
 }
 
+function matchesQuantity(value, operator, target) {
+  if (operator === "eq") return value === target;
+  if (operator === "gte") return value >= target;
+  if (operator === "lt") return value < target;
+  if (operator === "lte") return value <= target;
+  return value > target;
+}
+
 export default function MobileInventoryWorkspace() {
   const [tab, setTab] = useState("inventory");
   const [receipts, setReceipts] = useState([]);
@@ -58,6 +66,9 @@ export default function MobileInventoryWorkspace() {
   const [dirtyLineIds, setDirtyLineIds] = useState(() => new Set());
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("sku");
+  const [quantityField, setQuantityField] = useState("");
+  const [quantityOperator, setQuantityOperator] = useState("gt");
+  const [quantityValue, setQuantityValue] = useState("0");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -176,14 +187,20 @@ export default function MobileInventoryWorkspace() {
 
   const visibleInventory = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const rows = inventory.filter(row => !needle || `${row.product.sku_id} ${row.product.name} ${row.product.fitment || ""}`.toLowerCase().includes(needle));
+    const target = Number(quantityValue || 0);
+    const rows = inventory.filter(row => {
+      const searchMatch = !needle || `${row.product.sku_id} ${row.product.name} ${row.product.fitment || ""}`.toLowerCase().includes(needle);
+      const quantityActual = quantityField ? Number(row[quantityField] || 0) : 0;
+      const quantityMatch = !quantityField || matchesQuantity(quantityActual, quantityOperator, target);
+      return searchMatch && quantityMatch;
+    });
     return [...rows].sort((a, b) => {
       if (sort === "available-desc") return b.available - a.available || a.product.sku_id.localeCompare(b.product.sku_id);
       if (sort === "available-asc") return a.available - b.available || a.product.sku_id.localeCompare(b.product.sku_id);
       if (sort === "name") return a.product.name.localeCompare(b.product.name);
       return a.product.sku_id.localeCompare(b.product.sku_id);
     });
-  }, [inventory, query, sort]);
+  }, [inventory, query, sort, quantityField, quantityOperator, quantityValue]);
 
   const summary = useMemo(() => inventory.reduce((acc, row) => ({
     available: acc.available + row.available,
@@ -361,6 +378,27 @@ export default function MobileInventoryWorkspace() {
           <option value="available-desc">Most available</option>
           <option value="available-asc">Least available</option>
         </select>
+      </div>
+
+      <div className="cg-mobile-quantity-filter">
+        <select value={quantityField} onChange={event => setQuantityField(event.target.value)} aria-label="Inventory quantity field">
+          <option value="">Quantity filter</option>
+          <option value="received">Received</option>
+          <option value="sold">Sold</option>
+          <option value="damaged">Damaged</option>
+          <option value="internalUse">Internal Use</option>
+          <option value="salesCommitted">Committed</option>
+          <option value="available">Available</option>
+        </select>
+        <select value={quantityOperator} onChange={event => setQuantityOperator(event.target.value)} disabled={!quantityField} aria-label="Inventory quantity condition">
+          <option value="gt">&gt;</option>
+          <option value="gte">≥</option>
+          <option value="eq">=</option>
+          <option value="lt">&lt;</option>
+          <option value="lte">≤</option>
+        </select>
+        <input type="number" min="0" step="1" value={quantityValue} onChange={event => setQuantityValue(event.target.value)} disabled={!quantityField} aria-label="Inventory quantity value" />
+        {quantityField ? <button type="button" onClick={() => { setQuantityField(""); setQuantityOperator("gt"); setQuantityValue("0"); }}>Clear</button> : null}
       </div>
 
       <div className="cg-mobile-card-list">
