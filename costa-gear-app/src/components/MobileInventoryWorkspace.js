@@ -386,7 +386,7 @@ export default function MobileInventoryWorkspace() {
             {row.receiptDamaged > 0 ? <span className="cg-mobile-chip bad">{row.receiptDamaged} received damaged</span> : null}
             {row.rejected > 0 ? <span className="cg-mobile-chip bad">{row.rejected} rejected at receiving</span> : null}
           </div> : null}
-          <button type="button" className="cg-mobile-secondary-wide" disabled={row.available <= 0} onClick={() => setDispositionProductId(row.product.id)}>Adjust Stock</button>
+          <button type="button" className="cg-mobile-secondary-wide" disabled={row.available <= 0} onClick={() => setDispositionProductId(row.product.id)}>{row.available > 0 ? "Adjust Stock" : row.receiptDamaged > 0 ? "Damage Recorded at Receiving" : "No Sellable Stock"}</button>
         </article>)}
         {!visibleInventory.length ? <div className="cg-mobile-empty">No inventory matches this search.</div> : null}
       </div>
