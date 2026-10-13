@@ -12,12 +12,13 @@ export async function loadPricingData() {
     supabase.from("quotes").select("*").order("quote_date", { ascending: false }),
     supabase.from("market_prices").select("*").order("observed_at", { ascending: false }),
     supabase.from("pricing_reviews").select("*").order("created_at", { ascending: false }),
+    supabase.from("inventory_dispositions").select("*, inventory_disposition_lines(*)").order("disposition_date", { ascending: true }).order("created_at", { ascending: true }),
   ]);
 
   const error = results.find(result => result.error)?.error;
   if (error) throw error;
 
-  const [products, receipts, receiptItems, purchaseOrders, purchaseOrderItems, salesOrders, salesOrderItems, quotes, marketPrices, pricingReviews] = results;
+  const [products, receipts, receiptItems, purchaseOrders, purchaseOrderItems, salesOrders, salesOrderItems, quotes, marketPrices, pricingReviews, inventoryDispositions] = results;
 
   const receiptRows = receipts.data || [];
   const purchaseOrderRows = purchaseOrders.data || [];
@@ -54,6 +55,7 @@ export async function loadPricingData() {
     quotes: quotes.data || [],
     marketPrices: marketPrices.data || [],
     pricingReviews: pricingReviews.data || [],
+    inventoryDispositions: inventoryDispositions.data || [],
   };
 }
 
