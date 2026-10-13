@@ -52,8 +52,11 @@ assert.match(desktopInventory, /Adjust Stock/);
 assert.match(mobileInventory, /Adjust Stock/);
 assert.match(desktopInventory, /Internal Use/);
 assert.match(mobileInventory, /Internal Use/);
-assert.match(desktopInventory, /Damaged Write-off/);
-assert.match(mobileInventory, /Damaged Adj\./);
+assert.match(desktopInventory, /"Damaged"/);
+assert.match(mobileInventory, /<span>Damaged<\/span>/);
+assert.doesNotMatch(desktopInventory, /"Receiving Damage","Internal Use","Damaged Write-off","On-hand"/);
+assert.doesNotMatch(mobileInventory, /<span>On hand<\/span>/);
+assert.doesNotMatch(mobileInventory, /Damaged Adj\./);
 
 assert.match(analytics, /inventoryDispositions/);
 assert.match(analytics, /disposedByReceiptItem/);
@@ -92,8 +95,10 @@ assert.match(accountingWorkspace, /summary\.ownerFundedOperatingExpenses/);
 assert.match(accountingWorkspace, /summary\.ownerFundedCapitalAssets/);
 assert.match(accountingWorkspace, /Inventory dispositions only reclassify cost already funded earlier/);
 
-assert.match(desktopInventory, /Receiving Damage/);
-assert.match(mobileInventory, /Damage Recorded at Receiving/);
+assert.match(desktopInventory, /damaged=receiptDamaged\+disposition\.damaged/);
+assert.match(desktopInventory, /internalUse=disposition\.prototype\+disposition\.display/);
+assert.match(mobileInventory, /const damaged = receiptDamaged \+ disposition\.damaged/);
+assert.match(mobileInventory, /const internalUse = disposition\.prototype \+ disposition\.display/);
 assert.doesNotMatch(migration, /insert into public\.inventory_dispositions \([^)]*CG-/s);
 
 process.stdout.write("Inventory disposition and Accounting guard passed.\n");

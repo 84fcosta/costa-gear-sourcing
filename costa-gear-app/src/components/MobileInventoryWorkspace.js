@@ -154,6 +154,8 @@ export default function MobileInventoryWorkspace() {
       const rejected = rows.reduce((sum, item) => sum + Number(item.quantity_rejected || 0), 0);
       const sold = completed.get(product.id) || 0;
       const disposition = dispositionSummary.get(product.id) || { total: 0, prototype: 0, display: 0, damaged: 0, lost: 0, returned: 0, other: 0 };
+      const damaged = receiptDamaged + disposition.damaged;
+      const internalUse = disposition.prototype + disposition.display;
       const onHand = Math.max(0, received - receiptDamaged - rejected - sold - disposition.total);
       const salesCommitted = openCommitted.get(product.id) || 0;
       return {
@@ -163,6 +165,8 @@ export default function MobileInventoryWorkspace() {
         rejected,
         sold,
         disposition,
+        damaged,
+        internalUse,
         onHand,
         salesCommitted,
         available: Math.max(0, onHand - salesCommitted),
@@ -182,11 +186,11 @@ export default function MobileInventoryWorkspace() {
   }, [inventory, query, sort]);
 
   const summary = useMemo(() => inventory.reduce((acc, row) => ({
-    onHand: acc.onHand + row.onHand,
     available: acc.available + row.available,
     committed: acc.committed + row.salesCommitted,
-    adjusted: acc.adjusted + row.disposition.total,
-  }), { onHand: 0, available: 0, committed: 0, adjusted: 0 }), [inventory]);
+    damaged: acc.damaged + row.damaged,
+    internalUse: acc.internalUse + row.internalUse,
+  }), { available: 0, committed: 0, damaged: 0, internalUse: 0 }), [inventory]);
 
   const chooseShipment = id => {
     const shipment = shipments.find(row => row.id === id);
@@ -339,14 +343,14 @@ export default function MobileInventoryWorkspace() {
 
     {tab === "inventory" ? <>
       <div className="cg-mobile-section-head">
-        <div><h2>Inventory Position</h2><p>Sellable stock after posted receipts, damage and sales commitments.</p></div>
+        <div><h2>Inventory Position</h2><p>Available stock after sales, damage, internal use and open commitments.</p></div>
       </div>
 
       <div className="cg-mobile-summary-grid">
         <div className="cg-mobile-summary-card"><span>Available</span><strong>{summary.available}</strong></div>
-        <div className="cg-mobile-summary-card"><span>On hand</span><strong>{summary.onHand}</strong></div>
         <div className="cg-mobile-summary-card"><span>Committed</span><strong>{summary.committed}</strong></div>
-        <div className="cg-mobile-summary-card"><span>Adjusted</span><strong>{summary.adjusted}</strong></div>
+        <div className="cg-mobile-summary-card"><span>Damaged</span><strong>{summary.damaged}</strong></div>
+        <div className="cg-mobile-summary-card"><span>Internal Use</span><strong>{summary.internalUse}</strong></div>
       </div>
 
       <div className="cg-mobile-search-row">
@@ -372,21 +376,19 @@ export default function MobileInventoryWorkspace() {
           <div className="cg-mobile-metric-row">
             <div className="cg-mobile-metric"><span>Received</span><strong>{row.received}</strong></div>
             <div className="cg-mobile-metric"><span>Sold</span><strong>{row.sold}</strong></div>
-            <div className="cg-mobile-metric"><span>Internal Use</span><strong>{row.disposition.prototype + row.disposition.display}</strong></div>
+            <div className="cg-mobile-metric"><span>Damaged</span><strong>{row.damaged}</strong></div>
           </div>
-          <div className="cg-mobile-metric-row">
-            <div className="cg-mobile-metric"><span>Damaged Adj.</span><strong>{row.disposition.damaged}</strong></div>
+          <div className="cg-mobile-metric-row two">
+            <div className="cg-mobile-metric"><span>Internal Use</span><strong>{row.internalUse}</strong></div>
             <div className="cg-mobile-metric"><span>Committed</span><strong>{row.salesCommitted}</strong></div>
-            <div className="cg-mobile-metric"><span>On hand</span><strong>{row.onHand}</strong></div>
           </div>
-          {(row.receiptDamaged > 0 || row.rejected > 0 || row.disposition.total > 0 || row.available === 0) ? <div className="cg-mobile-alert-row">
+          {(row.damaged > 0 || row.internalUse > 0 || row.rejected > 0 || row.available === 0) ? <div className="cg-mobile-alert-row">
             {row.available === 0 ? <span className="cg-mobile-chip warn">No available stock</span> : null}
-            {row.disposition.prototype + row.disposition.display > 0 ? <span className="cg-mobile-chip">{row.disposition.prototype + row.disposition.display} internal use</span> : null}
-            {row.disposition.damaged > 0 ? <span className="cg-mobile-chip bad">{row.disposition.damaged} write-off</span> : null}
-            {row.receiptDamaged > 0 ? <span className="cg-mobile-chip bad">{row.receiptDamaged} received damaged</span> : null}
+            {row.internalUse > 0 ? <span className="cg-mobile-chip">{row.internalUse} internal use</span> : null}
+            {row.damaged > 0 ? <span className="cg-mobile-chip bad">{row.damaged} damaged</span> : null}
             {row.rejected > 0 ? <span className="cg-mobile-chip bad">{row.rejected} rejected at receiving</span> : null}
           </div> : null}
-          <button type="button" className="cg-mobile-secondary-wide" disabled={row.available <= 0} onClick={() => setDispositionProductId(row.product.id)}>{row.available > 0 ? "Adjust Stock" : row.receiptDamaged > 0 ? "Damage Recorded at Receiving" : "No Sellable Stock"}</button>
+          <button type="button" className="cg-mobile-secondary-wide" disabled={row.available <= 0} onClick={() => setDispositionProductId(row.product.id)}>{row.available > 0 ? "Adjust Stock" : "No Sellable Stock"}</button>
         </article>)}
         {!visibleInventory.length ? <div className="cg-mobile-empty">No inventory matches this search.</div> : null}
       </div>

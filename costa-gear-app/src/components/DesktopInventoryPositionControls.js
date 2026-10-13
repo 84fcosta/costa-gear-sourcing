@@ -11,12 +11,10 @@ const SORT_COLUMNS = [
   { key: "product", label: "Product", index: 1, type: "text" },
   { key: "received", label: "Received", index: 2, type: "number" },
   { key: "sold", label: "Sold", index: 3, type: "number" },
-  { key: "receivingDamage", label: "Receiving Damage", index: 4, type: "number" },
+  { key: "damaged", label: "Damaged", index: 4, type: "number" },
   { key: "internalUse", label: "Internal Use", index: 5, type: "number" },
-  { key: "damagedWriteoff", label: "Damaged Write-off", index: 6, type: "number" },
-  { key: "onHand", label: "On-hand", index: 7, type: "number" },
-  { key: "salesCommitted", label: "Committed", index: 8, type: "number" },
-  { key: "available", label: "Available", index: 9, type: "number" },
+  { key: "salesCommitted", label: "Committed", index: 6, type: "number" },
+  { key: "available", label: "Available", index: 7, type: "number" },
 ];
 
 function rowSku(row) {
