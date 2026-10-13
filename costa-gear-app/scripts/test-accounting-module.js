@@ -36,7 +36,7 @@ assert.match(domain, /landed_cost_per_unit_cad/);
 assert.match(domain, /if \(expense\.is_asset_purchase\) continue/);
 assert.match(domain, /Operating Expense ·/);
 assert.match(domain, /"COGS", "Inventory"/);
-assert.match(domain, /"Inventory",\n      "Owner Contributions"/);
+assert.match(domain, /"Inventory",\s*"Owner Contributions"/);
 assert.match(domain, /month\.netBusinessIncome = month\.cogsComplete/);
 assert.match(domain, /forecastYtdOpex - actualYtdOpex/);
 assert.match(domain, /line\.kind === "income" \? actual - forecast : forecast - actual/);

@@ -8,12 +8,13 @@ export async function loadPerformanceData() {
     supabase.from("purchase_order_items").select("id,product_id,landed_cost_per_unit_cad"),
     supabase.from("sales_orders").select("*").order("sold_date", { ascending: false }),
     supabase.from("sales_order_items").select("*").order("created_at", { ascending: true }),
+    supabase.from("inventory_dispositions").select("*, inventory_disposition_lines(*)").order("disposition_date", { ascending: true }).order("created_at", { ascending: true }),
   ]);
 
   const error = results.find(result => result.error)?.error;
   if (error) throw error;
 
-  const [products, receipts, receiptItems, purchaseOrderItems, salesOrders, salesOrderItems] = results;
+  const [products, receipts, receiptItems, purchaseOrderItems, salesOrders, salesOrderItems, inventoryDispositions] = results;
   return {
     products: products.data || [],
     receipts: receipts.data || [],
@@ -21,5 +22,6 @@ export async function loadPerformanceData() {
     purchaseOrderItems: purchaseOrderItems.data || [],
     salesOrders: salesOrders.data || [],
     salesOrderItems: salesOrderItems.data || [],
+    inventoryDispositions: inventoryDispositions.data || [],
   };
 }

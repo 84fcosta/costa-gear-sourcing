@@ -82,6 +82,22 @@
     color: #20251f;
   }
 
+  .cg-mobile-secondary-wide {
+    width: 100%;
+    border: 1px solid #dde1d8;
+    background: #fff;
+    color: #20251f;
+    border-radius: 13px;
+    min-height: 42px;
+    padding: 0 14px;
+    font-weight: 850;
+    font-size: 13.5px;
+  }
+
+  .cg-mobile-secondary-wide:disabled {
+    opacity: .5;
+  }
+
   .cg-mobile-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 128px;

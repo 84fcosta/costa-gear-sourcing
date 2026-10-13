@@ -11,11 +11,12 @@ export async function loadDemandPlanningData() {
     supabase.from("receipt_items").select("*").order("created_at"),
     supabase.from("sales_orders").select("*").order("sold_date", { ascending: false }),
     supabase.from("sales_order_items").select("*").order("created_at"),
+    supabase.from("inventory_dispositions").select("*, inventory_disposition_lines(*)").order("disposition_date", { ascending: true }).order("created_at", { ascending: true }),
   ]);
 
   const error = results.find(result => result.error)?.error;
   if (error) throw error;
-  const [products, suppliers, quotes, purchaseOrders, purchaseOrderItems, receipts, receiptItems, salesOrders, salesOrderItems] = results;
+  const [products, suppliers, quotes, purchaseOrders, purchaseOrderItems, receipts, receiptItems, salesOrders, salesOrderItems, inventoryDispositions] = results;
   return {
     products: products.data || [],
     suppliers: suppliers.data || [],
@@ -26,6 +27,7 @@ export async function loadDemandPlanningData() {
     receiptItems: receiptItems.data || [],
     salesOrders: salesOrders.data || [],
     salesOrderItems: salesOrderItems.data || [],
+    inventoryDispositions: inventoryDispositions.data || [],
   };
 }
 

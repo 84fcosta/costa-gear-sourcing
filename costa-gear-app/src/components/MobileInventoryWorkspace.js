@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import InventoryDispositionDialog from "./InventoryDispositionDialog";
+import { summarizeDispositionUnits } from "../domain/inventoryDisposition";
+import { listInventoryDispositions } from "../services/inventoryDispositionRepository";
 import {
   addReceiptItem,
   createReceipt,
@@ -11,7 +14,8 @@ import {
 } from "../services/receivingRepository";
 import "../mobile-operations.css";
 
-const salesCommitStatuses = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
+const openCommitStatuses = new Set(["Confirmed", "Paid", "Shipped"]);
+const completedSaleStatuses = new Set(["Completed"]);
 const money = value => value === null || value === undefined || Number.isNaN(Number(value))
   ? "N/A"
   : Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
@@ -47,6 +51,8 @@ export default function MobileInventoryWorkspace() {
   const [inventoryRows, setInventoryRows] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
   const [salesItems, setSalesItems] = useState([]);
+  const [inventoryDispositions, setInventoryDispositions] = useState([]);
+  const [dispositionProductId, setDispositionProductId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [receiptScreen, setReceiptScreen] = useState("list");
   const [dirtyLineIds, setDirtyLineIds] = useState(() => new Set());
@@ -71,6 +77,7 @@ export default function MobileInventoryWorkspace() {
         postedInventory,
         { data: saleRows, error: saleError },
         { data: saleItemRows, error: saleItemError },
+        dispositionRows,
       ] = await Promise.all([
         listReceipts(),
         supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
@@ -81,6 +88,7 @@ export default function MobileInventoryWorkspace() {
         loadPostedInventory(),
         supabase.from("sales_orders").select("id,status"),
         supabase.from("sales_order_items").select("sales_order_id,product_id,quantity"),
+        listInventoryDispositions(),
       ]);
       const dbError = orderError || poItemError || shipmentError || shipmentItemError || productError || saleError || saleItemError;
       if (dbError) throw dbError;
@@ -93,6 +101,7 @@ export default function MobileInventoryWorkspace() {
       setInventoryRows(postedInventory || []);
       setSalesOrders(saleRows || []);
       setSalesItems(saleItemRows || []);
+      setInventoryDispositions(dispositionRows || []);
     } catch (e) {
       setError(e?.message || "Unable to load inventory.");
     } finally {
@@ -124,23 +133,42 @@ export default function MobileInventoryWorkspace() {
   }, [selectedId, receipts]);
 
   const inventory = useMemo(() => {
-    const activeIds = new Set(salesOrders.filter(order => salesCommitStatuses.has(order.status)).map(order => order.id));
-    const committed = new Map();
+    const openIds = new Set(salesOrders.filter(order => openCommitStatuses.has(order.status)).map(order => order.id));
+    const completedIds = new Set(salesOrders.filter(order => completedSaleStatuses.has(order.status)).map(order => order.id));
+    const openCommitted = new Map();
+    const completed = new Map();
     for (const item of salesItems) {
-      if (activeIds.has(item.sales_order_id)) {
-        committed.set(item.product_id, (committed.get(item.product_id) || 0) + Number(item.quantity || 0));
+      const qty = Number(item.quantity || 0);
+      if (openIds.has(item.sales_order_id)) {
+        openCommitted.set(item.product_id, (openCommitted.get(item.product_id) || 0) + qty);
+      }
+      if (completedIds.has(item.sales_order_id)) {
+        completed.set(item.product_id, (completed.get(item.product_id) || 0) + qty);
       }
     }
+    const dispositionSummary = summarizeDispositionUnits(inventoryDispositions);
     return products.map(product => {
       const rows = inventoryRows.filter(item => item.product_id === product.id);
       const received = rows.reduce((sum, item) => sum + Number(item.quantity_received || 0), 0);
-      const damaged = rows.reduce((sum, item) => sum + Number(item.quantity_damaged || 0), 0);
+      const receiptDamaged = rows.reduce((sum, item) => sum + Number(item.quantity_damaged || 0), 0);
       const rejected = rows.reduce((sum, item) => sum + Number(item.quantity_rejected || 0), 0);
-      const onHand = Math.max(0, received - damaged - rejected);
-      const salesCommitted = committed.get(product.id) || 0;
-      return { product, received, damaged, rejected, onHand, salesCommitted, available: Math.max(0, onHand - salesCommitted) };
-    }).filter(row => row.onHand > 0 || row.salesCommitted > 0);
-  }, [products, inventoryRows, salesOrders, salesItems]);
+      const sold = completed.get(product.id) || 0;
+      const disposition = dispositionSummary.get(product.id) || { total: 0, prototype: 0, display: 0, damaged: 0, lost: 0, returned: 0, other: 0 };
+      const onHand = Math.max(0, received - receiptDamaged - rejected - sold - disposition.total);
+      const salesCommitted = openCommitted.get(product.id) || 0;
+      return {
+        product,
+        received,
+        receiptDamaged,
+        rejected,
+        sold,
+        disposition,
+        onHand,
+        salesCommitted,
+        available: Math.max(0, onHand - salesCommitted),
+      };
+    }).filter(row => row.received > 0 || row.salesCommitted > 0 || row.disposition.total > 0);
+  }, [products, inventoryRows, salesOrders, salesItems, inventoryDispositions]);
 
   const visibleInventory = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -157,8 +185,8 @@ export default function MobileInventoryWorkspace() {
     onHand: acc.onHand + row.onHand,
     available: acc.available + row.available,
     committed: acc.committed + row.salesCommitted,
-    damaged: acc.damaged + row.damaged,
-  }), { onHand: 0, available: 0, committed: 0, damaged: 0 }), [inventory]);
+    adjusted: acc.adjusted + row.disposition.total,
+  }), { onHand: 0, available: 0, committed: 0, adjusted: 0 }), [inventory]);
 
   const chooseShipment = id => {
     const shipment = shipments.find(row => row.id === id);
@@ -298,6 +326,8 @@ export default function MobileInventoryWorkspace() {
 
   if (loading) return <div className="cg-mobile-empty">Loading inventory...</div>;
 
+  const dispositionRow = inventory.find(row => row.product.id === dispositionProductId) || null;
+
   return <div className="cg-mobile-ops">
     {error ? <div className="cg-mobile-message error">{error}</div> : null}
     {message ? <div className="cg-mobile-message success">{message}</div> : null}
@@ -316,7 +346,7 @@ export default function MobileInventoryWorkspace() {
         <div className="cg-mobile-summary-card"><span>Available</span><strong>{summary.available}</strong></div>
         <div className="cg-mobile-summary-card"><span>On hand</span><strong>{summary.onHand}</strong></div>
         <div className="cg-mobile-summary-card"><span>Committed</span><strong>{summary.committed}</strong></div>
-        <div className="cg-mobile-summary-card"><span>Damaged</span><strong>{summary.damaged}</strong></div>
+        <div className="cg-mobile-summary-card"><span>Adjusted</span><strong>{summary.adjusted}</strong></div>
       </div>
 
       <div className="cg-mobile-search-row">
@@ -340,15 +370,23 @@ export default function MobileInventoryWorkspace() {
             <div className="cg-mobile-available"><strong>{row.available}</strong><span>Available</span></div>
           </div>
           <div className="cg-mobile-metric-row">
-            <div className="cg-mobile-metric"><span>On hand</span><strong>{row.onHand}</strong></div>
-            <div className="cg-mobile-metric"><span>Committed</span><strong>{row.salesCommitted}</strong></div>
             <div className="cg-mobile-metric"><span>Received</span><strong>{row.received}</strong></div>
+            <div className="cg-mobile-metric"><span>Sold</span><strong>{row.sold}</strong></div>
+            <div className="cg-mobile-metric"><span>Internal Use</span><strong>{row.disposition.prototype + row.disposition.display}</strong></div>
           </div>
-          {(row.damaged > 0 || row.rejected > 0 || row.available === 0) ? <div className="cg-mobile-alert-row">
+          <div className="cg-mobile-metric-row">
+            <div className="cg-mobile-metric"><span>Damaged Adj.</span><strong>{row.disposition.damaged}</strong></div>
+            <div className="cg-mobile-metric"><span>Committed</span><strong>{row.salesCommitted}</strong></div>
+            <div className="cg-mobile-metric"><span>On hand</span><strong>{row.onHand}</strong></div>
+          </div>
+          {(row.receiptDamaged > 0 || row.rejected > 0 || row.disposition.total > 0 || row.available === 0) ? <div className="cg-mobile-alert-row">
             {row.available === 0 ? <span className="cg-mobile-chip warn">No available stock</span> : null}
-            {row.damaged > 0 ? <span className="cg-mobile-chip bad">{row.damaged} damaged</span> : null}
-            {row.rejected > 0 ? <span className="cg-mobile-chip bad">{row.rejected} rejected</span> : null}
+            {row.disposition.prototype + row.disposition.display > 0 ? <span className="cg-mobile-chip">{row.disposition.prototype + row.disposition.display} internal use</span> : null}
+            {row.disposition.damaged > 0 ? <span className="cg-mobile-chip bad">{row.disposition.damaged} write-off</span> : null}
+            {row.receiptDamaged > 0 ? <span className="cg-mobile-chip bad">{row.receiptDamaged} received damaged</span> : null}
+            {row.rejected > 0 ? <span className="cg-mobile-chip bad">{row.rejected} rejected at receiving</span> : null}
           </div> : null}
+          <button type="button" className="cg-mobile-secondary-wide" disabled={row.available <= 0} onClick={() => setDispositionProductId(row.product.id)}>{row.available > 0 ? "Adjust Stock" : row.receiptDamaged > 0 ? "Damage Recorded at Receiving" : "No Sellable Stock"}</button>
         </article>)}
         {!visibleInventory.length ? <div className="cg-mobile-empty">No inventory matches this search.</div> : null}
       </div>
@@ -410,5 +448,14 @@ export default function MobileInventoryWorkspace() {
         </div>
       </> : null}
     </>}
+    {dispositionRow ? <InventoryDispositionDialog
+      product={dispositionRow.product}
+      available={dispositionRow.available}
+      onClose={() => setDispositionProductId("")}
+      onPosted={async posted => {
+        setMessage(`${posted?.disposition_ref || "Inventory adjustment"} posted. Inventory and Accounting were updated.`);
+        await load();
+      }}
+    /> : null}
   </div>;
 }

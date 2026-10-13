@@ -6,6 +6,7 @@ import {
   calcDeductible,
   calcEstimatedCca,
 } from "./expenseTracking";
+import { dispositionCost, dispositionTypeMeta } from "./inventoryDisposition";
 
 export const ACCOUNTING_SCENARIO = "Baseline";
 export const MONTHS = [
@@ -23,7 +24,17 @@ export const MONTHS = [
   { number: 12, key: "dec", short: "Dec", label: "December" },
 ];
 
-const OPERATING_EXPENSE_LINES = EXPENSE_CATEGORIES.map(category => ({
+export const DISPOSITION_EXPENSE_CATEGORIES = [
+  "Prototype / Product Development",
+  "Inventory Write-off / Loss",
+];
+
+export const ACCOUNTING_EXPENSE_CATEGORIES = [
+  ...EXPENSE_CATEGORIES,
+  ...DISPOSITION_EXPENSE_CATEGORIES,
+];
+
+const OPERATING_EXPENSE_LINES = ACCOUNTING_EXPENSE_CATEGORIES.map(category => ({
   code: `expense:${category}`,
   label: category,
   group: "Operating Expenses",
@@ -68,9 +79,13 @@ function blankMonth(month) {
     missingCostUnits: 0,
     directSellingCosts: 0,
     operatingExpenses: 0,
-    expensesByCategory: Object.fromEntries(EXPENSE_CATEGORIES.map(category => [category, 0])),
+    expensesByCategory: Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [category, 0])),
     inventoryPurchases: 0,
     inventoryPurchaseCostComplete: true,
+    inventoryDispositionCost: 0,
+    receivingDamageExpense: 0,
+    prototypeExpense: 0,
+    inventoryWriteoffExpense: 0,
     capitalAssets: 0,
     manualOwnerContributions: 0,
     ownerDraws: 0,
@@ -218,29 +233,129 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (!month) continue;
 
     const sellableQty = Math.max(0, num(item.quantity_received) - num(item.quantity_damaged) - num(item.quantity_rejected));
-    if (!sellableQty) continue;
+    const damagedQty = Math.max(0, num(item.quantity_damaged));
     const plannedCost = poItemMap.get(item.purchase_order_item_id)?.landed_cost_per_unit_cad;
     const unitCost = finite(item.actual_landed_cost_per_unit_cad)
       ? Number(item.actual_landed_cost_per_unit_cad)
       : finite(plannedCost) ? Number(plannedCost) : null;
 
-    if (unitCost === null) {
+    if ((sellableQty > 0 || damagedQty > 0) && unitCost === null) {
       month.inventoryPurchaseCostComplete = false;
       continue;
     }
 
-    const amount = sellableQty * unitCost;
-    month.inventoryPurchases += amount;
-    month.derivedOwnerFunding += amount;
-    ledger.push(ledgerEntry(
-      String(dateValue || "").slice(0, 10),
-      "Receiving",
-      `${receipt.receipt_ref || "Posted receipt"} · ${sellableQty} sellable unit${sellableQty === 1 ? "" : "s"}`,
-      "Inventory",
-      "Owner Contributions",
-      amount,
-      receipt.receipt_ref || item.id
-    ));
+    if (sellableQty > 0) {
+      const amount = sellableQty * unitCost;
+      month.inventoryPurchases += amount;
+      month.derivedOwnerFunding += amount;
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Receiving",
+        `${receipt.receipt_ref || "Posted receipt"} · ${sellableQty} sellable unit${sellableQty === 1 ? "" : "s"}`,
+        "Inventory",
+        "Owner Contributions",
+        amount,
+        receipt.receipt_ref || item.id
+      ));
+    }
+
+    if (damagedQty > 0) {
+      const damagedAmount = damagedQty * unitCost;
+      const category = "Inventory Write-off / Loss";
+      month.operatingExpenses += damagedAmount;
+      month.receivingDamageExpense += damagedAmount;
+      month.inventoryWriteoffExpense += damagedAmount;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + damagedAmount;
+      month.derivedOwnerFunding += damagedAmount;
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Receiving Damage",
+        `${receipt.receipt_ref || "Posted receipt"} · ${damagedQty} damaged unit${damagedQty === 1 ? "" : "s"} recorded at receiving`,
+        `Operating Expense · ${category}`,
+        "Owner Contributions",
+        damagedAmount,
+        receipt.receipt_ref || item.id
+      ));
+    }
+  }
+
+  let dispositionCapitalAssetCount = 0;
+  let dispositionCapitalAssetValue = 0;
+
+  for (const disposition of operational.inventoryDispositions || []) {
+    if (disposition.status !== "Posted") continue;
+    const dateValue = disposition.disposition_date || disposition.created_at;
+    if (yearOf(dateValue) !== Number(year)) continue;
+    const month = monthMap.get(monthOf(dateValue));
+    if (!month) continue;
+
+    const totalCost = round2(dispositionCost(disposition));
+    const recovery = Math.min(totalCost, Math.max(0, num(disposition.recovery_amount_cad)));
+    const netCost = round2(totalCost - recovery);
+    month.inventoryDispositionCost += totalCost;
+    const ref = disposition.disposition_ref || disposition.id;
+    const reason = dispositionTypeMeta(disposition.disposition_type).label;
+
+    if (disposition.accounting_treatment === "expense_now") {
+      const category = "Prototype / Product Development";
+      month.operatingExpenses += netCost;
+      month.prototypeExpense += netCost;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
+      if (netCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · ${disposition.quantity} unit${Number(disposition.quantity) === 1 ? "" : "s"}`,
+          `Operating Expense · ${category}`,
+          "Inventory",
+          netCost,
+          ref
+        ));
+      }
+    } else if (disposition.accounting_treatment === "capital_asset") {
+      month.capitalAssets += totalCost;
+      dispositionCapitalAssetCount += 1;
+      dispositionCapitalAssetValue += totalCost;
+      if (totalCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · reclassified to capital asset`,
+          "Capital Assets",
+          "Inventory",
+          totalCost,
+          ref
+        ));
+      }
+    } else {
+      const category = "Inventory Write-off / Loss";
+      month.operatingExpenses += netCost;
+      month.inventoryWriteoffExpense += netCost;
+      month.expensesByCategory[category] = (month.expensesByCategory[category] || 0) + netCost;
+      if (netCost > 0) {
+        ledger.push(ledgerEntry(
+          String(dateValue || "").slice(0, 10),
+          "Inventory Adjustment",
+          `${reason} · ${disposition.quantity} unit${Number(disposition.quantity) === 1 ? "" : "s"}`,
+          `Operating Expense · ${category}`,
+          "Inventory",
+          netCost,
+          ref
+        ));
+      }
+    }
+
+    if (recovery > 0) {
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Inventory Recovery",
+        `${reason} · supplier / recovery value`,
+        "Business Cash / Supplier Recovery",
+        "Inventory",
+        recovery,
+        ref
+      ));
+    }
   }
 
   for (const transaction of ownerTransactions) {
@@ -280,6 +395,10 @@ export function buildAccountingModel(data, year, now = new Date()) {
     month.directSellingCosts = round2(month.directSellingCosts);
     month.operatingExpenses = round2(month.operatingExpenses);
     month.inventoryPurchases = round2(month.inventoryPurchases);
+    month.inventoryDispositionCost = round2(month.inventoryDispositionCost);
+    month.receivingDamageExpense = round2(month.receivingDamageExpense);
+    month.prototypeExpense = round2(month.prototypeExpense);
+    month.inventoryWriteoffExpense = round2(month.inventoryWriteoffExpense);
     month.capitalAssets = round2(month.capitalAssets);
     month.manualOwnerContributions = round2(month.manualOwnerContributions);
     month.ownerDraws = round2(month.ownerDraws);
@@ -307,7 +426,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     ? null
     : round2(derivedOwnerFunding + manualOwnerContributions + netBusinessIncome - ownerDraws);
 
-  const expenseCategoryTotals = Object.fromEntries(EXPENSE_CATEGORIES.map(category => [
+  const expenseCategoryTotals = Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [
     category,
     round2(monthly.reduce((total, row) => total + num(row.expensesByCategory[category]), 0)),
   ]));
@@ -332,6 +451,10 @@ export function buildAccountingModel(data, year, now = new Date()) {
       operatingExpenses: sum("operatingExpenses"),
       netBusinessIncome,
       inventoryPurchases: sum("inventoryPurchases"),
+      inventoryDispositionCost: sum("inventoryDispositionCost"),
+      receivingDamageExpense: sum("receivingDamageExpense"),
+      prototypeExpense: sum("prototypeExpense"),
+      inventoryWriteoffExpense: sum("inventoryWriteoffExpense"),
       capitalAssets: sum("capitalAssets"),
       inventoryValue: round2(performance.summary.totalInventoryValueCad || 0),
       availableUnits: Number(performance.summary.totalAvailableUnits || 0),
@@ -345,7 +468,9 @@ export function buildAccountingModel(data, year, now = new Date()) {
       regularExpenseCount: regularExpenses.length,
       taxReadyExpenses,
       missingReceiptExpenses,
-      assetCount: assets.length,
+      assetCount: assets.length + dispositionCapitalAssetCount,
+      dispositionCapitalAssetCount,
+      dispositionCapitalAssetValue: round2(dispositionCapitalAssetValue),
       estimatedCca,
     },
     expenseCategoryTotals,
