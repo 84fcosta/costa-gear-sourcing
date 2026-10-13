@@ -130,6 +130,44 @@
     box-shadow: 0 0 0 3px rgba(133, 140, 56, .11);
   }
 
+  .cg-mobile-quantity-filter {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 62px 72px auto;
+    gap: 7px;
+  }
+
+  .cg-mobile-quantity-filter select,
+  .cg-mobile-quantity-filter input,
+  .cg-mobile-quantity-filter button {
+    min-width: 0;
+    min-height: 42px;
+    border: 1px solid #dde1d8;
+    border-radius: 11px;
+    background: #fff;
+    color: #20251f;
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .cg-mobile-quantity-filter select,
+  .cg-mobile-quantity-filter input {
+    padding: 8px 9px;
+  }
+
+  .cg-mobile-quantity-filter input {
+    text-align: right;
+  }
+
+  .cg-mobile-quantity-filter button {
+    padding: 0 10px;
+    font-weight: 800;
+  }
+
+  .cg-mobile-quantity-filter :disabled {
+    background: #f2f3f0;
+    color: #a0a69d;
+  }
+
   .cg-mobile-summary-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
