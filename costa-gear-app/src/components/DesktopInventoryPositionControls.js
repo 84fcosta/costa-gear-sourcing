@@ -26,6 +26,14 @@ function compareValues(a, b, type) {
   return String(a || "").localeCompare(String(b || ""), undefined, { numeric: true, sensitivity: "base" });
 }
 
+function matchesQuantity(value, operator, target) {
+  if (operator === "eq") return value === target;
+  if (operator === "gte") return value >= target;
+  if (operator === "lt") return value < target;
+  if (operator === "lte") return value <= target;
+  return value > target;
+}
+
 export default function DesktopInventoryPositionControls() {
   const [host, setHost] = useState(null);
   const [table, setTable] = useState(null);
@@ -34,6 +42,9 @@ export default function DesktopInventoryPositionControls() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [fitment, setFitment] = useState("");
+  const [quantityField, setQuantityField] = useState("");
+  const [quantityOperator, setQuantityOperator] = useState("gt");
+  const [quantityValue, setQuantityValue] = useState("0");
   const [sortKey, setSortKey] = useState("sku");
   const [sortDir, setSortDir] = useState("asc");
   const [visibleCount, setVisibleCount] = useState(0);
@@ -201,7 +212,11 @@ export default function DesktopInventoryPositionControls() {
       const searchMatch = !query || haystack.some(value => value.includes(query));
       const categoryMatch = !category || meta?.category === category;
       const fitmentMatch = !fitment || meta?.fitment === fitment;
-      row.style.display = searchMatch && categoryMatch && fitmentMatch ? "" : "none";
+      const quantityColumn = quantityField ? SORT_COLUMNS.find(item => item.key === quantityField) : null;
+      const quantityTarget = Number(quantityValue || 0);
+      const quantityActual = quantityColumn ? Number(row.cells?.[quantityColumn.index]?.textContent?.trim() || 0) : 0;
+      const quantityMatch = !quantityColumn || matchesQuantity(quantityActual, quantityOperator, quantityTarget);
+      row.style.display = searchMatch && categoryMatch && fitmentMatch && quantityMatch ? "" : "none";
     });
 
     const column = SORT_COLUMNS.find(item => item.key === sortKey) || SORT_COLUMNS[0];
@@ -217,15 +232,18 @@ export default function DesktopInventoryPositionControls() {
     if (orderChanged) sorted.forEach(row => tbody.appendChild(row));
 
     setVisibleCount(rows.filter(row => row.style.display !== "none").length);
-  }, [table, metaBySku, search, category, fitment, sortKey, sortDir, revision]);
+  }, [table, metaBySku, search, category, fitment, quantityField, quantityOperator, quantityValue, sortKey, sortDir, revision]);
 
   if (!host) return null;
 
-  const filtered = Boolean(search || category || fitment);
+  const filtered = Boolean(search || category || fitment || quantityField);
   const clear = () => {
     setSearch("");
     setCategory("");
     setFitment("");
+    setQuantityField("");
+    setQuantityOperator("gt");
+    setQuantityValue("0");
   };
 
   return createPortal(
@@ -257,6 +275,29 @@ export default function DesktopInventoryPositionControls() {
           {fitments.map(value => <option key={value} value={value}>{value}</option>)}
         </select>
       </label>
+
+      <div className="cg-desktop-snapshot-filter cg-desktop-quantity-filter">
+        <span>Quantity</span>
+        <div>
+          <select value={quantityField} onChange={event => setQuantityField(event.target.value)} aria-label="Inventory quantity field">
+            <option value="">Any quantity</option>
+            <option value="received">Received</option>
+            <option value="sold">Sold</option>
+            <option value="damaged">Damaged</option>
+            <option value="internalUse">Internal Use</option>
+            <option value="salesCommitted">Committed</option>
+            <option value="available">Available</option>
+          </select>
+          <select value={quantityOperator} onChange={event => setQuantityOperator(event.target.value)} disabled={!quantityField} aria-label="Inventory quantity condition">
+            <option value="gt">&gt;</option>
+            <option value="gte">≥</option>
+            <option value="eq">=</option>
+            <option value="lt">&lt;</option>
+            <option value="lte">≤</option>
+          </select>
+          <input type="number" min="0" step="1" value={quantityValue} onChange={event => setQuantityValue(event.target.value)} disabled={!quantityField} aria-label="Inventory quantity value" />
+        </div>
+      </div>
 
       <div className="cg-desktop-snapshot-result">
         <strong>{visibleCount}</strong>
