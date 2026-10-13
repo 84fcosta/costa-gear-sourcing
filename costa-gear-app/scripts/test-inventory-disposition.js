@@ -71,6 +71,10 @@ assert.match(accounting, /damagedQty = Math\.max\(0, num\(item\.quantity_damaged
 assert.match(accounting, /"Receiving Damage"/);
 assert.match(accounting, /month\.receivingDamageExpense \+= damagedAmount/);
 assert.match(accounting, /month\.derivedOwnerFunding \+= damagedAmount/);
+assert.match(accounting, /month\.ownerFundedOperatingExpenses \+= businessAmount/);
+assert.match(accounting, /month\.ownerFundedCapitalAssets \+= businessCost/);
+assert.match(accounting, /ownerFundedOperatingExpenses: sum\("ownerFundedOperatingExpenses"\)/);
+assert.match(accounting, /ownerFundedCapitalAssets: sum\("ownerFundedCapitalAssets"\)/);
 
 for (const source of [sales, mobileSales, quickSale]) {
   assert.match(source, /inventoryDispositions/);
@@ -82,6 +86,11 @@ for (const source of [dashboardRepo, salesRepo, performanceRepo, pricingRepo, de
   assert.match(source, /inventory_dispositions/);
   assert.match(source, /inventory_disposition_lines/);
 }
+
+const accountingWorkspace = read("src/components/AccountingWorkspace.js");
+assert.match(accountingWorkspace, /summary\.ownerFundedOperatingExpenses/);
+assert.match(accountingWorkspace, /summary\.ownerFundedCapitalAssets/);
+assert.match(accountingWorkspace, /Inventory dispositions only reclassify cost already funded earlier/);
 
 assert.match(desktopInventory, /Receiving Damage/);
 assert.match(mobileInventory, /Damage Recorded at Receiving/);

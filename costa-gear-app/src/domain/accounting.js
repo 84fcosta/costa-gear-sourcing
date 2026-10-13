@@ -79,6 +79,7 @@ function blankMonth(month) {
     missingCostUnits: 0,
     directSellingCosts: 0,
     operatingExpenses: 0,
+    ownerFundedOperatingExpenses: 0,
     expensesByCategory: Object.fromEntries(ACCOUNTING_EXPENSE_CATEGORIES.map(category => [category, 0])),
     inventoryPurchases: 0,
     inventoryPurchaseCostComplete: true,
@@ -87,6 +88,7 @@ function blankMonth(month) {
     prototypeExpense: 0,
     inventoryWriteoffExpense: 0,
     capitalAssets: 0,
+    ownerFundedCapitalAssets: 0,
     manualOwnerContributions: 0,
     ownerDraws: 0,
     derivedOwnerFunding: 0,
@@ -181,6 +183,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (!month) continue;
     const businessAmount = calcDeductible(expense.total_amount, expense.business_use_pct);
     month.operatingExpenses += businessAmount;
+    month.ownerFundedOperatingExpenses += businessAmount;
     if (!Object.prototype.hasOwnProperty.call(month.expensesByCategory, expense.category)) {
       month.expensesByCategory[expense.category] = 0;
     }
@@ -207,6 +210,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (!month) continue;
     const businessCost = calcBusinessCost(asset.cost, asset.business_use_pct);
     month.capitalAssets += businessCost;
+    month.ownerFundedCapitalAssets += businessCost;
     month.derivedOwnerFunding += businessCost;
     if (businessCost > 0) {
       ledger.push(ledgerEntry(
@@ -394,12 +398,14 @@ export function buildAccountingModel(data, year, now = new Date()) {
     month.cogs = round2(month.cogs);
     month.directSellingCosts = round2(month.directSellingCosts);
     month.operatingExpenses = round2(month.operatingExpenses);
+    month.ownerFundedOperatingExpenses = round2(month.ownerFundedOperatingExpenses);
     month.inventoryPurchases = round2(month.inventoryPurchases);
     month.inventoryDispositionCost = round2(month.inventoryDispositionCost);
     month.receivingDamageExpense = round2(month.receivingDamageExpense);
     month.prototypeExpense = round2(month.prototypeExpense);
     month.inventoryWriteoffExpense = round2(month.inventoryWriteoffExpense);
     month.capitalAssets = round2(month.capitalAssets);
+    month.ownerFundedCapitalAssets = round2(month.ownerFundedCapitalAssets);
     month.manualOwnerContributions = round2(month.manualOwnerContributions);
     month.ownerDraws = round2(month.ownerDraws);
     month.derivedOwnerFunding = round2(month.derivedOwnerFunding);
@@ -449,6 +455,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
       directSellingCosts: sum("directSellingCosts"),
       grossProfit,
       operatingExpenses: sum("operatingExpenses"),
+      ownerFundedOperatingExpenses: sum("ownerFundedOperatingExpenses"),
       netBusinessIncome,
       inventoryPurchases: sum("inventoryPurchases"),
       inventoryDispositionCost: sum("inventoryDispositionCost"),
@@ -456,6 +463,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
       prototypeExpense: sum("prototypeExpense"),
       inventoryWriteoffExpense: sum("inventoryWriteoffExpense"),
       capitalAssets: sum("capitalAssets"),
+      ownerFundedCapitalAssets: sum("ownerFundedCapitalAssets"),
       inventoryValue: round2(performance.summary.totalInventoryValueCad || 0),
       availableUnits: Number(performance.summary.totalAvailableUnits || 0),
       uncostedInventoryUnits: Number(performance.summary.totalUncostedUnits || 0),

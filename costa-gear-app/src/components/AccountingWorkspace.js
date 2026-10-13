@@ -417,7 +417,7 @@ export default function AccountingWorkspace({ onNavigate }) {
     </> : null}
 
     {view === "owner" ? <>
-      <div className="cg-accounting-callout owner"><Landmark size={18}/><div><strong>Current funding assumption: owner-funded.</strong><span>Until Costa Gear has its own bank/card workflow, business-use operating expenses, capital assets and recognized inventory purchases are treated as Owner Contributions automatically. Sale-level fees/shipping remain in Business Cash / Clearing unless separately entered as an Expense.</span></div></div>
+      <div className="cg-accounting-callout owner"><Landmark size={18}/><div><strong>Current funding assumption: owner-funded.</strong><span>Until Costa Gear has its own bank/card workflow, new business-use operating expenses, purchased capital assets and recognized inventory purchases are treated as Owner Contributions automatically. Inventory dispositions only reclassify cost already funded earlier, so they do not create another Owner Contribution.</span></div></div>
       <div className="cg-accounting-kpi-grid compact">
         <Kpi label="Automatic Owner Funding" value={money0(summary.derivedOwnerFunding)} sub="Expenses + assets + recognized inventory" icon={Landmark}/>
         <Kpi label="Additional Contributions" value={money0(summary.manualOwnerContributions)} sub="Manual owner adjustments" icon={PlusCircle}/>
@@ -437,8 +437,8 @@ export default function AccountingWorkspace({ onNavigate }) {
       </Section>
       <Section eyebrow="Automatic bridge" title="What Generated Owner Funding">
         <div className="cg-accounting-statement">
-          <div><span>Operating expenses funded by owner</span><strong>{money(summary.operatingExpenses)}</strong></div>
-          <div><span>Capital assets funded by owner</span><strong>{money(summary.capitalAssets)}</strong></div>
+          <div><span>Operating expenses funded by owner</span><strong>{money(summary.ownerFundedOperatingExpenses)}</strong></div>
+          <div><span>Capital assets funded by owner</span><strong>{money(summary.ownerFundedCapitalAssets)}</strong></div>
           <div><span>Inventory recognized as owner-funded</span><strong>{money(summary.inventoryPurchases)}</strong></div>
           <div className="total"><span>Automatic Owner Funding</span><strong>{money(summary.derivedOwnerFunding)}</strong></div>
         </div>
