@@ -17,6 +17,8 @@ const quickSale = read("src/components/MobileQuickSale.js");
 const dashboardRepo = read("src/services/dashboardRepository.js");
 const salesRepo = read("src/services/salesRepository.js");
 const performanceRepo = read("src/services/performanceRepository.js");
+const pricingRepo = read("src/services/pricingRepository.js");
+const demandRepo = read("src/services/demandPlanningRepository.js");
 
 assert.match(migration, /create table if not exists public\.inventory_dispositions/);
 assert.match(migration, /create table if not exists public\.inventory_disposition_lines/);
@@ -65,6 +67,10 @@ assert.match(accounting, /"Inventory Recovery"/);
 assert.match(accounting, /month\.inventoryDispositionCost \+= totalCost/);
 assert.match(accounting, /month\.prototypeExpense \+= netCost/);
 assert.match(accounting, /month\.inventoryWriteoffExpense \+= netCost/);
+assert.match(accounting, /damagedQty = Math\.max\(0, num\(item\.quantity_damaged\)\)/);
+assert.match(accounting, /"Receiving Damage"/);
+assert.match(accounting, /month\.receivingDamageExpense \+= damagedAmount/);
+assert.match(accounting, /month\.derivedOwnerFunding \+= damagedAmount/);
 
 for (const source of [sales, mobileSales, quickSale]) {
   assert.match(source, /inventoryDispositions/);
@@ -72,11 +78,13 @@ for (const source of [sales, mobileSales, quickSale]) {
   assert.match(source, /disposedCost/);
 }
 
-for (const source of [dashboardRepo, salesRepo, performanceRepo]) {
+for (const source of [dashboardRepo, salesRepo, performanceRepo, pricingRepo, demandRepo]) {
   assert.match(source, /inventory_dispositions/);
   assert.match(source, /inventory_disposition_lines/);
 }
 
+assert.match(desktopInventory, /Receiving Damage/);
+assert.match(mobileInventory, /Damage Recorded at Receiving/);
 assert.doesNotMatch(migration, /insert into public\.inventory_dispositions \([^)]*CG-/s);
 
 process.stdout.write("Inventory disposition and Accounting guard passed.\n");
