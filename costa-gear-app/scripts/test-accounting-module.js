@@ -6,6 +6,7 @@ const read = relative => fs.readFileSync(path.join(__dirname, "..", relative), "
 
 const app = read("src/App.js");
 const workspace = read("src/components/AccountingWorkspace.js");
+const mobileWorkspace = read("src/components/MobileAccountingWorkspace.js");
 const domain = read("src/domain/accounting.js");
 const repository = read("src/services/accountingRepository.js");
 const sql = read("database/accounting-module.sql");
@@ -27,6 +28,16 @@ assert.match(workspace, /Forecast vs Actual/);
 assert.match(workspace, /Save Baseline/);
 assert.match(workspace, /Current funding assumption: owner-funded/);
 assert.match(workspace, /generated, not re-entered/);
+
+assert.match(mobileWorkspace, /buildAccountingModel/);
+assert.match(mobileWorkspace, /buildForecastModel/);
+assert.match(mobileWorkspace, /loadAccountingData/);
+assert.match(mobileWorkspace, /saveAccountingForecast/);
+assert.match(mobileWorkspace, /saveOwnerTransaction/);
+assert.match(mobileWorkspace, /deleteOwnerTransaction/);
+assert.match(mobileWorkspace, /Baseline stays fixed until you edit it/);
+assert.match(mobileWorkspace, /Inventory stays capitalized until sold or reclassified/);
+assert.match(mobileWorkspace, /Generated ledger/);
 
 assert.match(domain, /Completed/);
 assert.match(domain, /Posted/);
