@@ -27,6 +27,7 @@ import LogisticsWorkspace from "./components/LogisticsWorkspace";
 import CommercialWorkspace from "./components/CommercialWorkspace";
 import ExpenseWorkspace from "./components/ExpenseWorkspace";
 import AccountingWorkspace from "./components/AccountingWorkspace";
+import MobileAccountingWorkspace from "./components/MobileAccountingWorkspace";
 import DocumentGovernanceWorkspace from "./components/DocumentGovernanceWorkspace";
 import WorkflowHandoffNotice from "./components/WorkflowHandoffNotice";
 import {
@@ -610,7 +611,7 @@ export default function App() {
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
           : workspace === "expenses" ? (mobile ? <MobileExpenseWorkspace key={oneDriveVersion} onConnectOneDrive={connectOneDrive} oneDriveAuth={oneDriveAuth} oneDriveBusy={oneDriveBusy} /> : <ExpenseWorkspace key={oneDriveVersion} />)
-          : workspace === "accounting" ? <AccountingWorkspace onNavigate={navigate} />
+          : workspace === "accounting" ? (mobile ? <MobileAccountingWorkspace onNavigate={navigate} /> : <AccountingWorkspace onNavigate={navigate} />)
           : workspace === "governance" ? <DocumentGovernanceWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}
       </div>
