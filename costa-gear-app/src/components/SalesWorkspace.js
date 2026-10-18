@@ -7,6 +7,7 @@ import {
   loadSalesWorkspaceData,
   updateSalesOrder,
 } from "../services/salesRepository";
+import { localDateInputValue } from "../domain/appDate";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)"};
 const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:12.5,background:"#fff",color:C.ink};
@@ -14,7 +15,7 @@ const btn=(primary=false)=>({border:primary?0:`1px solid ${C.border}`,background
 const Field=({label,children})=><label style={{display:"grid",gap:5,fontSize:11,fontWeight:780,color:C.muted}}>{label}{children}</label>;
 const money=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":Number(v).toLocaleString("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2});
 const pct=v=>v===null||v===undefined||Number.isNaN(Number(v))?"—":`${Number(v).toFixed(1)}%`;
-const saleRef=()=>`SALE-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${String(Date.now()).slice(-4)}`;
+const saleRef=()=>`SALE-${localDateInputValue().replaceAll("-","")}-${String(Date.now()).slice(-4)}`;
 const activeStatuses=new Set(["Confirmed","Paid","Shipped","Completed"]);
 
 function Badge({status}){
@@ -26,7 +27,7 @@ function Badge({status}){
 export default function SalesWorkspace(){
   const [data,setData]=useState(null),[items,setItems]=useState([]),[selectedId,setSelectedId]=useState("");
   const [loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState("");
-  const [form,setForm]=useState({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:new Date().toISOString().slice(0,10),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});
+  const [form,setForm]=useState({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});
   const [itemForm,setItemForm]=useState({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});
 
   const load=async()=>{setLoading(true);setError("");try{setData(await loadSalesWorkspaceData());}catch(e){setError(e?.message||"Unable to load sales data.");}finally{setLoading(false);}};
@@ -79,7 +80,7 @@ export default function SalesWorkspace(){
     return {units,gross,discount,net,cogs,orderCosts,profit,margin};
   },[items,form.paymentFeeCad,form.outboundShippingCad,form.otherCostsCad]);
 
-  const reset=()=>{setSelectedId("");setItems([]);setForm({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:new Date().toISOString().slice(0,10),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});setError("");setMessage("");};
+  const reset=()=>{setSelectedId("");setItems([]);setForm({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});setError("");setMessage("");};
   const create=async()=>{try{const created=await createSalesOrder(form);await load();setSelectedId(created.id);setMessage("Sale created as Draft. Add products before confirming it.");}catch(e){setError(e?.message||"Unable to create sale.");}};
   const save=async()=>{
     if(!selectedId)return create();
