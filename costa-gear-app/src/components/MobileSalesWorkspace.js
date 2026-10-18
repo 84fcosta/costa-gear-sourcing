@@ -7,6 +7,7 @@ import {
   loadSalesWorkspaceData,
   updateSalesOrder,
 } from "../services/salesRepository";
+import { localDateInputValue } from "../domain/appDate";
 import "../mobile-operations.css";
 
 const activeStatuses = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
@@ -14,12 +15,12 @@ const money = value => value === null || value === undefined || Number.isNaN(Num
   ? "N/A"
   : Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
 const pct = value => value === null || value === undefined || Number.isNaN(Number(value)) ? "N/A" : `${Number(value).toFixed(1)}%`;
-const saleRef = () => `SALE-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${String(Date.now()).slice(-4)}`;
+const saleRef = () => `SALE-${localDateInputValue().replaceAll("-", "")}-${String(Date.now()).slice(-4)}`;
 const freshSale = () => ({
   saleRef: saleRef(),
   channel: "Marketplace",
   status: "Draft",
-  soldDate: new Date().toISOString().slice(0, 10),
+  soldDate: localDateInputValue(),
   customerName: "",
   paymentFeeCad: "0",
   outboundShippingCad: "0",

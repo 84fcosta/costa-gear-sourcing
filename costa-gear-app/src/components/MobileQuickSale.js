@@ -6,6 +6,7 @@ import {
   loadSalesWorkspaceData,
   updateSalesOrder,
 } from "../services/salesRepository";
+import { localDateInputValue } from "../domain/appDate";
 import "../mobile-first.css";
 
 const ACTIVE = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
@@ -13,7 +14,7 @@ const money = value => value === null || value === undefined || Number.isNaN(Num
   ? "N/A"
   : Number(value).toLocaleString("en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = value => value === null || value === undefined || Number.isNaN(Number(value)) ? "N/A" : `${Number(value).toFixed(1)}%`;
-const saleRef = () => `SALE-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${String(Date.now()).slice(-4)}`;
+const saleRef = () => `SALE-${localDateInputValue().replaceAll("-","")}-${String(Date.now()).slice(-4)}`;
 
 export default function MobileQuickSale({ initialProductId = null, onNavigate }) {
   const [data, setData] = useState(null);
@@ -22,7 +23,7 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
   const [unitPrice, setUnitPrice] = useState("");
   const [channel, setChannel] = useState("Marketplace");
   const [customer, setCustomer] = useState("");
-  const [soldDate, setSoldDate] = useState(new Date().toISOString().slice(0,10));
+  const [soldDate, setSoldDate] = useState(localDateInputValue());
   const [discount, setDiscount] = useState("0");
   const [paymentFee, setPaymentFee] = useState("0");
   const [outboundShipping, setOutboundShipping] = useState("0");
@@ -127,7 +128,7 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
     setUnitPrice("");
     setChannel("Marketplace");
     setCustomer("");
-    setSoldDate(new Date().toISOString().slice(0,10));
+    setSoldDate(localDateInputValue());
     setDiscount("0");
     setPaymentFee("0");
     setOutboundShipping("0");

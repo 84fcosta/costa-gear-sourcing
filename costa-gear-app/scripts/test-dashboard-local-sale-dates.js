@@ -14,6 +14,18 @@ const performance = fs.readFileSync(
   path.join(__dirname, "..", "src", "domain", "performanceAnalytics.js"),
   "utf8"
 );
+const salesWorkspace = fs.readFileSync(
+  path.join(__dirname, "..", "src", "components", "SalesWorkspace.js"),
+  "utf8"
+);
+const mobileSalesWorkspace = fs.readFileSync(
+  path.join(__dirname, "..", "src", "components", "MobileSalesWorkspace.js"),
+  "utf8"
+);
+const mobileQuickSale = fs.readFileSync(
+  path.join(__dirname, "..", "src", "components", "MobileQuickSale.js"),
+  "utf8"
+);
 
 (async () => {
   const api = await import("data:text/javascript;base64," + Buffer.from(helperCode).toString("base64"));
@@ -25,6 +37,11 @@ const performance = fs.readFileSync(
   assert.strictEqual(oct1.getDate(), 1);
   assert.strictEqual(sep1.getMonth(), 8);
   assert.strictEqual(sep1.getDate(), 1);
+
+  // 2026-10-18T03:30Z is still Oct 17 in Vancouver. Sales defaults must use
+  // the local calendar day instead of slicing the UTC ISO timestamp.
+  const eveningVancouver = new Date("2026-10-18T03:30:00Z");
+  assert.strictEqual(api.localDateInputValue(eveningVancouver), "2026-10-17");
 
   // Reproduce the Costa Gear sales history that exposed the bug.
   const sales = [
@@ -49,8 +66,12 @@ const performance = fs.readFileSync(
   assert.match(dashboard, /parseAppDate\(orderDate\(order\)\)/);
   assert.doesNotMatch(dashboard, /new Date\(orderDate\(order\)\)/);
   assert.match(performance, /return parseAppDate\(value\)/);
+  for (const source of [salesWorkspace, mobileSalesWorkspace, mobileQuickSale]) {
+    assert.match(source, /localDateInputValue/);
+    assert.doesNotMatch(source, /toISOString\(\)\.slice\(0,\s*10\)/);
+  }
 
-  process.stdout.write("Dashboard local sale-date regression test passed.\n");
+  process.stdout.write("Dashboard and Sales local-date regression test passed.\n");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
