@@ -587,4 +587,58 @@
   .cg-main-area [style*="grid-template-columns: repeat(3"] {
     grid-template-columns: 1fr !important;
   }
+
+
+  /* Buying workspace: prevent long PO / supplier / payment values from forcing horizontal overflow. */
+  .cg-buying-workspace,
+  .cg-buying-body,
+  .cg-buying-layout,
+  .cg-buying-detail-column,
+  .cg-buying-form-grid,
+  .cg-buying-layout > div,
+  .cg-buying-detail-column > div,
+  .cg-buying-field {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .cg-buying-body {
+    padding: 12px 0 28px !important;
+  }
+
+  .cg-buying-layout,
+  .cg-buying-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .cg-buying-workspace input,
+  .cg-buying-workspace select,
+  .cg-buying-workspace textarea,
+  .cg-buying-workspace button {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .cg-buying-workspace select,
+  .cg-buying-workspace input {
+    width: 100% !important;
+  }
+
+  .cg-buying-workspace button,
+  .cg-buying-workspace option {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .cg-buying-layout > div:first-child button {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .cg-buying-detail-column [style*="overflow-x: auto"] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
 }
