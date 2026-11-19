@@ -233,7 +233,7 @@ function enhanceSuppliers(state) {
 export default function SourcingSortControls() {
   useEffect(() => {
     const states = {
-      snapshot: { value: null },
+      snapshot: { value: { key: "sku", direction: "asc" } },
       recentQuotes: { value: null },
       products: { value: null },
       suppliers: { value: null },
