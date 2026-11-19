@@ -3,9 +3,28 @@ alter table public.shipments
 
 -- Freight is stored at shipment-line level in cents, but per-unit freight
 -- needs additional precision so line quantities can reconcile to those cents.
+-- Drop and recreate the two column-specific triggers because PostgreSQL does
+-- not allow changing the type of a column referenced by a trigger definition.
+drop trigger if exists trg_normalize_quote_landed_cost on public.quotes;
+drop trigger if exists trg_quotes_sync_shipping_legacy_compatibility on public.quotes;
+
 alter table public.quotes
   alter column shipping_cost_per_unit_cad type numeric(18,6)
-  using shipping_cost_per_unit_cad::numeric(18,6);
+    using shipping_cost_per_unit_cad::numeric(18,6),
+  alter column shipping_cost type numeric(18,6)
+    using shipping_cost::numeric(18,6);
+
+create trigger trg_normalize_quote_landed_cost
+before insert or update of
+  unit_price, usd_cad_rate, incoterm, shipping_cost, shipping_currency,
+  shipping_cost_per_unit_cad, duty_rate_pct, brokerage_cad, other_fees_cad
+on public.quotes
+for each row execute function public.normalize_quote_landed_cost();
+
+create trigger trg_quotes_sync_shipping_legacy_compatibility
+before insert or update of shipping_cost_per_unit_cad
+on public.quotes
+for each row execute function public.sync_quote_shipping_legacy_compatibility();
 
 create or replace function public.apply_shipment_freight(p_shipment_id uuid)
 returns jsonb
