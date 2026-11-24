@@ -28,6 +28,8 @@ function cleanExpense(input) {
     payment_method: input.payment_method || null,
     payment_reference: input.payment_reference || null,
     receipt_status: input.receipt_status || "Missing",
+    transaction_type: input.transaction_type || "Expense",
+    original_expense_id: input.transaction_type === "Refund" ? (input.original_expense_id || null) : null,
     notes: input.notes || null,
     tax_year: Number(input.tax_year),
     is_asset_purchase: Boolean(input.is_asset_purchase),
