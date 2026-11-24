@@ -7,6 +7,7 @@ import {
   calcEstimatedCca,
 } from "./expenseTracking";
 import { dispositionCost, dispositionTypeMeta } from "./inventoryDisposition";
+import { summarizeSale } from "./salesDiscounts";
 
 export const ACCOUNTING_SCENARIO = "Baseline";
 export const MONTHS = [
@@ -150,17 +151,17 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (!month) continue;
 
     const lines = orderItems.get(order.id) || [];
-    let revenue = 0;
+    const saleSummary = summarizeSale(order, lines);
+    const revenue = saleSummary.netCad;
     let cogs = 0;
     let missingUnits = 0;
     for (const line of lines) {
       const qty = Math.max(0, num(line.quantity));
-      revenue += Math.max(0, num(line.unit_sell_price_cad) * qty - num(line.discount_cad));
       if (finite(line.unit_cost_cad)) cogs += Number(line.unit_cost_cad) * qty;
       else missingUnits += qty;
     }
 
-    const sellingCosts = num(order.payment_fee_cad) + num(order.outbound_shipping_cad) + num(order.other_costs_cad);
+    const sellingCosts = saleSummary.orderCostsCad;
     month.revenue += revenue;
     month.cogs += cogs;
     month.directSellingCosts += sellingCosts;
