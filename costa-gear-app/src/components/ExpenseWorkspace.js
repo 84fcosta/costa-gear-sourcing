@@ -20,7 +20,10 @@ import {
   PAYMENT_METHODS,
   calcBusinessCost,
   calcDeductible,
+  calcExpenseDeductible,
   calcEstimatedCca,
+  expenseReference,
+  signedExpenseAmount,
   documentUrl,
   documentsForAsset,
   documentsForExpense,
@@ -124,13 +127,48 @@ function DocumentPicker({ driveReady, value, onChange }) {
   );
 }
 
-function ExpenseForm({ initial, assets, documents, driveReady, onSubmit, onCancel, saving }) {
+function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmit, onCancel, saving }) {
   const [form, setForm] = useState({ ...makeEmptyExpense(initial?.tax_year), ...(initial || {}) });
   const [file, setFile] = useState(null);
   const linkedDocuments = initial?.id ? documentsForExpense(documents, initial.id) : [];
+  const originalExpenseOptions = (expenses || []).filter(expense =>
+    expense.id !== initial?.id
+    && expense.transaction_type !== "Refund"
+    && !expense.is_asset_purchase
+  );
 
   function set(name, value) {
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function setTransactionType(value) {
+    setForm(current => ({
+      ...current,
+      transaction_type: value,
+      original_expense_id: value === "Refund" ? current.original_expense_id : null,
+      is_asset_purchase: value === "Refund" ? false : current.is_asset_purchase,
+      linked_asset_id: value === "Refund" ? null : current.linked_asset_id,
+    }));
+  }
+
+  function linkOriginalExpense(id) {
+    const original = originalExpenseOptions.find(expense => expense.id === id);
+    if (!original) {
+      set("original_expense_id", null);
+      return;
+    }
+    setForm(current => ({
+      ...current,
+      original_expense_id: original.id,
+      vendor: original.vendor || current.vendor,
+      description: `Refund - ${original.description || original.vendor || "Expense"}`,
+      category: original.category || current.category,
+      business_use_pct: original.business_use_pct ?? current.business_use_pct,
+      payment_method: original.payment_method || current.payment_method,
+      payment_reference: original.payment_reference || current.payment_reference,
+      is_asset_purchase: false,
+      linked_asset_id: null,
+    }));
   }
 
   return (
@@ -140,6 +178,27 @@ function ExpenseForm({ initial, assets, documents, driveReady, onSubmit, onCance
           <label>Date</label>
           <input type="date" value={form.expense_date || ""} onChange={(event) => set("expense_date", event.target.value)} required />
         </div>
+        <div>
+          <label>Transaction Type</label>
+          <select value={form.transaction_type || "Expense"} onChange={(event) => setTransactionType(event.target.value)}>
+            <option>Expense</option>
+            <option>Refund</option>
+          </select>
+        </div>
+        {form.transaction_type === "Refund" ? (
+          <div className="wide">
+            <label>Original Expense</label>
+            <select value={form.original_expense_id || ""} onChange={(event) => linkOriginalExpense(event.target.value)}>
+              <option value="">Not linked</option>
+              {originalExpenseOptions.map((expense) => (
+                <option key={expense.id} value={expense.id}>
+                  {expenseReference(expense)} | {expense.expense_date} | {expense.vendor} | {expense.description} | {money(expense.total_amount)}
+                </option>
+              ))}
+            </select>
+            <div className="cg-expense-help">Recommended. Selecting the original expense copies its vendor, category, business use and payment details.</div>
+          </div>
+        ) : null}
         <div>
           <label>Vendor</label>
           <input value={form.vendor || ""} onChange={(event) => set("vendor", event.target.value)} required />
@@ -166,8 +225,8 @@ function ExpenseForm({ initial, assets, documents, driveReady, onSubmit, onCance
           <input type="number" min="0" max="100" step="1" value={form.business_use_pct ?? 100} onChange={(event) => set("business_use_pct", event.target.value)} />
         </div>
         <div>
-          <label>Deductible</label>
-          <input value={money(calcDeductible(form.total_amount, form.business_use_pct))} readOnly />
+          <label>{form.transaction_type === "Refund" ? "Deductible Impact" : "Deductible"}</label>
+          <input value={money(form.transaction_type === "Refund" ? -calcDeductible(form.total_amount, form.business_use_pct) : calcDeductible(form.total_amount, form.business_use_pct))} readOnly />
         </div>
         <div>
           <label>Payment Method</label>
@@ -193,14 +252,14 @@ function ExpenseForm({ initial, assets, documents, driveReady, onSubmit, onCance
         </div>
         <div>
           <label>Asset Purchase?</label>
-          <select value={form.is_asset_purchase ? "Yes" : "No"} onChange={(event) => set("is_asset_purchase", event.target.value === "Yes")}>
+          <select disabled={form.transaction_type === "Refund"} value={form.is_asset_purchase ? "Yes" : "No"} onChange={(event) => set("is_asset_purchase", event.target.value === "Yes")}>
             <option>No</option>
             <option>Yes</option>
           </select>
         </div>
         <div>
           <label>Linked Asset</label>
-          <select value={form.linked_asset_id || ""} onChange={(event) => set("linked_asset_id", event.target.value || null)}>
+          <select disabled={form.transaction_type === "Refund"} value={form.linked_asset_id || ""} onChange={(event) => set("linked_asset_id", event.target.value || null)}>
             <option value="">None</option>
             {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.asset_code} | {asset.asset_name}</option>)}
           </select>
@@ -404,8 +463,8 @@ export default function ExpenseWorkspace() {
   }, [assets, expenses, year]);
 
   const regularExpenses = useMemo(() => expenses.filter((expense) => !expense.is_asset_purchase), [expenses]);
-  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0);
-  const deductibleExpenses = regularExpenses.reduce((sum, expense) => sum + calcDeductible(expense.total_amount, expense.business_use_pct), 0);
+  const totalExpenses = expenses.reduce((sum, expense) => sum + signedExpenseAmount(expense), 0);
+  const deductibleExpenses = regularExpenses.reduce((sum, expense) => sum + calcExpenseDeductible(expense), 0);
   const assetPurchases = assets.reduce((sum, asset) => sum + Number(asset.cost || 0), 0);
   const estimatedCca = assets.reduce((sum, asset) => sum + calcEstimatedCca(asset), 0);
   const missingReceipts = expenses.filter((expense) => expense.receipt_status === "Missing").length;
@@ -485,11 +544,29 @@ export default function ExpenseWorkspace() {
     }
   }
 
+  async function deleteManagedDocuments(recordDocuments) {
+    const managed = (recordDocuments || []).filter(document => document.onedrive_item_id);
+    if (managed.length && !driveState.ready) {
+      throw new Error("Connect OneDrive before deleting this record so its managed document can be removed too.");
+    }
+    for (const document of managed) {
+      await deleteBusinessDocumentFromOneDrive(document.onedrive_item_id);
+    }
+    return managed.length;
+  }
+
   async function handleDeleteExpense(expense) {
-    if (!window.confirm(`Delete expense "${expense.description}"?`)) return;
+    const linkedDocuments = documentsForExpense(documents, expense.id);
+    const managedCount = linkedDocuments.filter(document => document.onedrive_item_id).length;
+    const ref = expenseReference(expense);
+    const documentMessage = managedCount
+      ? ` Its ${managedCount} managed OneDrive document${managedCount === 1 ? "" : "s"} will also be deleted.`
+      : "";
+    if (!window.confirm(`Delete ${ref || "expense"} "${expense.description}"?${documentMessage} This is for duplicates or entries created by mistake, not refunds.`)) return;
     try {
+      const removedFiles = await deleteManagedDocuments(linkedDocuments);
       await deleteBusinessExpense(expense.id);
-      setNotice("Expense deleted.");
+      setNotice(`${ref || "Expense"} deleted.${removedFiles ? ` ${removedFiles} OneDrive document${removedFiles === 1 ? "" : "s"} deleted too.` : ""}`);
       await loadData();
     } catch (deleteError) {
       setError(deleteError.message || "Unable to delete expense.");
@@ -537,7 +614,7 @@ export default function ExpenseWorkspace() {
         </div>
 
         <div className="cg-kpi-grid cg-expense-kpis">
-          <Kpi label="Total Expenses YTD" value={money(totalExpenses)} sub={`${expenses.length} entries for ${year}`} />
+          <Kpi label="Net Expenses YTD" value={money(totalExpenses)} sub={`${expenses.length} transactions for ${year}, after refunds`} />
           <Kpi label="Deductible Expenses" value={money(deductibleExpenses)} sub="Excludes asset purchases" />
           <Kpi label="Asset Purchases" value={money(assetPurchases)} sub={`${assets.length} assets tracked`} />
           <Kpi label="Estimated CCA Claim" value={money(estimatedCca)} sub="First-year estimate" tone="info" />
@@ -602,23 +679,25 @@ export default function ExpenseWorkspace() {
           </div>
           <div className="cg-expense-table-wrap">
             <table>
-              <thead><tr><th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Total</th><th>Business %</th><th>Deductible</th><th>Payment</th><th>Receipt</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Ref</th><th>Date</th><th>Type</th><th>Vendor</th><th>Description</th><th>Category</th><th>Amount</th><th>Business %</th><th>Deductible Impact</th><th>Payment</th><th>Receipt</th><th>Actions</th></tr></thead>
               <tbody>
                 {filteredExpenses.map((expense) => (
                   <tr key={expense.id}>
+                    <td>{expenseReference(expense)}</td>
                     <td>{expense.expense_date}</td>
+                    <td><span className={`cg-expense-tag ${expense.transaction_type === "Refund" ? "ok" : ""}`}>{expense.transaction_type || "Expense"}</span>{expense.original_expense_id ? <div className="cg-expense-muted">linked refund</div> : null}</td>
                     <td>{expense.vendor}</td>
                     <td>{expense.description}<div className="cg-expense-muted">{expense.notes}</div></td>
                     <td><span className={`cg-expense-tag ${expense.is_asset_purchase ? "asset" : ""}`}>{expense.category}</span></td>
-                    <td className="cg-expense-amount">{money(expense.total_amount)}</td>
+                    <td className="cg-expense-amount">{money(signedExpenseAmount(expense))}</td>
                     <td>{pct(expense.business_use_pct)}</td>
-                    <td className="cg-expense-amount">{money(calcDeductible(expense.total_amount, expense.business_use_pct))}</td>
+                    <td className="cg-expense-amount">{money(calcExpenseDeductible(expense))}</td>
                     <td>{expense.payment_method}<div className="cg-expense-muted">{expense.payment_reference}</div></td>
                     <td><RecordDocuments documents={documentsForExpense(documents, expense.id)} onDelete={driveState.ready ? handleDeleteDocument : null} /></td>
                     <td><div className="cg-expense-row-actions"><button className="cg-icon-button" onClick={() => setExpenseModal(expense)} title="Edit expense"><Edit3 size={15} /></button><button className="cg-icon-button danger" onClick={() => handleDeleteExpense(expense)} title="Delete expense"><Trash2 size={15} /></button></div></td>
                   </tr>
                 ))}
-                {!filteredExpenses.length ? <tr><td colSpan="10" className="cg-expense-empty">No expenses found.</td></tr> : null}
+                {!filteredExpenses.length ? <tr><td colSpan="12" className="cg-expense-empty">No expenses found.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -632,7 +711,7 @@ export default function ExpenseWorkspace() {
       <>
         <div className="cg-expense-heading-row"><div><h2>Add Expense</h2><p>Register a new business expense for the selected tax year.</p></div></div>
         <section className="cg-dashboard-panel cg-expense-form-panel">
-          <ExpenseForm initial={makeEmptyExpense(year)} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setView("overview")} />
+          <ExpenseForm initial={makeEmptyExpense(year)} expenses={expenses} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setView("overview")} />
         </section>
       </>
     );
@@ -677,8 +756,8 @@ export default function ExpenseWorkspace() {
       const rows = regularExpenses.filter((expense) => expense.category === item);
       return {
         category: item,
-        total: rows.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0),
-        deductible: rows.reduce((sum, expense) => sum + calcDeductible(expense.total_amount, expense.business_use_pct), 0),
+        total: rows.reduce((sum, expense) => sum + signedExpenseAmount(expense), 0),
+        deductible: rows.reduce((sum, expense) => sum + calcExpenseDeductible(expense), 0),
       };
     }).filter((row) => row.total || row.deductible);
 
@@ -735,7 +814,7 @@ export default function ExpenseWorkspace() {
 
       {expenseModal ? (
         <Modal title="Edit Expense" onClose={() => setExpenseModal(null)}>
-          <ExpenseForm initial={expenseModal} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setExpenseModal(null)} />
+          <ExpenseForm initial={expenseModal} expenses={expenses} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setExpenseModal(null)} />
         </Modal>
       ) : null}
 
