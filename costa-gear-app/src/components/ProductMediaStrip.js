@@ -212,7 +212,7 @@ function ProductMediaControl({ row, connected, workingId, onSync }) {
   );
 }
 
-export default function ProductMediaStrip() {
+export default function ProductMediaStrip({ masterData = null }) {
   const [rows, setRows] = useState([]);
   const [connected, setConnected] = useState(false);
   const [workingId, setWorkingId] = useState(null);
@@ -229,7 +229,7 @@ export default function ProductMediaStrip() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, masterData]);
 
   useEffect(() => {
     let timer = null;

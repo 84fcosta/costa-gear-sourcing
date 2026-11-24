@@ -392,7 +392,7 @@ const QSTATUS_COLOR = {
 // ════════════════════════════════════════════════════════════════
 // MAIN APP
 // ════════════════════════════════════════════════════════════════
-export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) {
+export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake, onMasterDataLoaded }) {
   const [tab, setTab]           = useState("dashboard");
   const [products,  setProducts]  = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -403,6 +403,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
   const [vehicleFitments, setVehicleFitments] = useState([]);
   const [productFitmentRows, setProductFitmentRows] = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error,     setError]     = useState(null);
 
   const [modal,    setModal]    = useState(null);
@@ -425,9 +426,11 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
       ]);
       if (se || pe || qe || pte || pme || vfe || pfe) throw new Error((se || pe || qe || pte || pme || vfe || pfe).message);
       setSuppliers(s || []); setProducts(p || []); setQuotes(q || []); setProductTypes(pt || []); setCategories(categoryRows || []); setMaterials(pm || []); setVehicleFitments(vf || []); setProductFitmentRows(pf || []);
+      setHasLoaded(true);
+      onMasterDataLoaded?.({ products: p || [], quotes: q || [], productFitments: pf || [], vehicleFitments: vf || [] });
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [onMasterDataLoaded]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -682,7 +685,7 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake }) 
 
       <div style={{ maxWidth: 1560, margin: "0 auto", padding: "28px 44px 48px" }}>
         {error && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "12px 16px", marginBottom: 20, color: C.red, fontSize: 14 }}>⚠️ Database error: {error}</div>}
-        {loading ? <Spinner /> : (
+        {loading && !hasLoaded ? <Spinner /> : (
           <>
             {tab === "dashboard" && <Dashboard products={uiProducts} suppliers={uiSuppliers} quotes={uiQuotes} onOpenDetail={openDetail} />}
             {tab === "products"  && <Products  products={uiProducts} quotes={uiQuotes} categories={categories} onAdd={() => openAdd("product")} onManageTaxonomy={() => setTaxonomyOpen(true)} onEdit={p => openEdit("product", p)} onDelete={id => { if (window.confirm("Delete product?")) deleteProduct(id); }} onDetail={openDetail} />}

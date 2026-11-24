@@ -58,7 +58,7 @@ const statusFor = row => {
   return { label: "Near market", tone: "neutral" };
 };
 
-export default function MobileProductCostSnapshot({ active = true }) {
+export default function MobileProductCostSnapshot({ active = true, masterData = null }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [productFitments, setProductFitments] = useState([]);
@@ -106,7 +106,7 @@ export default function MobileProductCostSnapshot({ active = true }) {
     };
     load();
     return () => { mounted = false; };
-  }, [active]);
+  }, [active, masterData]);
 
   useEffect(() => {
     try { window.localStorage.setItem(SORT_KEY, sort); } catch {}
@@ -150,8 +150,8 @@ export default function MobileProductCostSnapshot({ active = true }) {
   const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
 
   useEffect(() => {
-    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
-  }, [modelYear, yearOptions]);
+    if (!loading && modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [loading, modelYear, yearOptions]);
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase();

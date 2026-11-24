@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { setRowFilterVisibility, clearRowFilterVisibility, isRowFilterVisible } from "../domain/listFilterVisibility";
 import { Search, X } from "lucide-react";
 import { supabase } from "../supabase";
 import "../desktop-sourcing-overrides.css";
@@ -103,6 +104,7 @@ export default function DesktopInventoryPositionControls() {
 
     const reset = () => {
       disconnectBody();
+      Array.from(currentTable?.tBodies?.[0]?.rows || []).forEach(clearRowFilterVisibility);
       if (currentHost?.isConnected) currentHost.remove();
       currentHost = null;
       currentTable = null;
@@ -115,7 +117,7 @@ export default function DesktopInventoryPositionControls() {
       const tbody = nextTable?.tBodies?.[0];
       if (!tbody) return;
       tbodyObserver = new MutationObserver(() => setRevision(value => value + 1));
-      tbodyObserver.observe(tbody, { childList: true, subtree: false });
+      tbodyObserver.observe(tbody, { childList: true, characterData: true, subtree: true });
     };
 
     const locate = () => {
@@ -216,7 +218,7 @@ export default function DesktopInventoryPositionControls() {
       const quantityTarget = Number(quantityValue || 0);
       const quantityActual = quantityColumn ? Number(row.cells?.[quantityColumn.index]?.textContent?.trim() || 0) : 0;
       const quantityMatch = !quantityColumn || matchesQuantity(quantityActual, quantityOperator, quantityTarget);
-      row.style.display = searchMatch && categoryMatch && fitmentMatch && quantityMatch ? "" : "none";
+      setRowFilterVisibility(row, searchMatch && categoryMatch && fitmentMatch && quantityMatch);
     });
 
     const column = SORT_COLUMNS.find(item => item.key === sortKey) || SORT_COLUMNS[0];
@@ -231,7 +233,7 @@ export default function DesktopInventoryPositionControls() {
     const orderChanged = sorted.some((row, index) => row !== current[index]);
     if (orderChanged) sorted.forEach(row => tbody.appendChild(row));
 
-    setVisibleCount(rows.filter(row => row.style.display !== "none").length);
+    setVisibleCount(rows.filter(isRowFilterVisible).length);
   }, [table, metaBySku, search, category, fitment, quantityField, quantityOperator, quantityValue, sortKey, sortDir, revision]);
 
   if (!host) return null;

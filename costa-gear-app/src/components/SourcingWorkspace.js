@@ -36,6 +36,7 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
   const [mobileLegacyTab, setMobileLegacyTab] = useState("dashboard");
   const [pendingLegacyTab, setPendingLegacyTab] = useState(null);
   const [quotationFocusId, setQuotationFocusId] = useState(null);
+  const [masterData, setMasterData] = useState(null);
 
   useEffect(() => setView(initialView === "images" ? "master" : initialView), [initialView]);
 
@@ -143,14 +144,14 @@ export default function SourcingWorkspace({ onNavigate, initialView = "master" }
     </div>
     {view === "intake" && <div className="cg-module-embedded"><SupplierIntakeWorkspace onCompleteQuotation={quotationId => { setQuotationFocusId(quotationId); setMobileMoreOpen(false); setView("quotations"); }} /></div>}
     {view === "master" && <>
-      {showLegacyMaster && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip /></>}
-      <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} />
-      <DesktopProductSnapshotControls active={showLegacyMaster} />
-      <DesktopProductMasterControls active={showLegacyMaster} />
+      {showLegacyMaster && <><SourcingDensityPolish /><SourcingSortControls /><SourcingCostIntegrityGuard /><ProductMediaStrip masterData={masterData} /></>}
+      <MobileProductCostSnapshot active={mobileLegacyTab === "dashboard"} masterData={masterData} />
+      <DesktopProductSnapshotControls active={showLegacyMaster} masterData={masterData} />
+      <DesktopProductMasterControls active={showLegacyMaster} masterData={masterData} />
       <DesktopSupplierControls active={showLegacyMaster} />
-      <MobileProductMaster active={mobileLegacyTab === "products"} />
+      <MobileProductMaster active={mobileLegacyTab === "products"} masterData={masterData} />
       <MobileSuppliersWorkspace active={mobileLegacyTab === "suppliers"} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} />
-      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
+      {showLegacyMaster && <div className={`cg-legacy-embedded cg-legacy-mobile-${mobileLegacyTab}`}><LegacyApp onMasterDataLoaded={setMasterData} onOpenSupplierQuotations={() => { setMobileMoreOpen(false); setView("quotations"); }} onOpenSupplierIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     </>}
     {view === "quotations" && <div className="cg-module-embedded"><SupplierQuotationWorkspace onNavigate={onNavigate} initialQuotationId={quotationFocusId} onOpenIntake={() => { setQuotationFocusId(null); setMobileMoreOpen(false); setView("intake"); }} /></div>}
     {view === "analysis" && <div className="cg-module-embedded"><SourcingDecisionLab onCreateBuyingDecision={createBuyingDraft} handoffBusy={handoffBusy} /></div>}

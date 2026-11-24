@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
+import { setRowFilterVisibility, clearRowFilterVisibility } from "../domain/listFilterVisibility";
 import "../desktop-sourcing-overrides.css";
 
 const DESKTOP_STICKY_BREAKPOINT = 1180;
@@ -64,7 +65,7 @@ export default function DesktopSupplierControls({ active = true }) {
     const reset = () => {
       if (currentList && currentHeader) {
         supplierCards(currentList, currentHeader, currentHost).forEach(card => {
-          card.style.display = "";
+          clearRowFilterVisibility(card);
         });
         currentList.style.removeProperty("--cg-supplier-controls-stack");
       }
@@ -113,7 +114,7 @@ export default function DesktopSupplierControls({ active = true }) {
       locate();
       setRevision(value => value + 1);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
     window.addEventListener("resize", locate);
 
     return () => {
@@ -131,7 +132,7 @@ export default function DesktopSupplierControls({ active = true }) {
 
     supplierCards(list, headerHost, host).forEach(card => {
       const visible = !query || normalize(card.textContent).includes(query);
-      card.style.display = visible ? "grid" : "none";
+      setRowFilterVisibility(card, visible);
       if (visible) count += 1;
     });
 

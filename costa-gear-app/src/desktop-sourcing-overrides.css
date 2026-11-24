@@ -187,3 +187,6 @@
     justify-content: flex-end;
   }
 }
+
+/* Filter visibility is independent of React and compact-layout inline display styles. */
+[data-cg-filter-hidden="true"] { display: none !important; }

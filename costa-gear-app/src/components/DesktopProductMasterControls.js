@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
-import { supabase } from "../supabase";
+import { setRowFilterVisibility, clearRowFilterVisibility } from "../domain/listFilterVisibility";
 import {
   buildProductFitmentMap,
   modelYearOptions,
@@ -11,6 +11,7 @@ import {
 } from "../domain/structuredFitmentFilter";
 import "../desktop-sourcing-overrides.css";
 
+const EMPTY_ROWS = [];
 const normalize = value => String(value || "").trim().toLowerCase();
 const DESKTOP_STICKY_BREAKPOINT = 1180;
 
@@ -55,41 +56,21 @@ function cardSku(card) {
   return text.match(/CG-[A-Z]{2}-\d{2}/)?.[0] || "";
 }
 
-export default function DesktopProductMasterControls({ active = true }) {
+export default function DesktopProductMasterControls({ active = true, masterData = null }) {
   const [host, setHost] = useState(null);
   const [list, setList] = useState(null);
   const [headerHost, setHeaderHost] = useState(null);
   const [legacyFilterRow, setLegacyFilterRow] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [productFitments, setProductFitments] = useState([]);
-  const [vehicleFitments, setVehicleFitments] = useState([]);
+  const products = masterData?.products || EMPTY_ROWS;
+  const quotes = masterData?.quotes || EMPTY_ROWS;
+  const productFitments = masterData?.productFitments || EMPTY_ROWS;
+  const vehicleFitments = masterData?.vehicleFitments || EMPTY_ROWS;
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [vehicleCode, setVehicleCode] = useState("");
   const [modelYear, setModelYear] = useState("");
   const [visibleCount, setVisibleCount] = useState(0);
   const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    if (!active) return undefined;
-    let cancelled = false;
-
-    Promise.all([
-      supabase.from("products").select("id,sku_id,name,product_type,material,category,fitment"),
-      supabase.from("quotes").select("product_id,supplier_sku,supplier_name"),
-      supabase.from("product_fitments").select("product_id,fitment_code,year_from,year_to"),
-      supabase.from("vehicle_fitments").select("code,display_name,model_year_start,model_year_end,sort_order,active").eq("active", true),
-    ]).then(([productResult, quoteResult, fitmentResult, vehicleResult]) => {
-      if (cancelled) return;
-      if (!productResult.error) setProducts(productResult.data || []);
-      if (!quoteResult.error) setQuotes(quoteResult.data || []);
-      if (!fitmentResult.error) setProductFitments(fitmentResult.data || []);
-      if (!vehicleResult.error) setVehicleFitments(vehicleResult.data || []);
-    });
-
-    return () => { cancelled = true; };
-  }, [active]);
 
   const rowsBySku = useMemo(() => {
     const quoteMap = new Map();
@@ -126,8 +107,8 @@ export default function DesktopProductMasterControls({ active = true }) {
   const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
 
   useEffect(() => {
-    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
-  }, [modelYear, yearOptions]);
+    if (masterData && modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [masterData, modelYear, yearOptions]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -141,7 +122,7 @@ export default function DesktopProductMasterControls({ active = true }) {
 
     const reset = () => {
       if (currentList && currentHeader) {
-        productCards(currentList, currentHeader).forEach(card => { card.style.display = ""; });
+        productCards(currentList, currentHeader).forEach(card => { clearRowFilterVisibility(card); });
       }
       if (currentLegacyRow?.isConnected) currentLegacyRow.style.display = "";
       if (currentList) currentList.style.removeProperty("--cg-product-controls-stack");
@@ -204,7 +185,7 @@ export default function DesktopProductMasterControls({ active = true }) {
       locate();
       setRevision(value => value + 1);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
     window.addEventListener("resize", locate);
 
     return () => {
@@ -243,7 +224,7 @@ export default function DesktopProductMasterControls({ active = true }) {
         const categoryMatch = !category || meta?.category === category;
         const fitmentMatch = productMatchesStructuredFitment(structuredEntries, vehicleCode, modelYear);
         const visible = searchMatch && categoryMatch && fitmentMatch;
-        card.style.display = visible ? "grid" : "none";
+        setRowFilterVisibility(card, visible);
         if (visible) count += 1;
       });
       setVisibleCount(count);

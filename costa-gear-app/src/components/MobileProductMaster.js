@@ -33,7 +33,7 @@ const findLegacyProductCard = sku => {
   }) || null;
 };
 
-export default function MobileProductMaster({ active }) {
+export default function MobileProductMaster({ active, masterData = null }) {
   const [products, setProducts] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [images, setImages] = useState([]);
@@ -78,7 +78,7 @@ export default function MobileProductMaster({ active }) {
     };
     load();
     return () => { cancelled = true; };
-  }, [active, taxonomyVersion]);
+  }, [active, taxonomyVersion, masterData]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -129,8 +129,8 @@ export default function MobileProductMaster({ active }) {
   const yearOptions = useMemo(() => modelYearOptions(vehicleFitments, vehicleCode), [vehicleFitments, vehicleCode]);
 
   useEffect(() => {
-    if (modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
-  }, [modelYear, yearOptions]);
+    if (!loading && modelYear && !yearOptions.includes(Number(modelYear))) setModelYear("");
+  }, [loading, modelYear, yearOptions]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
