@@ -8,6 +8,7 @@ import {
   updateSalesOrder,
 } from "../services/salesRepository";
 import { localDateInputValue } from "../domain/appDate";
+import { summarizeSale } from "../domain/salesDiscounts";
 
 const C={ink:"#20251F",olive:"#858C38",oliveDark:"#747B31",green:"#4D7D57",red:"#B65145",amber:"#A87818",muted:"#647062",border:"rgba(50,56,42,.12)"};
 const input={width:"100%",boxSizing:"border-box",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:12.5,background:"#fff",color:C.ink};
@@ -27,12 +28,12 @@ function Badge({status}){
 export default function SalesWorkspace(){
   const [data,setData]=useState(null),[items,setItems]=useState([]),[selectedId,setSelectedId]=useState("");
   const [loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState("");
-  const [form,setForm]=useState({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});
-  const [itemForm,setItemForm]=useState({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});
+  const [form,setForm]=useState({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",orderDiscountType:"none",orderDiscountValue:"0",notes:""});
+  const [itemForm,setItemForm]=useState({productId:"",quantity:"1",unitSellPriceCad:"",discountType:"amount",discountValue:"0",notes:""});
 
   const load=async()=>{setLoading(true);setError("");try{setData(await loadSalesWorkspaceData());}catch(e){setError(e?.message||"Unable to load sales data.");}finally{setLoading(false);}};
   useEffect(()=>{load();},[]);
-  useEffect(()=>{if(!selectedId){setItems([]);return;}const order=data?.salesOrders.find(x=>x.id===selectedId);if(order)setForm({saleRef:order.sale_ref,channel:order.channel,status:order.status,soldDate:order.sold_date||"",customerName:order.customer_name||"",paymentFeeCad:String(order.payment_fee_cad||0),outboundShippingCad:String(order.outbound_shipping_cad||0),otherCostsCad:String(order.other_costs_cad||0),notes:order.notes||""});listSalesOrderItems(selectedId).then(setItems).catch(e=>setError(e?.message||"Unable to load sale items."));},[selectedId,data]);
+  useEffect(()=>{if(!selectedId){setItems([]);return;}const order=data?.salesOrders.find(x=>x.id===selectedId);if(order)setForm({saleRef:order.sale_ref,channel:order.channel,status:order.status,soldDate:order.sold_date||"",customerName:order.customer_name||"",paymentFeeCad:String(order.payment_fee_cad||0),outboundShippingCad:String(order.outbound_shipping_cad||0),otherCostsCad:String(order.other_costs_cad||0),orderDiscountType:order.order_discount_type||"none",orderDiscountValue:String(order.order_discount_value||0),notes:order.notes||""});listSalesOrderItems(selectedId).then(setItems).catch(e=>setError(e?.message||"Unable to load sale items."));},[selectedId,data]);
 
   const stock=useMemo(()=>{
     if(!data)return {gross:new Map(),committed:new Map(),available:new Map(),cost:new Map()};
@@ -73,14 +74,9 @@ export default function SalesWorkspace(){
   const selectedProduct=data?.products.find(p=>p.id===itemForm.productId);
   useEffect(()=>{if(!selectedProduct)return;setItemForm(f=>({...f,unitSellPriceCad:f.unitSellPriceCad||String(selectedProduct.target_sell_price_cad??selectedProduct.market_reference_cad??"")}));},[selectedProduct]);
 
-  const totals=useMemo(()=>{
-    let units=0,gross=0,discount=0,cogs=0;
-    for(const i of items){const q=Number(i.quantity||0);units+=q;gross+=Number(i.unit_sell_price_cad||0)*q;discount+=Number(i.discount_cad||0);cogs+=Number(i.unit_cost_cad||0)*q;}
-    const net=Math.max(0,gross-discount),orderCosts=Number(form.paymentFeeCad||0)+Number(form.outboundShippingCad||0)+Number(form.otherCostsCad||0),profit=net-cogs-orderCosts,margin=net>0?profit/net*100:null;
-    return {units,gross,discount,net,cogs,orderCosts,profit,margin};
-  },[items,form.paymentFeeCad,form.outboundShippingCad,form.otherCostsCad]);
+  const totals=useMemo(()=>summarizeSale(form,items),[items,form.paymentFeeCad,form.outboundShippingCad,form.otherCostsCad,form.orderDiscountType,form.orderDiscountValue]);
 
-  const reset=()=>{setSelectedId("");setItems([]);setForm({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",notes:""});setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});setError("");setMessage("");};
+  const reset=()=>{setSelectedId("");setItems([]);setForm({saleRef:saleRef(),channel:"Marketplace",status:"Draft",soldDate:localDateInputValue(),customerName:"",paymentFeeCad:"0",outboundShippingCad:"0",otherCostsCad:"0",orderDiscountType:"none",orderDiscountValue:"0",notes:""});setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountType:"amount",discountValue:"0",notes:""});setError("");setMessage("");};
   const create=async()=>{try{const created=await createSalesOrder(form);await load();setSelectedId(created.id);setMessage("Sale created as Draft. Add products before confirming it.");}catch(e){setError(e?.message||"Unable to create sale.");}};
   const save=async()=>{
     if(!selectedId)return create();
@@ -98,7 +94,7 @@ export default function SalesWorkspace(){
     const qty=Math.max(1,Number(itemForm.quantity||1)),available=stock.available.get(itemForm.productId)||0;
     if(qty>available)return setError(`Only ${available} units are currently available for this SKU.`);
     if(!itemForm.unitSellPriceCad)return setError("Enter the selling price.");
-    try{await addSalesOrderItem({salesOrderId:selectedId,productId:itemForm.productId,quantity:qty,unitSellPriceCad:itemForm.unitSellPriceCad,unitCostCad:stock.cost.get(itemForm.productId),discountCad:itemForm.discountCad,notes:itemForm.notes});setItems(await listSalesOrderItems(selectedId));setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""});setMessage("Product added with a landed-cost snapshot for realized margin tracking.");}catch(e){setError(e?.message||"Unable to add sale item.");}
+    try{await addSalesOrderItem({salesOrderId:selectedId,productId:itemForm.productId,quantity:qty,unitSellPriceCad:itemForm.unitSellPriceCad,unitCostCad:stock.cost.get(itemForm.productId),discountType:itemForm.discountType,discountValue:itemForm.discountValue,notes:itemForm.notes});setItems(await listSalesOrderItems(selectedId));setItemForm({productId:"",quantity:"1",unitSellPriceCad:"",discountType:"amount",discountValue:"0",notes:""});setMessage("Product added with a landed-cost snapshot for realized margin tracking.");}catch(e){setError(e?.message||"Unable to add sale item.");}
   };
   const remove=async id=>{if(form.status!=="Draft")return setError("Return the sale to Draft before changing its product lines.");try{await deleteSalesOrderItem(id);setItems(await listSalesOrderItems(selectedId));}catch(e){setError(e?.message||"Unable to remove item.");}};
 
@@ -129,27 +125,29 @@ export default function SalesWorkspace(){
             <Field label="Outbound Shipping CAD"><input style={input} type="number" min="0" step=".01" value={form.outboundShippingCad} onChange={e=>setForm(f=>({...f,outboundShippingCad:e.target.value}))}/></Field>
             <Field label="Other Costs CAD"><input style={input} type="number" min="0" step=".01" value={form.otherCostsCad} onChange={e=>setForm(f=>({...f,otherCostsCad:e.target.value}))}/></Field>
           </div>
+          {selectedId&&<div style={{marginTop:10,padding:11,border:`1px solid ${C.border}`,borderRadius:10,background:"#FAFBF7"}}><div style={{fontSize:12,fontWeight:850,marginBottom:7}}>Order Discount</div><div style={{display:"grid",gridTemplateColumns:"180px minmax(160px,240px) 1fr",gap:8,alignItems:"end"}}><Field label="Type"><select style={input} disabled={form.status!=="Draft"} value={form.orderDiscountType} onChange={e=>setForm(f=>({...f,orderDiscountType:e.target.value,orderDiscountValue:e.target.value==="none"?"0":f.orderDiscountValue}))}><option value="none">None</option><option value="amount">Fixed amount (CAD)</option><option value="percentage">Percentage (%)</option></select></Field><Field label={form.orderDiscountType==="percentage"?"Discount %":"Discount CAD"}><input style={input} disabled={form.status!=="Draft"||form.orderDiscountType==="none"} type="number" min="0" max={form.orderDiscountType==="percentage"?"100":undefined} step={form.orderDiscountType==="percentage"?".1":".01"} value={form.orderDiscountValue} onChange={e=>setForm(f=>({...f,orderDiscountValue:e.target.value}))}/></Field><div style={{fontSize:10.5,color:C.muted,paddingBottom:8}}>Applied after line-item discounts and allocated proportionally across products for margin reporting.</div></div></div>}
           <div style={{marginTop:9}}><Field label="Notes"><input style={input} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></Field></div>
           <div style={{marginTop:11}}><button style={btn(true)} onClick={save}>{selectedId?"Save Sale":"Create Draft"}</button></div>
         </div>
 
         {selectedId&&<>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:9}}>{[["Units",totals.units],["Net Revenue",money(totals.net)],["COGS",money(totals.cogs)],["Fees & Shipping",money(totals.orderCosts)],["Realized Profit",money(totals.profit)],["Realized Margin",pct(totals.margin)]].map(([l,v])=><div key={l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:12}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800,textTransform:"uppercase",letterSpacing:.35}}>{l}</div><div style={{fontSize:18,fontWeight:850,marginTop:4,color:l.includes("Profit")||l.includes("Margin")?(totals.profit>=0?C.green:C.red):C.ink}}>{v}</div></div>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:9}}>{[["Units",totals.units],["Gross Sales",money(totals.grossCad)],["Discounts",money(totals.totalDiscountCad)],["Net Revenue",money(totals.netCad)],["COGS",money(totals.cogsCad)],["Fees & Shipping",money(totals.orderCostsCad)],["Realized Profit",money(totals.profitCad)],["Realized Margin",pct(totals.marginPct)]].map(([l,v])=><div key={l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:12}}><div style={{fontSize:9.5,color:C.muted,fontWeight:800,textTransform:"uppercase",letterSpacing:.35}}>{l}</div><div style={{fontSize:18,fontWeight:850,marginTop:4,color:l.includes("Profit")||l.includes("Margin")?(totals.profitCad>=0?C.green:C.red):C.ink}}>{v}</div></div>)}</div>
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:15}}>
             <div style={{fontSize:15,fontWeight:850,marginBottom:9}}>Add Product</div>
-            <div style={{display:"grid",gridTemplateColumns:"2fr .55fr 1fr .8fr auto",gap:8,alignItems:"end"}}>
-              <Field label="Product"><select style={input} disabled={form.status!=="Draft"} value={itemForm.productId} onChange={e=>setItemForm({productId:e.target.value,quantity:"1",unitSellPriceCad:"",discountCad:"0",notes:""})}><option value="">Select product</option>{data.products.map(p=><option key={p.id} value={p.id}>{p.sku_id} · {p.name} · {stock.available.get(p.id)||0} available</option>)}</select></Field>
+            <div style={{display:"grid",gridTemplateColumns:"2fr .45fr .9fr .9fr .7fr auto",gap:8,alignItems:"end"}}>
+              <Field label="Product"><select style={input} disabled={form.status!=="Draft"} value={itemForm.productId} onChange={e=>setItemForm({productId:e.target.value,quantity:"1",unitSellPriceCad:"",discountType:"amount",discountValue:"0",notes:""})}><option value="">Select product</option>{data.products.map(p=><option key={p.id} value={p.id}>{p.sku_id} · {p.name} · {stock.available.get(p.id)||0} available</option>)}</select></Field>
               <Field label="Qty"><input style={input} disabled={form.status!=="Draft"} type="number" min="1" value={itemForm.quantity} onChange={e=>setItemForm(f=>({...f,quantity:e.target.value}))}/></Field>
               <Field label="Unit Sell CAD"><input style={input} disabled={form.status!=="Draft"} type="number" min="0" step=".01" value={itemForm.unitSellPriceCad} onChange={e=>setItemForm(f=>({...f,unitSellPriceCad:e.target.value}))}/></Field>
-              <Field label="Discount CAD"><input style={input} disabled={form.status!=="Draft"} type="number" min="0" step=".01" value={itemForm.discountCad} onChange={e=>setItemForm(f=>({...f,discountCad:e.target.value}))}/></Field>
+              <Field label="Line Discount"><select style={input} disabled={form.status!=="Draft"} value={itemForm.discountType} onChange={e=>setItemForm(f=>({...f,discountType:e.target.value,discountValue:"0"}))}><option value="amount">CAD</option><option value="percentage">%</option></select></Field>
+              <Field label="Value"><input style={input} disabled={form.status!=="Draft"} type="number" min="0" max={itemForm.discountType==="percentage"?"100":undefined} step={itemForm.discountType==="percentage"?".1":".01"} value={itemForm.discountValue} onChange={e=>setItemForm(f=>({...f,discountValue:e.target.value}))}/></Field>
               <button style={{...btn(true),height:36}} disabled={form.status!=="Draft"} onClick={addItem}>Add</button>
             </div>
             {selectedProduct&&<div style={{fontSize:10.5,color:C.muted,marginTop:7}}>Available now: <strong>{stock.available.get(selectedProduct.id)||0}</strong> · Weighted landed-cost snapshot: <strong>{money(stock.cost.get(selectedProduct.id))}</strong></div>}
           </div>
 
           <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:13,padding:15,overflowX:"auto"}}>
-            <table style={{minWidth:1050}}><thead><tr>{["SKU","Product","Qty","Unit Sell","Discount","Unit Cost","Net Revenue","COGS","Profit","Margin",""].map(h=><th key={h} style={{textAlign:"left",padding:8,borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead><tbody>{items.map(i=>{const p=data.products.find(x=>x.id===i.product_id),q=Number(i.quantity||0),gross=Number(i.unit_sell_price_cad||0)*q,net=Math.max(0,gross-Number(i.discount_cad||0)),cogs=Number(i.unit_cost_cad||0)*q,profit=net-cogs,margin=net>0?profit/net*100:null;return <tr key={i.id}><td style={{padding:8,fontWeight:850,color:C.oliveDark}}>{p?.sku_id}</td><td style={{padding:8,fontWeight:700}}>{p?.name}</td><td style={{padding:8}}>{q}</td><td style={{padding:8}}>{money(i.unit_sell_price_cad)}</td><td style={{padding:8}}>{money(i.discount_cad)}</td><td style={{padding:8}}>{money(i.unit_cost_cad)}</td><td style={{padding:8,fontWeight:750}}>{money(net)}</td><td style={{padding:8}}>{money(cogs)}</td><td style={{padding:8,fontWeight:850,color:profit>=0?C.green:C.red}}>{money(profit)}</td><td style={{padding:8}}>{pct(margin)}</td><td style={{padding:8}}><button style={btn()} disabled={form.status!=="Draft"} onClick={()=>remove(i.id)}>Remove</button></td></tr>})}</tbody></table>
+            <table style={{minWidth:1180}}><thead><tr>{["SKU","Product","Qty","Unit Sell","Line Disc.","Order Disc.","Unit Cost","Net Revenue","COGS","Profit","Margin",""].map(h=><th key={h} style={{textAlign:"left",padding:8,borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead><tbody>{items.map((i,index)=>{const p=data.products.find(x=>x.id===i.product_id),q=Number(i.quantity||0),line=totals.lineSummaries[index];return <tr key={i.id}><td style={{padding:8,fontWeight:850,color:C.oliveDark}}>{p?.sku_id}</td><td style={{padding:8,fontWeight:700}}>{p?.name}</td><td style={{padding:8}}>{q}</td><td style={{padding:8}}>{money(i.unit_sell_price_cad)}</td><td style={{padding:8}}>{money(line?.itemDiscountCad)}</td><td style={{padding:8}}>{money(line?.orderDiscountCad)}</td><td style={{padding:8}}>{money(i.unit_cost_cad)}</td><td style={{padding:8,fontWeight:750}}>{money(line?.netCad)}</td><td style={{padding:8}}>{money(line?.cogsCad)}</td><td style={{padding:8,fontWeight:850,color:(line?.profitCad||0)>=0?C.green:C.red}}>{money(line?.profitCad)}</td><td style={{padding:8}}>{pct(line?.marginPct)}</td><td style={{padding:8}}><button style={btn()} disabled={form.status!=="Draft"} onClick={()=>remove(i.id)}>Remove</button></td></tr>})}</tbody></table>
             {!items.length&&<div style={{padding:24,textAlign:"center",color:C.muted,fontSize:11.5}}>No products added to this sale yet.</div>}
           </div>
         </>}

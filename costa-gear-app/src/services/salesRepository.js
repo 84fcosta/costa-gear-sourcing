@@ -19,6 +19,8 @@ export async function createSalesOrder(record) {
     payment_fee_cad: Number(record.paymentFeeCad || 0),
     outbound_shipping_cad: Number(record.outboundShippingCad || 0),
     other_costs_cad: Number(record.otherCostsCad || 0),
+    order_discount_type: record.orderDiscountType || "none",
+    order_discount_value: Number(record.orderDiscountValue || 0),
     notes: record.notes || null,
   };
   const { data, error } = await supabase.from("sales_orders").insert(payload).select("*").single();
@@ -35,6 +37,8 @@ export async function updateSalesOrder(id, record) {
     payment_fee_cad: Number(record.paymentFeeCad || 0),
     outbound_shipping_cad: Number(record.outboundShippingCad || 0),
     other_costs_cad: Number(record.otherCostsCad || 0),
+    order_discount_type: record.orderDiscountType || "none",
+    order_discount_value: Number(record.orderDiscountValue || 0),
     notes: record.notes || null,
   };
   const { data, error } = await supabase.from("sales_orders").update(payload).eq("id", id).select("*").single();
@@ -59,6 +63,8 @@ export async function addSalesOrderItem(record) {
     quantity: Number(record.quantity || 1),
     unit_sell_price_cad: Number(record.unitSellPriceCad || 0),
     unit_cost_cad: record.unitCostCad === null || record.unitCostCad === undefined || record.unitCostCad === "" ? null : Number(record.unitCostCad),
+    discount_type: record.discountType || "amount",
+    discount_value: Number(record.discountValue ?? record.discountCad ?? 0),
     discount_cad: Number(record.discountCad || 0),
     notes: record.notes || null,
   };

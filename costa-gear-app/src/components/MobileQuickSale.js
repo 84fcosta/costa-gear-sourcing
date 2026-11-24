@@ -7,6 +7,7 @@ import {
   updateSalesOrder,
 } from "../services/salesRepository";
 import { localDateInputValue } from "../domain/appDate";
+import { calculateLineDiscountCad } from "../domain/salesDiscounts";
 import "../mobile-first.css";
 
 const ACTIVE = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
@@ -24,7 +25,8 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
   const [channel, setChannel] = useState("Marketplace");
   const [customer, setCustomer] = useState("");
   const [soldDate, setSoldDate] = useState(localDateInputValue());
-  const [discount, setDiscount] = useState("0");
+  const [discountType, setDiscountType] = useState("amount");
+  const [discountValue, setDiscountValue] = useState("0");
   const [paymentFee, setPaymentFee] = useState("0");
   const [outboundShipping, setOutboundShipping] = useState("0");
   const [otherCosts, setOtherCosts] = useState("0");
@@ -114,13 +116,14 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
     const qty = Math.max(1, Number(quantity || 1));
     const sell = Number(unitPrice || 0);
     const unitCost = stock.cost.get(product.id);
-    const net = Math.max(0, sell * qty - Number(discount || 0));
+    const discountCad = calculateLineDiscountCad({ quantity: qty, unitSellPriceCad: sell, discountType, discountValue });
+    const net = Math.max(0, sell * qty - discountCad);
     const cogs = unitCost === null || unitCost === undefined ? null : unitCost * qty;
     const sellingCosts = Number(paymentFee || 0) + Number(outboundShipping || 0) + Number(otherCosts || 0);
     const profit = cogs === null ? null : net - cogs - sellingCosts;
     const margin = profit !== null && net > 0 ? profit / net * 100 : null;
-    return { qty, sell, unitCost, net, cogs, sellingCosts, profit, margin, available: stock.available.get(product.id) || 0 };
-  }, [product, quantity, unitPrice, discount, paymentFee, outboundShipping, otherCosts, stock]);
+    return { qty, sell, unitCost, discountCad, net, cogs, sellingCosts, profit, margin, available: stock.available.get(product.id) || 0 };
+  }, [product, quantity, unitPrice, discountType, discountValue, paymentFee, outboundShipping, otherCosts, stock]);
 
   const reset = () => {
     setProductId("");
@@ -129,7 +132,8 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
     setChannel("Marketplace");
     setCustomer("");
     setSoldDate(localDateInputValue());
-    setDiscount("0");
+    setDiscountType("amount");
+    setDiscountValue("0");
     setPaymentFee("0");
     setOutboundShipping("0");
     setOtherCosts("0");
@@ -167,7 +171,8 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
         quantity: preview.qty,
         unitSellPriceCad: unitPrice,
         unitCostCad: preview.unitCost,
-        discountCad: discount,
+        discountType,
+        discountValue,
         notes: null,
       });
 
@@ -239,6 +244,7 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
 
         <div className="cg-mf-sale-preview">
           <div><span>Landed Cost</span><strong>{money(preview.unitCost)}</strong></div>
+          <div><span>Discount</span><strong>{money(preview.discountCad)}</strong></div>
           <div><span>Net Revenue</span><strong>{money(preview.net)}</strong></div>
           <div><span>Profit</span><strong>{money(preview.profit)}</strong></div>
           <div><span>Margin</span><strong>{pct(preview.margin)}</strong></div>
@@ -253,7 +259,8 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
 
       <button type="button" className="cg-mf-disclosure" onClick={() => setShowCosts(value => !value)}>{showCosts ? "Hide" : "Add"} discount, fees or shipping</button>
       {showCosts ? <div className="cg-mf-extra-costs">
-        <label><span>Discount CAD</span><input type="number" min="0" step=".01" value={discount} onChange={event => setDiscount(event.target.value)}/></label>
+        <label><span>Discount Type</span><select value={discountType} onChange={event => { setDiscountType(event.target.value); setDiscountValue("0"); }}><option value="amount">CAD</option><option value="percentage">%</option></select></label>
+        <label><span>{discountType === "percentage" ? "Discount %" : "Discount CAD"}</span><input type="number" min="0" max={discountType === "percentage" ? "100" : undefined} step={discountType === "percentage" ? ".1" : ".01"} value={discountValue} onChange={event => setDiscountValue(event.target.value)}/></label>
         <label><span>Payment Fee</span><input type="number" min="0" step=".01" value={paymentFee} onChange={event => setPaymentFee(event.target.value)}/></label>
         <label><span>Outbound Shipping</span><input type="number" min="0" step=".01" value={outboundShipping} onChange={event => setOutboundShipping(event.target.value)}/></label>
         <label><span>Other Costs</span><input type="number" min="0" step=".01" value={otherCosts} onChange={event => setOtherCosts(event.target.value)}/></label>

@@ -1,5 +1,6 @@
 import { parseAppDate } from "./appDate";
 import { dispositionLineQuantityByReceiptItem, summarizeDispositionUnits } from "./inventoryDisposition";
+import { summarizeSale } from "./salesDiscounts";
 
 const DAY_MS = 86400000;
 
@@ -156,25 +157,23 @@ export function buildPerformanceAnalytics(data, asOfInput = new Date()) {
     }
   }
 
-  // Realized profitability. Order-level payment/shipping/other costs are allocated by each line's share of net revenue.
+  // Realized profitability. Item discounts are applied first, then any order-level
+  // discount is allocated proportionally across the remaining line revenue.
   for (const order of salesOrders) {
     if (!REALIZED_SALE_STATUSES.has(order.status)) continue;
     const lines = salesItemsByOrder.get(order.id) || [];
     if (!lines.length) continue;
-    const lineNets = lines.map(line => Math.max(0, number(line.unit_sell_price_cad) * number(line.quantity) - number(line.discount_cad)));
-    const orderNet = lineNets.reduce((sum, value) => sum + value, 0);
-    const orderCosts = number(order.payment_fee_cad) + number(order.outbound_shipping_cad) + number(order.other_costs_cad);
+    const sale = summarizeSale(order, lines);
 
     lines.forEach((line, index) => {
       const metric = metrics.get(line.product_id);
       if (!metric) return;
       const qty = Math.max(0, number(line.quantity));
-      const net = lineNets[index];
-      const allocatedCosts = orderNet > 0 ? orderCosts * (net / orderNet) : orderCosts / lines.length;
+      const lineSummary = sale.lineSummaries[index];
       const hasCost = line.unit_cost_cad !== null && line.unit_cost_cad !== undefined && line.unit_cost_cad !== "" && finite(line.unit_cost_cad);
 
-      metric.realizedRevenueCad += net;
-      metric.realizedSellingCostsCad += allocatedCosts;
+      metric.realizedRevenueCad += lineSummary.netCad;
+      metric.realizedSellingCostsCad += lineSummary.allocatedOrderCostsCad;
       if (hasCost) metric.realizedCogsCad += Number(line.unit_cost_cad) * qty;
       else {
         metric.realizedCostComplete = false;

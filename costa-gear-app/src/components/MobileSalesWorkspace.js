@@ -8,6 +8,7 @@ import {
   updateSalesOrder,
 } from "../services/salesRepository";
 import { localDateInputValue } from "../domain/appDate";
+import { summarizeSale } from "../domain/salesDiscounts";
 import "../mobile-operations.css";
 
 const activeStatuses = new Set(["Confirmed", "Paid", "Shipped", "Completed"]);
@@ -25,6 +26,8 @@ const freshSale = () => ({
   paymentFeeCad: "0",
   outboundShippingCad: "0",
   otherCostsCad: "0",
+  orderDiscountType: "none",
+  orderDiscountValue: "0",
   notes: "",
 });
 
@@ -48,7 +51,7 @@ export default function MobileSalesWorkspace() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [form, setForm] = useState(freshSale);
-  const [itemForm, setItemForm] = useState({ productId: "", quantity: "1", unitSellPriceCad: "", discountCad: "0", notes: "" });
+  const [itemForm, setItemForm] = useState({ productId: "", quantity: "1", unitSellPriceCad: "", discountType: "amount", discountValue: "0", notes: "" });
 
   const load = async () => {
     setLoading(true);
@@ -80,6 +83,8 @@ export default function MobileSalesWorkspace() {
         paymentFeeCad: String(order.payment_fee_cad || 0),
         outboundShippingCad: String(order.outbound_shipping_cad || 0),
         otherCostsCad: String(order.other_costs_cad || 0),
+        orderDiscountType: order.order_discount_type || "none",
+        orderDiscountValue: String(order.order_discount_value || 0),
         notes: order.notes || "",
       });
     }
@@ -143,36 +148,23 @@ export default function MobileSalesWorkspace() {
     }));
   }, [selectedProduct]);
 
-  const totals = useMemo(() => {
-    let units = 0;
-    let gross = 0;
-    let discount = 0;
-    let cogs = 0;
-    for (const item of items) {
-      const qty = Number(item.quantity || 0);
-      units += qty;
-      gross += Number(item.unit_sell_price_cad || 0) * qty;
-      discount += Number(item.discount_cad || 0);
-      cogs += Number(item.unit_cost_cad || 0) * qty;
-    }
-    const net = Math.max(0, gross - discount);
-    const orderCosts = Number(form.paymentFeeCad || 0) + Number(form.outboundShippingCad || 0) + Number(form.otherCostsCad || 0);
-    const profit = net - cogs - orderCosts;
-    const margin = net > 0 ? profit / net * 100 : null;
-    return { units, gross, discount, net, cogs, orderCosts, profit, margin };
-  }, [items, form.paymentFeeCad, form.outboundShippingCad, form.otherCostsCad]);
+  const totals = useMemo(
+    () => summarizeSale(form, items),
+    [items, form.paymentFeeCad, form.outboundShippingCad, form.otherCostsCad, form.orderDiscountType, form.orderDiscountValue]
+  );
 
   const saleSummaries = useMemo(() => {
     if (!data) return new Map();
-    const map = new Map();
+    const byOrder = new Map();
     for (const item of data.salesOrderItems) {
-      const current = map.get(item.sales_order_id) || { units: 0, net: 0 };
-      const qty = Number(item.quantity || 0);
-      current.units += qty;
-      current.net += Math.max(0, Number(item.unit_sell_price_cad || 0) * qty - Number(item.discount_cad || 0));
-      map.set(item.sales_order_id, current);
+      const list = byOrder.get(item.sales_order_id) || [];
+      list.push(item);
+      byOrder.set(item.sales_order_id, list);
     }
-    return map;
+    return new Map(data.salesOrders.map(order => {
+      const summary = summarizeSale(order, byOrder.get(order.id) || []);
+      return [order.id, { units: summary.units, net: summary.netCad }];
+    }));
   }, [data]);
 
   const visibleOrders = useMemo(() => {
@@ -195,7 +187,7 @@ export default function MobileSalesWorkspace() {
     setSelectedId("");
     setItems([]);
     setForm(freshSale());
-    setItemForm({ productId: "", quantity: "1", unitSellPriceCad: "", discountCad: "0", notes: "" });
+    setItemForm({ productId: "", quantity: "1", unitSellPriceCad: "", discountType: "amount", discountValue: "0", notes: "" });
     setError("");
     setMessage("");
     setScreen("edit");
@@ -273,11 +265,12 @@ export default function MobileSalesWorkspace() {
         quantity: qty,
         unitSellPriceCad: itemForm.unitSellPriceCad,
         unitCostCad: stock.cost.get(itemForm.productId),
-        discountCad: itemForm.discountCad,
+        discountType: itemForm.discountType,
+        discountValue: itemForm.discountValue,
         notes: itemForm.notes,
       });
       setItems(await listSalesOrderItems(selectedId));
-      setItemForm({ productId: "", quantity: "1", unitSellPriceCad: "", discountCad: "0", notes: "" });
+      setItemForm({ productId: "", quantity: "1", unitSellPriceCad: "", discountType: "amount", discountValue: "0", notes: "" });
       setMessage("Product added with a landed-cost snapshot for margin tracking.");
     } catch (e) {
       setError(e?.message || "Unable to add sale item.");
@@ -351,6 +344,10 @@ export default function MobileSalesWorkspace() {
           <Field label="Payment Fee CAD"><input type="number" min="0" step=".01" value={form.paymentFeeCad} onChange={event => setForm(current => ({ ...current, paymentFeeCad: event.target.value }))} /></Field>
           <Field label="Outbound Shipping CAD"><input type="number" min="0" step=".01" value={form.outboundShippingCad} onChange={event => setForm(current => ({ ...current, outboundShippingCad: event.target.value }))} /></Field>
         </div>
+        <div className="cg-mobile-field-grid">
+          <Field label="Order Discount"><select disabled={form.status !== "Draft"} value={form.orderDiscountType} onChange={event => setForm(current => ({ ...current, orderDiscountType: event.target.value, orderDiscountValue: event.target.value === "none" ? "0" : current.orderDiscountValue }))}><option value="none">None</option><option value="amount">CAD</option><option value="percentage">%</option></select></Field>
+          <Field label={form.orderDiscountType === "percentage" ? "Discount %" : "Discount CAD"}><input disabled={form.status !== "Draft" || form.orderDiscountType === "none"} type="number" min="0" max={form.orderDiscountType === "percentage" ? "100" : undefined} step={form.orderDiscountType === "percentage" ? ".1" : ".01"} value={form.orderDiscountValue} onChange={event => setForm(current => ({ ...current, orderDiscountValue: event.target.value }))} /></Field>
+        </div>
         <Field label="Other Costs CAD"><input type="number" min="0" step=".01" value={form.otherCostsCad} onChange={event => setForm(current => ({ ...current, otherCostsCad: event.target.value }))} /></Field>
         <Field label="Notes"><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} /></Field>
         <div className="cg-mobile-action-row single"><button className="cg-mobile-primary" onClick={save}>{selectedId ? "Save Sale" : "Create Draft"}</button></div>
@@ -358,22 +355,27 @@ export default function MobileSalesWorkspace() {
 
       {selectedId ? <>
         <div className="cg-mobile-sale-summary">
-          <div className="cg-mobile-summary-card"><span>Net Revenue</span><strong>{money(totals.net)}</strong></div>
-          <div className="cg-mobile-summary-card"><span>Realized Profit</span><strong style={{ color: totals.profit >= 0 ? "#4d7d57" : "#b65145" }}>{money(totals.profit)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Gross Sales</span><strong>{money(totals.grossCad)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Discounts</span><strong>{money(totals.totalDiscountCad)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Net Revenue</span><strong>{money(totals.netCad)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Realized Profit</span><strong style={{ color: totals.profitCad >= 0 ? "#4d7d57" : "#b65145" }}>{money(totals.profitCad)}</strong></div>
           <div className="cg-mobile-summary-card"><span>Units</span><strong>{totals.units}</strong></div>
-          <div className="cg-mobile-summary-card"><span>Margin</span><strong>{pct(totals.margin)}</strong></div>
-          <div className="cg-mobile-summary-card"><span>COGS</span><strong>{money(totals.cogs)}</strong></div>
-          <div className="cg-mobile-summary-card"><span>Fees + Shipping</span><strong>{money(totals.orderCosts)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Margin</span><strong>{pct(totals.marginPct)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>COGS</span><strong>{money(totals.cogsCad)}</strong></div>
+          <div className="cg-mobile-summary-card"><span>Fees + Shipping</span><strong>{money(totals.orderCostsCad)}</strong></div>
         </div>
 
         <section className="cg-mobile-form-card">
           <div className="cg-mobile-form-title"><div><strong>Add Product</strong><small>Available stock and selling price are checked before the line is added.</small></div></div>
-          <Field label="Product"><select disabled={form.status !== "Draft"} value={itemForm.productId} onChange={event => setItemForm({ productId: event.target.value, quantity: "1", unitSellPriceCad: "", discountCad: "0", notes: "" })}><option value="">Select product</option>{data.products.map(product => <option key={product.id} value={product.id}>{product.sku_id} - {product.name} - {stock.available.get(product.id) || 0} available</option>)}</select></Field>
+          <Field label="Product"><select disabled={form.status !== "Draft"} value={itemForm.productId} onChange={event => setItemForm({ productId: event.target.value, quantity: "1", unitSellPriceCad: "", discountType: "amount", discountValue: "0", notes: "" })}><option value="">Select product</option>{data.products.map(product => <option key={product.id} value={product.id}>{product.sku_id} - {product.name} - {stock.available.get(product.id) || 0} available</option>)}</select></Field>
           <div className="cg-mobile-field-grid">
             <Field label="Qty"><input disabled={form.status !== "Draft"} type="number" min="1" value={itemForm.quantity} onChange={event => setItemForm(current => ({ ...current, quantity: event.target.value }))} /></Field>
             <Field label="Unit Sell CAD"><input disabled={form.status !== "Draft"} type="number" min="0" step=".01" value={itemForm.unitSellPriceCad} onChange={event => setItemForm(current => ({ ...current, unitSellPriceCad: event.target.value }))} /></Field>
           </div>
-          <Field label="Discount CAD"><input disabled={form.status !== "Draft"} type="number" min="0" step=".01" value={itemForm.discountCad} onChange={event => setItemForm(current => ({ ...current, discountCad: event.target.value }))} /></Field>
+          <div className="cg-mobile-field-grid">
+            <Field label="Line Discount"><select disabled={form.status !== "Draft"} value={itemForm.discountType} onChange={event => setItemForm(current => ({ ...current, discountType: event.target.value, discountValue: "0" }))}><option value="amount">CAD</option><option value="percentage">%</option></select></Field>
+            <Field label="Value"><input disabled={form.status !== "Draft"} type="number" min="0" max={itemForm.discountType === "percentage" ? "100" : undefined} step={itemForm.discountType === "percentage" ? ".1" : ".01"} value={itemForm.discountValue} onChange={event => setItemForm(current => ({ ...current, discountValue: event.target.value }))} /></Field>
+          </div>
           {selectedProduct ? <div className="cg-mobile-card-note">Available now: <strong>{stock.available.get(selectedProduct.id) || 0}</strong> - Weighted landed cost: <strong>{money(stock.cost.get(selectedProduct.id))}</strong></div> : null}
           <div className="cg-mobile-action-row single"><button className="cg-mobile-primary" disabled={form.status !== "Draft"} onClick={addItem}>Add Product</button></div>
         </section>
@@ -383,11 +385,8 @@ export default function MobileSalesWorkspace() {
           {items.map(item => {
             const product = data.products.find(row => row.id === item.product_id);
             const qty = Number(item.quantity || 0);
-            const gross = Number(item.unit_sell_price_cad || 0) * qty;
-            const net = Math.max(0, gross - Number(item.discount_cad || 0));
-            const cogs = Number(item.unit_cost_cad || 0) * qty;
-            const profit = net - cogs;
-            const margin = net > 0 ? profit / net * 100 : null;
+            const index = items.findIndex(row => row.id === item.id);
+            const line = totals.lineSummaries[index];
             return <article className="cg-mobile-line-card" key={item.id}>
               <div className="cg-mobile-line-head"><div><span className="cg-mobile-sku">{product?.sku_id || "SKU"}</span><div className="cg-mobile-product-name">{product?.name || "Unnamed product"}</div></div>{form.status === "Draft" ? <button className="cg-mobile-remove" onClick={() => remove(item.id)}>Remove</button> : null}</div>
               <div className="cg-mobile-metric-row">
@@ -396,9 +395,13 @@ export default function MobileSalesWorkspace() {
                 <div className="cg-mobile-metric"><span>Unit Cost</span><strong>{money(item.unit_cost_cad)}</strong></div>
               </div>
               <div className="cg-mobile-metric-row">
-                <div className="cg-mobile-metric"><span>Net Revenue</span><strong>{money(net)}</strong></div>
-                <div className="cg-mobile-metric"><span>Profit</span><strong style={{ color: profit >= 0 ? "#4d7d57" : "#b65145" }}>{money(profit)}</strong></div>
-                <div className="cg-mobile-metric"><span>Margin</span><strong>{pct(margin)}</strong></div>
+                <div className="cg-mobile-metric"><span>Discount</span><strong>{money(line?.totalDiscountCad)}</strong></div>
+                <div className="cg-mobile-metric"><span>Net Revenue</span><strong>{money(line?.netCad)}</strong></div>
+                <div className="cg-mobile-metric"><span>Profit</span><strong style={{ color: (line?.profitCad || 0) >= 0 ? "#4d7d57" : "#b65145" }}>{money(line?.profitCad)}</strong></div>
+              </div>
+              <div className="cg-mobile-metric-row two">
+                <div className="cg-mobile-metric"><span>Margin</span><strong>{pct(line?.marginPct)}</strong></div>
+                <div className="cg-mobile-metric"><span>Order Disc.</span><strong>{money(line?.orderDiscountCad)}</strong></div>
               </div>
             </article>;
           })}
