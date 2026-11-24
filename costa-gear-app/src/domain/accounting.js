@@ -4,6 +4,7 @@ import {
   EXPENSE_CATEGORIES,
   calcBusinessCost,
   calcDeductible,
+  calcExpenseDeductible,
   calcEstimatedCca,
 } from "./expenseTracking";
 import { dispositionCost, dispositionTypeMeta } from "./inventoryDisposition";
@@ -182,7 +183,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     if (yearOf(dateValue) !== Number(year)) continue;
     const month = monthMap.get(monthOf(dateValue));
     if (!month) continue;
-    const businessAmount = calcDeductible(expense.total_amount, expense.business_use_pct);
+    const businessAmount = calcExpenseDeductible(expense);
     month.operatingExpenses += businessAmount;
     month.ownerFundedOperatingExpenses += businessAmount;
     if (!Object.prototype.hasOwnProperty.call(month.expensesByCategory, expense.category)) {
@@ -190,6 +191,7 @@ export function buildAccountingModel(data, year, now = new Date()) {
     }
     month.expensesByCategory[expense.category] += businessAmount;
     month.derivedOwnerFunding += businessAmount;
+    const ref = expense.expense_number ? `EXP${String(expense.expense_number).padStart(3, "0")}` : expense.id;
     if (businessAmount > 0) {
       ledger.push(ledgerEntry(
         String(dateValue || "").slice(0, 10),
@@ -198,7 +200,17 @@ export function buildAccountingModel(data, year, now = new Date()) {
         `Operating Expense · ${expense.category}`,
         "Owner Contributions",
         businessAmount,
-        expense.expense_number ? `EXP${String(expense.expense_number).padStart(3, "0")}` : expense.id
+        ref
+      ));
+    } else if (businessAmount < 0) {
+      ledger.push(ledgerEntry(
+        String(dateValue || "").slice(0, 10),
+        "Refund",
+        `${expense.vendor || "Refund"} · ${expense.description || expense.category}`,
+        "Owner Contributions",
+        `Operating Expense · ${expense.category}`,
+        Math.abs(businessAmount),
+        ref
       ));
     }
   }
