@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, Cloud, FileUp, ReceiptText, RefreshCw } from "lucide-react";
-import { EXPENSE_CATEGORIES, makeEmptyExpense, money } from "../domain/expenseTracking";
+import { EXPENSE_CATEGORIES, expenseReference, makeEmptyExpense, money, signedExpenseAmount } from "../domain/expenseTracking";
 import { createExpenseDocument, loadExpenseWorkspaceData, saveBusinessExpense } from "../services/expenseRepository";
 import { testOneDriveConnection, uploadBusinessDocument } from "../services/oneDriveAppFolderService";
 import "../mobile-first.css";
@@ -39,10 +39,41 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
 
   const monthTotal = useMemo(() => {
     const key = new Date().toISOString().slice(0, 7);
-    return expenses.filter(expense => String(expense.expense_date || "").startsWith(key)).reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0);
+    return expenses.filter(expense => String(expense.expense_date || "").startsWith(key)).reduce((sum, expense) => sum + signedExpenseAmount(expense), 0);
   }, [expenses]);
 
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const originalExpenseOptions = useMemo(
+    () => expenses.filter(expense => expense.transaction_type !== "Refund" && !expense.is_asset_purchase),
+    [expenses]
+  );
+
+  const setTransactionType = value => {
+    setForm(current => ({
+      ...current,
+      transaction_type: value,
+      original_expense_id: value === "Refund" ? current.original_expense_id : null,
+      is_asset_purchase: false,
+      linked_asset_id: null,
+    }));
+  };
+
+  const linkOriginalExpense = id => {
+    const original = originalExpenseOptions.find(expense => expense.id === id);
+    if (!original) return set("original_expense_id", null);
+    setForm(current => ({
+      ...current,
+      original_expense_id: original.id,
+      vendor: original.vendor || current.vendor,
+      description: `Refund - ${original.description || original.vendor || "Expense"}`,
+      category: original.category || current.category,
+      business_use_pct: original.business_use_pct ?? current.business_use_pct,
+      payment_method: original.payment_method || current.payment_method,
+      payment_reference: original.payment_reference || current.payment_reference,
+      is_asset_purchase: false,
+      linked_asset_id: null,
+    }));
+  };
 
   const reset = () => {
     setForm(makeEmptyExpense(year));
@@ -112,11 +143,11 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
   if (success) return <div className="cg-mobile-first">
     <section className="cg-mf-success-card">
       <CheckCircle2 size={44}/>
-      <span>Expense saved</span>
-      <h2>{money(success.expense.total_amount)}</h2>
+      <span>{success.expense.transaction_type === "Refund" ? "Refund saved" : "Expense saved"}</span>
+      <h2>{money(signedExpenseAmount(success.expense))}</h2>
       <p>{success.expense.vendor} · {success.expense.description}</p>
       {success.uploadWarning ? <div className="cg-mobile-message error">{success.uploadWarning}</div> : <div className="cg-mf-good compact"><strong>{file ? "Receipt attached" : "No receipt attached"}</strong><span>{file ? "Stored in the Costa Gear document repository." : "You can attach it later from the desktop expense record."}</span></div>}
-      <button className="cg-mf-primary-wide" onClick={reset}><RefreshCw size={18}/> Add Another Expense</button>
+      <button className="cg-mf-primary-wide" onClick={reset}><RefreshCw size={18}/> Add Another Transaction</button>
     </section>
   </div>;
 
@@ -124,7 +155,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
     {error ? <div className="cg-mobile-message error">{error}</div> : null}
 
     <div className="cg-mf-hero compact">
-      <div><span>Quick entry</span><h2>Expenses</h2><p>Capture a receipt and register the expense in under a minute.</p></div>
+      <div><span>Quick entry</span><h2>Expenses</h2><p>Register a business expense or refund and attach its supporting document.</p></div>
       <div className="cg-mf-hero-stat"><strong>{money(monthTotal)}</strong><span>this month</span></div>
     </div>
 
@@ -145,22 +176,24 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
 
       <div className="cg-mf-two-col">
         <label><span>Date</span><input type="date" value={form.expense_date || ""} onChange={event => set("expense_date", event.target.value)} required/></label>
-        <label><span>Total CAD</span><input type="number" min="0" step=".01" inputMode="decimal" value={form.total_amount ?? ""} onChange={event => set("total_amount", event.target.value)} placeholder="0.00" required/></label>
+        <label><span>Type</span><select value={form.transaction_type || "Expense"} onChange={event => setTransactionType(event.target.value)}><option>Expense</option><option>Refund</option></select></label>
       </div>
+      {form.transaction_type === "Refund" ? <label><span>Original Expense</span><select value={form.original_expense_id || ""} onChange={event => linkOriginalExpense(event.target.value)}><option value="">Not linked</option>{originalExpenseOptions.map(expense => <option key={expense.id} value={expense.id}>{expenseReference(expense)} · {expense.vendor} · {expense.description}</option>)}</select></label> : null}
+      <label><span>{form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"}</span><input type="number" min="0" step=".01" inputMode="decimal" value={form.total_amount ?? ""} onChange={event => set("total_amount", event.target.value)} placeholder="0.00" required/></label>
       <label><span>Vendor</span><input value={form.vendor || ""} onChange={event => set("vendor", event.target.value)} placeholder="Vendor or store" required/></label>
       <label><span>Description</span><input value={form.description || ""} onChange={event => set("description", event.target.value)} placeholder="What was purchased?" required/></label>
       <label><span>Category</span><select value={form.category || ""} onChange={event => set("category", event.target.value)}>{EXPENSE_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
       <label><span>Notes</span><textarea value={form.notes || ""} onChange={event => set("notes", event.target.value)} placeholder="Optional"/></label>
 
-      <button className="cg-mf-primary-wide" disabled={saving} type="submit"><ReceiptText size={19}/>{saving ? "Saving..." : "Save Expense"}</button>
+      <button className="cg-mf-primary-wide" disabled={saving} type="submit"><ReceiptText size={19}/>{saving ? "Saving..." : form.transaction_type === "Refund" ? "Save Refund" : "Save Expense"}</button>
     </form>
 
     <section className="cg-mf-section">
       <div className="cg-mf-section-head"><div><span>Recent</span><h3>Latest Expenses</h3></div></div>
       <div className="cg-mf-list expenses">
         {expenses.slice(0, 5).map(expense => <div key={expense.id}>
-          <span><strong>{expense.vendor}</strong><small>{expense.expense_date} · {expense.description}</small></span>
-          <em>{money(expense.total_amount)}<small>{expense.receipt_status}</small></em>
+          <span><strong>{expense.vendor}</strong><small>{expenseReference(expense)} · {expense.expense_date} · {expense.description}</small></span>
+          <em>{money(signedExpenseAmount(expense))}<small>{expense.transaction_type || "Expense"} · {expense.receipt_status}</small></em>
         </div>)}
         {!expenses.length ? <div className="cg-mf-empty-inline">No expenses recorded for {year}.</div> : null}
       </div>
