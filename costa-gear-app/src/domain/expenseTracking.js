@@ -72,6 +72,8 @@ export function makeEmptyExpense(year = new Date().getFullYear()) {
     payment_method: "Credit Card",
     payment_reference: "",
     receipt_status: "Missing",
+    transaction_type: "Expense",
+    original_expense_id: null,
     notes: "",
     tax_year: year,
     is_asset_purchase: false,
@@ -114,6 +116,24 @@ export function calcDeductible(total, businessPct) {
   return Number((amount * use).toFixed(2));
 }
 
+export function expenseReference(expense) {
+  return expense?.expense_number
+    ? `EXP${String(expense.expense_number).padStart(3, "0")}`
+    : "";
+}
+
+export function expenseDirection(expense) {
+  return expense?.transaction_type === "Refund" ? -1 : 1;
+}
+
+export function signedExpenseAmount(expense) {
+  return Number((expenseDirection(expense) * Number(expense?.total_amount || 0)).toFixed(2));
+}
+
+export function calcExpenseDeductible(expense) {
+  return Number((expenseDirection(expense) * calcDeductible(expense?.total_amount, expense?.business_use_pct)).toFixed(2));
+}
+
 export function calcBusinessCost(cost, businessPct) {
   return calcDeductible(cost, businessPct);
 }
@@ -152,27 +172,34 @@ function downloadWorkbook(workbook, filename) {
 }
 
 export function exportExpenses(expenses, documents, year) {
-  const rows = expenses.map((expense) => ({
-    Date: expense.expense_date,
-    Vendor: expense.vendor,
-    Description: expense.description,
-    Category: expense.category,
-    "Total CAD": Number(expense.total_amount || 0),
-    "Business Use %": Number(expense.business_use_pct || 0),
-    "Deductible CAD": calcDeductible(expense.total_amount, expense.business_use_pct),
-    "Payment Method": expense.payment_method,
-    "Payment Reference": expense.payment_reference,
-    "Receipt Status": expense.receipt_status,
-    "Receipt Link": firstDocumentLink(documents, (document) => document.expense_id === expense.id),
-    "Asset Purchase": expense.is_asset_purchase ? "Yes" : "No",
-    "Tax Ready": expense.tax_ready ? "Yes" : "No",
-    Notes: expense.notes,
-  }));
+  const byId = new Map((expenses || []).map(expense => [expense.id, expense]));
+  const rows = expenses.map((expense) => {
+    const original = expense.original_expense_id ? byId.get(expense.original_expense_id) : null;
+    return {
+      Reference: expenseReference(expense),
+      Date: expense.expense_date,
+      Type: expense.transaction_type || "Expense",
+      "Original Expense": original ? expenseReference(original) : "",
+      Vendor: expense.vendor,
+      Description: expense.description,
+      Category: expense.category,
+      "Amount CAD": signedExpenseAmount(expense),
+      "Business Use %": Number(expense.business_use_pct || 0),
+      "Deductible Impact CAD": calcExpenseDeductible(expense),
+      "Payment Method": expense.payment_method,
+      "Payment Reference": expense.payment_reference,
+      "Receipt Status": expense.receipt_status,
+      "Receipt Link": firstDocumentLink(documents, (document) => document.expense_id === expense.id),
+      "Asset Purchase": expense.is_asset_purchase ? "Yes" : "No",
+      "Tax Ready": expense.tax_ready ? "Yes" : "No",
+      Notes: expense.notes,
+    };
+  });
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(
     workbook,
-    workbookSheet(rows, [12, 28, 36, 26, 12, 14, 14, 18, 18, 16, 42, 14, 12, 42]),
+    workbookSheet(rows, [13, 12, 12, 16, 28, 36, 26, 14, 14, 18, 18, 18, 16, 42, 14, 12, 42]),
     "Expenses"
   );
   downloadWorkbook(workbook, reportFileName({ report: "Expenses", period: `FY${year}`, generatedDate: today() }));
@@ -205,34 +232,38 @@ export function exportAssets(assets, documents, year) {
 }
 
 export function exportTaxReport(expenses, assets, documents, year) {
+  const byId = new Map((expenses || []).map(expense => [expense.id, expense]));
   const regularExpenses = expenses.filter((expense) => !expense.is_asset_purchase);
   const categoryRows = EXPENSE_CATEGORIES.map((category) => {
     const items = regularExpenses.filter((expense) => expense.category === category);
     return {
       Category: category,
-      "Total CAD": items.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0),
-      "Deductible CAD": items.reduce(
-        (sum, expense) => sum + calcDeductible(expense.total_amount, expense.business_use_pct),
-        0
-      ),
+      "Net Total CAD": items.reduce((sum, expense) => sum + signedExpenseAmount(expense), 0),
+      "Net Deductible CAD": items.reduce((sum, expense) => sum + calcExpenseDeductible(expense), 0),
     };
-  }).filter((row) => row["Total CAD"] || row["Deductible CAD"]);
+  }).filter((row) => row["Net Total CAD"] || row["Net Deductible CAD"]);
 
-  const expenseRows = expenses.map((expense) => ({
-    Date: expense.expense_date,
-    Vendor: expense.vendor,
-    Description: expense.description,
-    Category: expense.category,
-    "Total CAD": Number(expense.total_amount || 0),
-    "Business Use %": Number(expense.business_use_pct || 0),
-    "Deductible CAD": calcDeductible(expense.total_amount, expense.business_use_pct),
-    "Payment Method": expense.payment_method,
-    "Receipt Status": expense.receipt_status,
-    "Receipt Link": firstDocumentLink(documents, (document) => document.expense_id === expense.id),
-    "Asset Purchase": expense.is_asset_purchase ? "Yes" : "No",
-    "Tax Ready": expense.tax_ready ? "Yes" : "No",
-    Notes: expense.notes,
-  }));
+  const expenseRows = expenses.map((expense) => {
+    const original = expense.original_expense_id ? byId.get(expense.original_expense_id) : null;
+    return {
+      Reference: expenseReference(expense),
+      Date: expense.expense_date,
+      Type: expense.transaction_type || "Expense",
+      "Original Expense": original ? expenseReference(original) : "",
+      Vendor: expense.vendor,
+      Description: expense.description,
+      Category: expense.category,
+      "Amount CAD": signedExpenseAmount(expense),
+      "Business Use %": Number(expense.business_use_pct || 0),
+      "Deductible Impact CAD": calcExpenseDeductible(expense),
+      "Payment Method": expense.payment_method,
+      "Receipt Status": expense.receipt_status,
+      "Receipt Link": firstDocumentLink(documents, (document) => document.expense_id === expense.id),
+      "Asset Purchase": expense.is_asset_purchase ? "Yes" : "No",
+      "Tax Ready": expense.tax_ready ? "Yes" : "No",
+      Notes: expense.notes,
+    };
+  });
 
   const assetRows = assets.map((asset) => ({
     "Asset ID": asset.asset_code,
@@ -250,25 +281,26 @@ export function exportTaxReport(expenses, assets, documents, year) {
     Notes: asset.notes,
   }));
 
+  const netEntered = expenses.reduce((sum, expense) => sum + signedExpenseAmount(expense), 0);
   const regularDeductible = regularExpenses.reduce(
-    (sum, expense) => sum + calcDeductible(expense.total_amount, expense.business_use_pct),
+    (sum, expense) => sum + calcExpenseDeductible(expense),
     0
   );
   const estimatedCca = assets.reduce((sum, asset) => sum + calcEstimatedCca(asset), 0);
   const totals = [
-    { Metric: "Total expenses entered", "Amount CAD": expenses.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0) },
-    { Metric: "Deductible regular expenses, excluding asset purchases", "Amount CAD": regularDeductible },
+    { Metric: "Net expenses after refunds", "Amount CAD": netEntered },
+    { Metric: "Deductible regular expenses after refunds, excluding asset purchases", "Amount CAD": regularDeductible },
     { Metric: "Asset purchases", "Amount CAD": assets.reduce((sum, asset) => sum + Number(asset.cost || 0), 0) },
     { Metric: "Estimated first-year CCA claim", "Amount CAD": estimatedCca },
     { Metric: "Estimated tax deduction total", "Amount CAD": regularDeductible + estimatedCca },
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, workbookSheet(totals, [56, 18]), "Tax Summary");
-  XLSX.utils.book_append_sheet(workbook, workbookSheet(categoryRows, [34, 14, 16]), "By Category");
+  XLSX.utils.book_append_sheet(workbook, workbookSheet(totals, [64, 18]), "Tax Summary");
+  XLSX.utils.book_append_sheet(workbook, workbookSheet(categoryRows, [34, 16, 18]), "By Category");
   XLSX.utils.book_append_sheet(
     workbook,
-    workbookSheet(expenseRows, [12, 28, 36, 26, 12, 14, 14, 18, 16, 42, 14, 12, 42]),
+    workbookSheet(expenseRows, [13, 12, 12, 16, 28, 36, 26, 14, 14, 18, 18, 16, 42, 14, 12, 42]),
     "Expense Details"
   );
   XLSX.utils.book_append_sheet(
