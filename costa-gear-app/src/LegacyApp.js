@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { BarChart3, Box, Building2, Download, FileSpreadsheet, LayoutDashboard, PackageSearch, PlusCircle, Tags, Truck } from "lucide-react";
@@ -708,6 +709,49 @@ export default function App({ onOpenSupplierQuotations, onOpenSupplierIntake, on
 // ════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════════════════
+function SnapshotFitment({ product }) {
+  const buttonRef = useRef(null);
+  const [position, setPosition] = useState(null);
+  const entries = String(product.fitment || "").split("·").map(value => value.trim()).filter(Boolean);
+  const count = product.fitments?.length || entries.length;
+  useEffect(() => {
+    if (!position) return undefined;
+    const close = event => { if (!event?.target?.closest?.("[data-cg-snapshot-fitment-popover]")) setPosition(null); };
+    const key = event => { if (event.key === "Escape") { close(); buttonRef.current?.focus(); } };
+    const outside = event => { if (!buttonRef.current?.contains(event.target) && !event.target.closest?.("[data-cg-snapshot-fitment-popover]")) close(); };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", key);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", key);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [position]);
+  if (!entries.length && !product.fitmentNotes) return <div style={{color:C.dgray,fontSize:10,marginTop:3}}>Fitment TBD</div>;
+  const toggle = event => {
+    event.stopPropagation();
+    if (position) { setPosition(null); return; }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = Math.min(360, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+    const below = window.innerHeight - rect.bottom;
+    const above = below < 240 && rect.top > below;
+    setPosition({left,width, ...(above ? {bottom:window.innerHeight-rect.top+6,maxHeight:Math.min(320,rect.top-18)} : {top:rect.bottom+6,maxHeight:Math.min(320,below-18)})});
+  };
+  return <div style={{marginTop:3}}>
+    <button ref={buttonRef} type="button" aria-expanded={Boolean(position)} onClick={toggle} style={{background:"none",border:0,padding:0,color:"#626b2b",fontSize:10.5,fontWeight:600,cursor:"pointer",lineHeight:1.3,textDecoration:"underline",textUnderlineOffset:2}}>View fitment{count ? ` (${count})` : ""} <span aria-hidden="true">⌄</span></button>
+    {position && createPortal(<div data-cg-snapshot-fitment-popover role="region" aria-label="Vehicle fitment" onClick={event=>event.stopPropagation()} onScroll={event=>event.stopPropagation()} style={{position:"fixed",...position,zIndex:1000,overflowY:"auto",background:"#fff",border:"1px solid #d9ddd4",borderRadius:12,boxShadow:"0 8px 28px rgba(18,22,15,.18)",padding:14,boxSizing:"border-box",fontSize:12,color:C.navy}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",marginBottom:8}}><strong>Vehicle fitment</strong><button type="button" aria-label="Close fitment" onClick={()=>{setPosition(null);buttonRef.current?.focus();}} style={{border:0,background:"transparent",cursor:"pointer",fontSize:19,color:C.dgray}}>×</button></div>
+      <div style={{fontSize:11,color:C.dgray,marginBottom:8}}>{product.skuId} · {product.name}</div>
+      {entries.map((entry,index)=><div key={index} style={{padding:"5px 0",borderTop:"1px solid #eef0eb"}}>{entry}</div>)}
+      {product.fitmentNotes && !String(product.fitment || "").includes(product.fitmentNotes) && <div style={{marginTop:8,color:C.dgray}}>{product.fitmentNotes}</div>}
+    </div>,document.body)}
+  </div>;
+}
+
 function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
   const quoteText = (count) => `${count} ${count === 1 ? "quote" : "quotes"}`;
 
@@ -845,7 +889,7 @@ function Dashboard({ products, suppliers, quotes, onOpenDetail }) {
                       <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 800, color: C.accent2, fontFamily: "monospace", whiteSpace: "nowrap" }}>{p.skuId}</td>
                       <td style={{ ...snapshotCellStyle, minWidth: 260 }}>
                         <div style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.15, color: C.navy }}>{p.name}</div>
-                        <div style={{ color: C.dgray, fontSize: 10, lineHeight: 1.1, marginTop: 1 }}>{p.fitment || "Fitment TBD"}</div>
+                        <SnapshotFitment product={p} />
                       </td>
                       <td style={snapshotCellStyle}>{quoteText(p.quoteCount)}</td>
                       <td style={{ ...snapshotCellStyle, fontSize: 11.5, fontWeight: 700 }}>{costRange}</td>
