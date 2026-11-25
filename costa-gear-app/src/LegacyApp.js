@@ -1941,7 +1941,7 @@ function QuoteModal({ onSave, onClose, editing, products, suppliers }) {
         <Input label="Supplier's SKU" value={form.supplierSku} onChange={set("supplierSku")} placeholder="e.g. SKJLM001" />
 
         <div style={{ display: "flex", gap: 12 }}>
-          <Input label="Unit Price (USD)" value={form.unitPrice} onChange={set("unitPrice")} type="number" placeholder="e.g. 48" />
+          <Input label="Unit Price (USD)" value={form.unitPrice} onChange={set("unitPrice")} type="currency" placeholder="e.g. 48" />
           <Input label="MOQ / Quantity Basis" value={form.moq} onChange={set("moq")} placeholder="e.g. 10" />
         </div>
 

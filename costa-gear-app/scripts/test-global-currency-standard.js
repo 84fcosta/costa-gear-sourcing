@@ -20,6 +20,7 @@ for(const name of ["ReceivingInventoryWorkspace","MobileInventoryWorkspace"])ass
 const legacy=read("src/LegacyApp.js");
 assert.match(legacy,/label="Target Sell Price CAD"[^\n]*type="currency"/);
 assert.match(legacy,/label="Market Reference CAD"[^\n]*type="currency"/);
+assert.match(legacy,/label="Unit Price \(USD\)"[^\n]*type="currency"/);
 assert.match(legacy,/label="Shipping per Unit"[^\n]*type="number"/);
 const pricing=read("src/components/PricingIntelligenceWorkspace.js"),bulk=read("src/components/PricingMatrixBulkSaveControls.js");
 for(const field of ["target-price","target-margin","market-reference"]){assert.ok(pricing.includes('data-pricing-input="'+field+'"'));assert.ok(bulk.includes('field("'+field+'")'));}
