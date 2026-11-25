@@ -1,3 +1,4 @@
+import { useExpenseDraft } from "../domain/useExpenseDraft";
 import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
 import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -7,10 +8,9 @@ import { createExpenseDocument, loadExpenseWorkspaceData, saveBusinessExpense } 
 import { testOneDriveConnection, uploadBusinessDocument } from "../services/oneDriveAppFolderService";
 import "../mobile-first.css";
 
-export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth, oneDriveBusy = false }) {
+export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth, oneDriveBusy = false, oneDriveVersion = 0 }) {
   const year = new Date().getFullYear();
-  const [form, setForm] = useState(() => makeEmptyExpense(year));
-  const [file, setFile] = useState(null);
+  const {form,setForm,file,setFile,dirty,storageError,missingFile,clearDraft,discard}=useExpenseDraft(makeEmptyExpense(year),year);
   const [expenses, setExpenses] = useState([]);
   const [driveReady, setDriveReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -24,12 +24,8 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
     setLoading(true);
     setError("");
     try {
-      const [workspace, drive] = await Promise.all([
-        loadExpenseWorkspaceData(year),
-        testOneDriveConnection().catch(() => null),
-      ]);
+      const workspace=await loadExpenseWorkspaceData(year);
       setExpenses(workspace.expenses || []);
-      setDriveReady(Boolean(drive));
     } catch (e) {
       setError(e?.message || "Unable to load expenses.");
     } finally {
@@ -38,6 +34,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(()=>{let active=true;testOneDriveConnection().then(result=>{if(active)setDriveReady(Boolean(result));}).catch(()=>{if(active)setDriveReady(false);});return ()=>{active=false;};},[oneDriveVersion]);
 
   const monthTotal = useMemo(() => {
     const key = new Date().toISOString().slice(0, 7);
@@ -78,8 +75,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
   };
 
   const reset = () => {
-    setForm(makeEmptyExpense(year));
-    setFile(null);
+    discard();
     setError("");
     setSuccess(null);
     if (cameraRef.current) cameraRef.current.value = "";
@@ -91,6 +87,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
     if (!form.vendor.trim()) return setError("Vendor is required.");
     if (!form.description.trim()) return setError("Description is required.");
     if (!(Number(form.total_amount) > 0)) return setError("Enter a valid amount.");
+    if(missingFile && !window.confirm("The receipt must be attached again. Save without it?"))return;
 
     setSaving(true);
     setError("");
@@ -131,6 +128,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
         }
       }
 
+      clearDraft();
       setSuccess({ expense: saved, uploadWarning });
       await load();
     } catch (e) {
@@ -162,6 +160,8 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
     </div>
 
     <form className="cg-mf-form-card" onSubmit={save}>
+      {dirty && <div role="status" style={{fontSize:12,color:"#647062"}}>{storageError ? "Draft could not be saved. Keep this page open." : "Draft saved in this tab · Not recorded yet"}</div>}
+      {missingFile && <div role="status" style={{fontSize:12,color:"#a36c28"}}>Please attach {missingFile} again. The form was recovered, but the file was not.</div>}
       {!driveReady ? <div className="cg-mf-drive-warning">
         <Cloud size={18}/>
         <span><strong>Receipt upload needs OneDrive</strong><small>{oneDriveAuth?.needsConsent ? "Reconnect Microsoft access to attach photos." : "Connect the Costa Gear document repository to attach photos."}</small></span>
@@ -191,6 +191,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
       <label><span>Notes</span><textarea value={form.notes || ""} onChange={event => set("notes", event.target.value)} placeholder="Optional"/></label>
 
       <button className="cg-mf-primary-wide" disabled={saving} type="submit"><ReceiptText size={19}/>{saving ? "Saving..." : form.transaction_type === "Refund" ? "Save Refund" : "Save Expense"}</button>
+      {dirty && <button type="button" disabled={saving} className="cg-mf-disclosure" onClick={()=>{if(window.confirm("Discard this unsaved expense draft?"))reset();}}>Discard Draft</button>}
     </form>
 
     <section className="cg-mf-section">

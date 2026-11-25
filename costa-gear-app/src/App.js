@@ -610,7 +610,7 @@ export default function App() {
           : workspace === "buying" ? <div className="cg-module-embedded"><BuyingDecisionWorkspace /></div>
           : workspace === "logistics" ? <LogisticsWorkspace key={logisticsView} initialView={logisticsView} />
           : workspace === "receiving" ? <div className="cg-module-embedded"><ReceivingInventoryWorkspace /></div>
-          : workspace === "expenses" ? (mobile ? <MobileExpenseWorkspace key={oneDriveVersion} onConnectOneDrive={connectOneDrive} oneDriveAuth={oneDriveAuth} oneDriveBusy={oneDriveBusy} /> : <ExpenseWorkspace key={oneDriveVersion} />)
+          : workspace === "expenses" ? (mobile ? <MobileExpenseWorkspace oneDriveVersion={oneDriveVersion} onConnectOneDrive={connectOneDrive} oneDriveAuth={oneDriveAuth} oneDriveBusy={oneDriveBusy} /> : <ExpenseWorkspace oneDriveVersion={oneDriveVersion} />)
           : workspace === "accounting" ? (mobile ? <MobileAccountingWorkspace onNavigate={navigate} /> : <AccountingWorkspace onNavigate={navigate} />)
           : workspace === "governance" ? <DocumentGovernanceWorkspace />
           : <CommercialWorkspace key={salesView} initialView={salesView} onNavigate={navigate} />}

@@ -1,0 +1,16 @@
+const assert=require("assert"),fs=require("fs"),path=require("path"),vm=require("vm");
+const read=p=>fs.readFileSync(path.join(__dirname,"..",p),"utf8");
+const app=read("src/App.js"), desktop=read("src/components/ExpenseWorkspace.js"), mobile=read("src/components/MobileExpenseWorkspace.js"), draft=read("src/domain/useExpenseDraft.js"), input=read("src/components/HistoryInput.js");
+assert.doesNotMatch(app, /ExpenseWorkspace key=\{oneDriveVersion\}/);
+assert.match(app,/ExpenseWorkspace oneDriveVersion=\{oneDriveVersion\}/);
+assert.match(desktop,/\[oneDriveVersion\]/);assert.match(mobile,/\[oneDriveVersion\]/);
+assert.match(desktop,/clearDraft\(\);\s*setExpenseModal/);assert.match(mobile,/clearDraft\(\);\s*setSuccess/);
+assert.match(draft,/sessionStorage\.setItem/);assert.match(draft,/sessionStorage\.removeItem/);
+assert.doesNotMatch(draft,/supabase|saveBusinessExpense/);
+assert.match(input,/Restore hidden suggestions/);assert.match(input,/type="button"/);
+const ctx={};vm.runInNewContext(read("src/domain/historySuggestions.js").replace(/export /g,"")+"\nthis.suggest=historySuggestions",ctx);
+const rows=[{vendor:"The Home Depot"},{vendor:"THE HOME DEPOT"},{vendor:"Fizz"},{vendor:"OpenAI"}];
+assert.equal(ctx.suggest(rows,"vendor","",undefined,["the home depot"]).length,2);
+assert.equal(ctx.suggest(rows,"vendor","home").length,1);
+assert.equal(ctx.suggest(rows,"vendor","home",undefined,["THE HOME DEPOT"]).length,0);
+console.log("Expense draft and suggestion dismissal regression guards passed.");

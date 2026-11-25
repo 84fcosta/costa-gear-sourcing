@@ -1,6 +1,8 @@
+import { AccountContext } from "../AuthGate";
+import { readExpenseDraft, useExpenseDraft } from "../domain/useExpenseDraft";
 import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
 import HistoryInput from "./HistoryInput";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Calendar,
@@ -130,8 +132,7 @@ function DocumentPicker({ driveReady, value, onChange }) {
 }
 
 function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmit, onCancel, saving }) {
-  const [form, setForm] = useState({ ...makeEmptyExpense(initial?.tax_year), ...(initial || {}) });
-  const [file, setFile] = useState(null);
+  const {form,setForm,file,setFile,dirty,storageError,missingFile,clearDraft} = useExpenseDraft({...makeEmptyExpense(initial?.tax_year),...(initial||{})}, initial?.tax_year, !initial?.id);
   const linkedDocuments = initial?.id ? documentsForExpense(documents, initial.id) : [];
   const originalExpenseOptions = (expenses || []).filter(expense =>
     expense.id !== initial?.id
@@ -174,7 +175,9 @@ function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmi
   }
 
   return (
-    <form onSubmit={(event) => { event.preventDefault(); onSubmit(form, file); }}>
+    <form onSubmit={(event) => { event.preventDefault(); if (missingFile && !window.confirm("The receipt must be attached again. Save without it?")) return; onSubmit(form, file, clearDraft); }}>
+      {!initial?.id && dirty && <div role="status" style={{fontSize:12,color:"#647062",marginBottom:10}}>{storageError ? "Draft could not be saved in this browser. Keep this page open." : "Draft saved in this tab · Not recorded in Expenses yet"}</div>}
+      {missingFile && <div role="status" style={{fontSize:12,color:"#a36c28",marginBottom:10}}>Please attach {missingFile} again. The form was recovered, but the file was not.</div>}
       <div className="cg-expense-form-grid">
         <div>
           <label>Date</label>
@@ -288,7 +291,7 @@ function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmi
         </div>
       </div>
       <div className="cg-expense-form-actions">
-        <button type="button" className="cg-expense-btn" onClick={onCancel}>Cancel</button>
+        <button type="button" className="cg-expense-btn" disabled={saving} onClick={()=>{if(!initial?.id && dirty && !window.confirm("Discard this unsaved expense draft?"))return;clearDraft();onCancel();}}>{!initial?.id && dirty ? "Discard Draft" : "Cancel"}</button>
         <button type="submit" className="cg-expense-btn primary" disabled={saving}>{saving ? "Saving..." : "Save Expense"}</button>
       </div>
     </form>
@@ -410,8 +413,9 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-export default function ExpenseWorkspace() {
-  const [view, setView] = useState("overview");
+export default function ExpenseWorkspace({oneDriveVersion=0}) {
+  const userId=useContext(AccountContext);
+  const [view, setView] = useState(()=>readExpenseDraft(userId,new Date().getFullYear()) ? "add" : "overview");
   const [year, setYear] = useState(new Date().getFullYear());
   const [expenses, setExpenses] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -455,7 +459,7 @@ export default function ExpenseWorkspace() {
       .then(() => { if (active) setDriveState({ ready: true, checking: false, label: "Connected" }); })
       .catch(() => { if (active) setDriveState({ ready: false, checking: false, label: "Connection required" }); });
     return () => { active = false; };
-  }, []);
+  }, [oneDriveVersion]);
 
   const yearOptions = useMemo(() => {
     const years = new Set([2024, 2025, 2026, 2027, 2028, year]);
@@ -503,7 +507,7 @@ export default function ExpenseWorkspace() {
     });
   }
 
-  async function persistExpense(form, file) {
+  async function persistExpense(form, file, clearDraft = () => {}) {
     setSaving(true);
     setError("");
     setNotice("");
@@ -514,6 +518,7 @@ export default function ExpenseWorkspace() {
         try { await attachDocument(saved, file, "expense"); }
         catch (uploadError) { uploadWarning = ` Expense saved, but the document upload failed: ${uploadError.message}`; }
       }
+      clearDraft();
       setExpenseModal(null);
       setView("expenses");
       setNotice(`Expense saved.${uploadWarning}`);
@@ -713,7 +718,7 @@ export default function ExpenseWorkspace() {
       <>
         <div className="cg-expense-heading-row"><div><h2>Add Expense</h2><p>Register a new business expense for the selected tax year.</p></div></div>
         <section className="cg-dashboard-panel cg-expense-form-panel">
-          <ExpenseForm initial={makeEmptyExpense(year)} expenses={expenses} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setView("overview")} />
+          <ExpenseForm key={year} initial={makeEmptyExpense(year)} expenses={expenses} assets={assets} documents={documents} driveReady={driveState.ready} saving={saving} onSubmit={persistExpense} onCancel={() => setView("overview")} />
         </section>
       </>
     );
@@ -796,7 +801,7 @@ export default function ExpenseWorkspace() {
           {VIEWS.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}>{item.label}</button>)}
         </div>
         <div className="cg-expense-command-controls">
-          <label className="cg-expense-year"><Calendar size={15} /><span>Tax Year</span><select value={year} onChange={(event) => setYear(Number(event.target.value))}>{yearOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label className="cg-expense-year"><Calendar size={15} /><span>Tax Year</span><select disabled={saving} value={year} onChange={(event) => setYear(Number(event.target.value))}>{yearOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
           <div className={`cg-expense-drive ${driveState.ready ? "connected" : "pending"}`} title={`Microsoft Graph permission: ${ONE_DRIVE_APP_FOLDER_SCOPE}`}>
             <Cloud size={16} />
             <div><strong>OneDrive App Folder</strong><span>{driveState.checking ? "Checking..." : driveState.label}</span></div>

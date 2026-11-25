@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import "./auth.css";
+
+export const AccountContext = createContext(null);
 
 const palette = {
   ink: "#20251F",
@@ -136,11 +138,11 @@ export default function AuthGate({ children }) {
   if(!session)return <LoginScreen onAuthenticated={nextSession=>{sessionRef.current=nextSession;setSession(nextSession);setLoading(true);checkMembership(nextSession);}}/>;
   if(!membership)return <AccessPending user={session.user}/>;
 
-  return <>
+  return <AccountContext.Provider value={session.user.id} key={session.user.id}>
     <div className="cg-account-control">
       <span>{session.user.email}</span>
       <button onClick={()=>supabase.auth.signOut()}>Sign out</button>
     </div>
     {children}
-  </>;
+  </AccountContext.Provider>;
 }

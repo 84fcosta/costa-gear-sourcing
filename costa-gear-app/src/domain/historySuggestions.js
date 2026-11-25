@@ -1,9 +1,9 @@
 export const normalizeHistory = value => String(value ?? "").trim().toLowerCase();
-export function historySuggestions(rows, field, query, preferred = () => false) {
-  const q = normalizeHistory(query), grouped = new Map();
+export function historySuggestions(rows, field, query, preferred = () => false, hidden = []) {
+  const q = normalizeHistory(query), grouped = new Map(), excluded = new Set(hidden.map(normalizeHistory));
   for (const row of rows || []) {
     const value = String(row[field] ?? "").trim(), key = normalizeHistory(value);
-    if (!key || !key.includes(q)) continue;
+    if (!key || !key.includes(q) || excluded.has(key)) continue;
     const priority = preferred(row) ? 1 : 0;
     const date = String(row.expense_date || row.sold_date || row.received_date || row.created_at || "");
     const existing = grouped.get(key);
