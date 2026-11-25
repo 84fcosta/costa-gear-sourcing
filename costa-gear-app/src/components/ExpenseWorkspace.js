@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { AccountContext } from "../AuthGate";
 import { readExpenseDraft, useExpenseDraft } from "../domain/useExpenseDraft";
 import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
@@ -223,7 +224,7 @@ function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmi
         </div>
         <div>
           <label>Total CAD</label>
-          <input type="number" min="0" step="0.01" value={form.total_amount ?? ""} onChange={(event) => set("total_amount", event.target.value)} required />
+          <CurrencyInput label={form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"} value={form.total_amount} onChange={value=>set("total_amount",value)} required />
         </div>
         <div>
           <label>Business Use %</label>

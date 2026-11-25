@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useExpenseDraft } from "../domain/useExpenseDraft";
 import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
 import HistoryInput from "./HistoryInput";
@@ -181,7 +182,7 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
         <label><span>Type</span><select value={form.transaction_type || "Expense"} onChange={event => setTransactionType(event.target.value)}><option>Expense</option><option>Refund</option></select></label>
       </div>
       {form.transaction_type === "Refund" ? <label><span>Original Expense</span><select value={form.original_expense_id || ""} onChange={event => linkOriginalExpense(event.target.value)}><option value="">Not linked</option>{originalExpenseOptions.map(expense => <option key={expense.id} value={expense.id}>{expenseReference(expense)} · {expense.vendor} · {expense.description}</option>)}</select></label> : null}
-      <label><span>{form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"}</span><input type="number" min="0" step=".01" inputMode="decimal" value={form.total_amount ?? ""} onChange={event => set("total_amount", event.target.value)} placeholder="0.00" required/></label>
+      <label><span>{form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"}</span><CurrencyInput label={form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"} value={form.total_amount} onChange={value=>set("total_amount",value)} required/></label>
       <label><span>Vendor</span><HistoryInput label="Vendor" rows={expenses} field="vendor" value={form.vendor} onChange={value=>set("vendor",value)} required /></label>
       <label><span>Description</span><HistoryInput label="Description" rows={expenseHistory(expenses,form)} field="description" value={form.description} onChange={value=>set("description",value)} preferred={row=>normalizeHistory(row.vendor)===normalizeHistory(form.vendor)} onSelect={row=>setForm(current=>recallDescription(current,row,EXPENSE_CATEGORIES))} required /></label>
       <label><span>Category</span><select value={form.category || ""} onChange={event => set("category", event.target.value)}>{EXPENSE_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
