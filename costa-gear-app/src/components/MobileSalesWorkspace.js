@@ -1,3 +1,4 @@
+import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useState } from "react";
 import {
   addSalesOrderItem,
@@ -338,7 +339,7 @@ export default function MobileSalesWorkspace() {
         </div>
         <div className="cg-mobile-field-grid">
           <Field label="Sold Date"><input type="date" value={form.soldDate} onChange={event => setForm(current => ({ ...current, soldDate: event.target.value }))} /></Field>
-          <Field label="Customer"><input value={form.customerName} onChange={event => setForm(current => ({ ...current, customerName: event.target.value }))} placeholder="Optional" /></Field>
+          <Field label="Customer"><HistoryInput label="Customer" rows={data?.salesOrders} field="customer_name" value={form.customerName} onChange={value=>setForm(current=>({...current,customerName:value}))} placeholder="Optional" /></Field>
         </div>
         <div className="cg-mobile-field-grid">
           <Field label="Payment Fee CAD"><input type="number" min="0" step=".01" value={form.paymentFeeCad} onChange={event => setForm(current => ({ ...current, paymentFeeCad: event.target.value }))} /></Field>

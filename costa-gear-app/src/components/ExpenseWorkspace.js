@@ -1,3 +1,5 @@
+import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
+import HistoryInput from "./HistoryInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
@@ -201,11 +203,11 @@ function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmi
         ) : null}
         <div>
           <label>Vendor</label>
-          <input value={form.vendor || ""} onChange={(event) => set("vendor", event.target.value)} required />
+          <HistoryInput label="Vendor" rows={expenses} field="vendor" value={form.vendor} onChange={value=>set("vendor",value)} required />
         </div>
         <div className="wide">
           <label>Description</label>
-          <input value={form.description || ""} onChange={(event) => set("description", event.target.value)} required />
+          <HistoryInput label="Description" rows={expenseHistory(expenses,form)} field="description" value={form.description} onChange={value=>set("description",value)} preferred={row=>normalizeHistory(row.vendor)===normalizeHistory(form.vendor)} onSelect={row=>setForm(current=>recallDescription(current,row,EXPENSE_CATEGORIES))} required />
         </div>
         <div>
           <label>Category</label>
@@ -236,7 +238,7 @@ function ExpenseForm({ initial, expenses, assets, documents, driveReady, onSubmi
         </div>
         <div>
           <label>Payment Reference</label>
-          <input placeholder="ex. Visa 4242" value={form.payment_reference || ""} onChange={(event) => set("payment_reference", event.target.value)} />
+          <HistoryInput label="Payment Reference" rows={expenses.filter(row=>normalizeHistory(row.payment_method)===normalizeHistory(form.payment_method))} field="payment_reference" value={form.payment_reference} onChange={value=>set("payment_reference",value)} placeholder="ex. Visa 4242" />
         </div>
         <div>
           <label>Receipt Status</label>

@@ -1,3 +1,4 @@
+import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useState } from "react";
 import {
   addSalesOrderItem,
@@ -120,7 +121,7 @@ export default function SalesWorkspace(){
             <Field label="Channel"><select style={input} value={form.channel} onChange={e=>setForm(f=>({...f,channel:e.target.value}))}>{["Marketplace","Website","Amazon","Direct","Other"].map(x=><option key={x}>{x}</option>)}</select></Field>
             <Field label="Status"><select style={input} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{["Draft","Confirmed","Paid","Shipped","Completed","Cancelled","Returned"].map(x=><option key={x}>{x}</option>)}</select></Field>
             <Field label="Sold Date"><input style={input} type="date" value={form.soldDate} onChange={e=>setForm(f=>({...f,soldDate:e.target.value}))}/></Field>
-            <Field label="Customer"><input style={input} value={form.customerName} onChange={e=>setForm(f=>({...f,customerName:e.target.value}))} placeholder="Optional"/></Field>
+            <Field label="Customer"><HistoryInput label="Customer" style={input} rows={data.salesOrders} field="customer_name" value={form.customerName} onChange={value=>setForm(f=>({...f,customerName:value}))} placeholder="Optional"/></Field>
             <Field label="Payment Fee CAD"><input style={input} type="number" min="0" step=".01" value={form.paymentFeeCad} onChange={e=>setForm(f=>({...f,paymentFeeCad:e.target.value}))}/></Field>
             <Field label="Outbound Shipping CAD"><input style={input} type="number" min="0" step=".01" value={form.outboundShippingCad} onChange={e=>setForm(f=>({...f,outboundShippingCad:e.target.value}))}/></Field>
             <Field label="Other Costs CAD"><input style={input} type="number" min="0" step=".01" value={form.otherCostsCad} onChange={e=>setForm(f=>({...f,otherCostsCad:e.target.value}))}/></Field>

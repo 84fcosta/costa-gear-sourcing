@@ -1,6 +1,8 @@
+import { expenseHistory, normalizeHistory, recallDescription } from "../domain/historySuggestions";
+import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, Cloud, FileUp, ReceiptText, RefreshCw } from "lucide-react";
-import { EXPENSE_CATEGORIES, expenseReference, makeEmptyExpense, money, signedExpenseAmount } from "../domain/expenseTracking";
+import { PAYMENT_METHODS, EXPENSE_CATEGORIES, expenseReference, makeEmptyExpense, money, signedExpenseAmount } from "../domain/expenseTracking";
 import { createExpenseDocument, loadExpenseWorkspaceData, saveBusinessExpense } from "../services/expenseRepository";
 import { testOneDriveConnection, uploadBusinessDocument } from "../services/oneDriveAppFolderService";
 import "../mobile-first.css";
@@ -180,9 +182,12 @@ export default function MobileExpenseWorkspace({ onConnectOneDrive, oneDriveAuth
       </div>
       {form.transaction_type === "Refund" ? <label><span>Original Expense</span><select value={form.original_expense_id || ""} onChange={event => linkOriginalExpense(event.target.value)}><option value="">Not linked</option>{originalExpenseOptions.map(expense => <option key={expense.id} value={expense.id}>{expenseReference(expense)} · {expense.vendor} · {expense.description}</option>)}</select></label> : null}
       <label><span>{form.transaction_type === "Refund" ? "Refund CAD" : "Total CAD"}</span><input type="number" min="0" step=".01" inputMode="decimal" value={form.total_amount ?? ""} onChange={event => set("total_amount", event.target.value)} placeholder="0.00" required/></label>
-      <label><span>Vendor</span><input value={form.vendor || ""} onChange={event => set("vendor", event.target.value)} placeholder="Vendor or store" required/></label>
-      <label><span>Description</span><input value={form.description || ""} onChange={event => set("description", event.target.value)} placeholder="What was purchased?" required/></label>
+      <label><span>Vendor</span><HistoryInput label="Vendor" rows={expenses} field="vendor" value={form.vendor} onChange={value=>set("vendor",value)} required /></label>
+      <label><span>Description</span><HistoryInput label="Description" rows={expenseHistory(expenses,form)} field="description" value={form.description} onChange={value=>set("description",value)} preferred={row=>normalizeHistory(row.vendor)===normalizeHistory(form.vendor)} onSelect={row=>setForm(current=>recallDescription(current,row,EXPENSE_CATEGORIES))} required /></label>
       <label><span>Category</span><select value={form.category || ""} onChange={event => set("category", event.target.value)}>{EXPENSE_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
+      <label><span>Payment Method</span><select value={form.payment_method} onChange={event=>set("payment_method",event.target.value)}>{PAYMENT_METHODS.map(method=><option key={method}>{method}</option>)}</select></label>
+      <label><span>Payment Reference</span><HistoryInput label="Payment Reference" rows={expenses.filter(row=>normalizeHistory(row.payment_method)===normalizeHistory(form.payment_method))} field="payment_reference" value={form.payment_reference} onChange={value=>set("payment_reference",value)} placeholder="ex. Visa 4242" /></label>
+      <label><span>Business Use %</span><input type="number" min="0" max="100" value={form.business_use_pct} onChange={event=>set("business_use_pct",event.target.value)}/></label>
       <label><span>Notes</span><textarea value={form.notes || ""} onChange={event => set("notes", event.target.value)} placeholder="Optional"/></label>
 
       <button className="cg-mf-primary-wide" disabled={saving} type="submit"><ReceiptText size={19}/>{saving ? "Saving..." : form.transaction_type === "Refund" ? "Save Refund" : "Save Expense"}</button>

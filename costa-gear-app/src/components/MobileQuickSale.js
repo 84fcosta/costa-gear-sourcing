@@ -1,3 +1,4 @@
+import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Minus, Plus, RefreshCw, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react";
 import {
@@ -431,7 +432,7 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
         <label><span>Channel</span><select value={channel} onChange={event => setChannel(event.target.value)}>{["Marketplace","Website","Amazon","Direct","Other"].map(value => <option key={value}>{value}</option>)}</select></label>
         <label><span>Sold Date</span><input type="date" value={soldDate} onChange={event => setSoldDate(event.target.value)}/></label>
       </div>
-      <label><span>Customer</span><input value={customer} onChange={event => setCustomer(event.target.value)} placeholder="Optional"/></label>
+      <label><span>Customer</span><HistoryInput label="Customer" rows={data.salesOrders} field="customer_name" value={customer} onChange={setCustomer} placeholder="Optional"/></label>
 
       <div className="cg-mf-order-discount">
         <div><strong>Order Discount</strong><small>Applied to the cart after all item discounts.</small></div>
