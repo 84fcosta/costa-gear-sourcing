@@ -334,7 +334,7 @@ function AssetForm({ initial, expenses, documents, driveReady, onSubmit, onCance
         </div>
         <div>
           <label>Cost CAD</label>
-          <input type="number" min="0" step="0.01" value={form.cost ?? ""} onChange={(event) => set("cost", event.target.value)} required />
+          <CurrencyInput label="Asset Cost CAD" min="0" value={form.cost ?? ""} onChange={(amount)=> set("cost", amount)} required />
         </div>
         <div>
           <label>CCA Class</label>

@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -59,9 +60,9 @@ function QuoteHeaderEditor({ value, onChange }) {
       <label>Currency<input value={value.currency || "USD"} onChange={e => set("currency", e.target.value.toUpperCase())} /></label>
       <label>Incoterm<input value={value.incoterm || ""} onChange={e => set("incoterm", e.target.value.toUpperCase())} placeholder="EXW / FOB / DDP..." /></label>
       <label>Shipping Method<input value={value.shippingMethod || ""} onChange={e => set("shippingMethod", e.target.value)} /></label>
-      <label>Shipping Total<input type="number" step="0.01" value={money(value.shippingTotal)} onChange={e => set("shippingTotal", e.target.value === "" ? null : Number(e.target.value))} /></label>
-      <label>Product Subtotal<input type="number" step="0.01" value={money(value.productSubtotal)} onChange={e => set("productSubtotal", e.target.value === "" ? null : Number(e.target.value))} /></label>
-      <label>Grand Total<input type="number" step="0.01" value={money(value.grandTotal)} onChange={e => set("grandTotal", e.target.value === "" ? null : Number(e.target.value))} /></label>
+      <label>Shipping Total<CurrencyInput label="Shipping Total" value={money(value.shippingTotal)} onChange={amount=> set("shippingTotal", amount === "" ? null : Number(amount))} /></label>
+      <label>Product Subtotal<CurrencyInput label="Product Subtotal" value={money(value.productSubtotal)} onChange={amount=> set("productSubtotal", amount === "" ? null : Number(amount))} /></label>
+      <label>Grand Total<CurrencyInput label="Grand Total" value={money(value.grandTotal)} onChange={amount=> set("grandTotal", amount === "" ? null : Number(amount))} /></label>
       <label>Dispatch Lead Time (days)<input type="number" value={money(value.dispatchLeadTimeDays)} onChange={e => set("dispatchLeadTimeDays", e.target.value === "" ? null : Number(e.target.value))} /></label>
       <label>Transit Time (days)<input type="number" value={money(value.transitTimeDays)} onChange={e => set("transitTimeDays", e.target.value === "" ? null : Number(e.target.value))} /></label>
       <label>Packaging<input value={value.packaging || ""} onChange={e => set("packaging", e.target.value)} /></label>
@@ -112,8 +113,8 @@ function QuoteLinesEditor({ lines, onChange }) {
                 <td><textarea rows={2} value={line.description || ""} onChange={e => update(index, "description", e.target.value)} /></td>
                 <td><input type="number" min="0" step="1" value={money(line.quantity)} onChange={e => update(index, "quantity", e.target.value === "" ? null : Number(e.target.value))} /></td>
                 <td><input value={line.unit || ""} onChange={e => update(index, "unit", e.target.value)} /></td>
-                <td><input type="number" min="0" step="0.01" value={money(line.unitPrice)} onChange={e => update(index, "unitPrice", e.target.value === "" ? null : Number(e.target.value))} /></td>
-                <td><input type="number" min="0" step="0.01" value={money(line.supplierLineTotal)} onChange={e => update(index, "supplierLineTotal", e.target.value === "" ? null : Number(e.target.value))} /></td>
+                <td><input type="number" min="0" step="any" inputMode="decimal" value={money(line.unitPrice)} onChange={e => update(index, "unitPrice", e.target.value === "" ? null : Number(e.target.value))} /></td>
+                <td><CurrencyInput label="Supplier Line Total" min="0" value={money(line.supplierLineTotal)} onChange={amount=> update(index, "supplierLineTotal", amount === "" ? null : Number(amount))} /></td>
                 <td><button type="button" className="danger-link" onClick={() => remove(index)}>Remove</button></td>
               </tr>
             ))}

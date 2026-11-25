@@ -479,7 +479,7 @@ export default function MobileInventoryWorkspace() {
                 <Field label="Received"><input type="number" min="0" value={line.quantity_received ?? 0} onChange={event => updateLine(line.id, "quantity_received", event.target.value)} /></Field>
                 <Field label="Damaged"><input type="number" min="0" value={line.quantity_damaged ?? 0} onChange={event => updateLine(line.id, "quantity_damaged", event.target.value)} /></Field>
                 <Field label="Rejected"><input type="number" min="0" value={line.quantity_rejected ?? 0} onChange={event => updateLine(line.id, "quantity_rejected", event.target.value)} /></Field>
-                <Field label="Actual Landed CAD"><input type="number" min="0" step=".01" value={actual ?? ""} onChange={event => updateLine(line.id, "actual_landed_cost_per_unit_cad", event.target.value)} /></Field>
+                <Field label="Actual Landed CAD"><input type="number" min="0" step="any" inputMode="decimal" value={actual ?? ""} onChange={event => updateLine(line.id, "actual_landed_cost_per_unit_cad", event.target.value)} /></Field>
               </div>
               <div className="cg-mobile-action-row single" style={{ marginTop: 11 }}><button className={dirty ? "cg-mobile-primary" : "cg-mobile-secondary"} disabled={!dirty} onClick={() => saveLine(line)}>{dirty ? "Save Changes" : "Saved"}</button></div>
             </article>;

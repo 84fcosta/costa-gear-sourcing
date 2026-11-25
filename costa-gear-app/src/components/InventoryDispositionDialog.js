@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, PackageMinus, X } from "lucide-react";
 import {
@@ -149,7 +150,7 @@ export default function InventoryDispositionDialog({ product, available, onClose
           <label className="wide"><span>Accounting Treatment</span><select value={form.accountingTreatment} onChange={event => setForm(current => ({ ...current, accountingTreatment: event.target.value }))}>
             {treatments.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select><small>{treatment.description}</small></label>
-          {["damaged_unsellable", "returned_supplier"].includes(form.dispositionType) ? <label><span>Recovery / Supplier Credit CAD</span><input type="number" min="0" step="0.01" value={form.recoveryAmountCad} onChange={event => setForm(current => ({ ...current, recoveryAmountCad: event.target.value }))} placeholder="0.00"/><small>Leave zero if there is no recovery.</small></label> : null}
+          {["damaged_unsellable", "returned_supplier"].includes(form.dispositionType) ? <label><span>Recovery / Supplier Credit CAD</span><CurrencyInput label="Recovery Amount CAD" min="0" value={form.recoveryAmountCad} onChange={amount=> setForm(current => ({ ...current, recoveryAmountCad: amount }))} placeholder="0.00"/><small>Leave zero if there is no recovery.</small></label> : null}
           <label className="wide"><span>Notes</span><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="Why this unit is being removed, condition, intended internal use, supplier outcome, etc."/></label>
         </div>
 

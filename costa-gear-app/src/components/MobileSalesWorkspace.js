@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -342,14 +343,14 @@ export default function MobileSalesWorkspace() {
           <Field label="Customer"><HistoryInput label="Customer" rows={data?.salesOrders} field="customer_name" value={form.customerName} onChange={value=>setForm(current=>({...current,customerName:value}))} placeholder="Optional" /></Field>
         </div>
         <div className="cg-mobile-field-grid">
-          <Field label="Payment Fee CAD"><input type="number" min="0" step=".01" value={form.paymentFeeCad} onChange={event => setForm(current => ({ ...current, paymentFeeCad: event.target.value }))} /></Field>
-          <Field label="Outbound Shipping CAD"><input type="number" min="0" step=".01" value={form.outboundShippingCad} onChange={event => setForm(current => ({ ...current, outboundShippingCad: event.target.value }))} /></Field>
+          <Field label="Payment Fee CAD"><CurrencyInput label="Payment Fee CAD" min="0" value={form.paymentFeeCad} onChange={amount=> setForm(current => ({ ...current, paymentFeeCad: amount }))} /></Field>
+          <Field label="Outbound Shipping CAD"><CurrencyInput label="Outbound Shipping CAD" min="0" value={form.outboundShippingCad} onChange={amount=> setForm(current => ({ ...current, outboundShippingCad: amount }))} /></Field>
         </div>
         <div className="cg-mobile-field-grid">
           <Field label="Order Discount"><select disabled={form.status !== "Draft"} value={form.orderDiscountType} onChange={event => setForm(current => ({ ...current, orderDiscountType: event.target.value, orderDiscountValue: event.target.value === "none" ? "0" : current.orderDiscountValue }))}><option value="none">None</option><option value="amount">CAD</option><option value="percentage">%</option></select></Field>
-          <Field label={form.orderDiscountType === "percentage" ? "Discount %" : "Discount CAD"}><input disabled={form.status !== "Draft" || form.orderDiscountType === "none"} type="number" min="0" max={form.orderDiscountType === "percentage" ? "100" : undefined} step={form.orderDiscountType === "percentage" ? ".1" : ".01"} value={form.orderDiscountValue} onChange={event => setForm(current => ({ ...current, orderDiscountValue: event.target.value }))} /></Field>
+          <Field label={form.orderDiscountType === "percentage" ? "Discount %" : "Discount CAD"}>{form.orderDiscountType === "percentage" ? <input disabled={form.status !== "Draft" || form.orderDiscountType === "none"} type="number" min="0" max={form.orderDiscountType === "percentage" ? "100" : undefined} step={form.orderDiscountType === "percentage" ? ".1" : ".01"} value={form.orderDiscountValue} onChange={event => setForm(current => ({ ...current, orderDiscountValue: event.target.value }))} /> : <CurrencyInput label="Discount CAD" disabled={form.status !== "Draft" || form.orderDiscountType === "none"} min="0" value={form.orderDiscountValue} onChange={amount=> setForm(current => ({ ...current, orderDiscountValue: amount }))} />}</Field>
         </div>
-        <Field label="Other Costs CAD"><input type="number" min="0" step=".01" value={form.otherCostsCad} onChange={event => setForm(current => ({ ...current, otherCostsCad: event.target.value }))} /></Field>
+        <Field label="Other Costs CAD"><CurrencyInput label="Other Costs CAD" min="0" value={form.otherCostsCad} onChange={amount=> setForm(current => ({ ...current, otherCostsCad: amount }))} /></Field>
         <Field label="Notes"><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} /></Field>
         <div className="cg-mobile-action-row single"><button className="cg-mobile-primary" onClick={save}>{selectedId ? "Save Sale" : "Create Draft"}</button></div>
       </section>
@@ -371,11 +372,11 @@ export default function MobileSalesWorkspace() {
           <Field label="Product"><select disabled={form.status !== "Draft"} value={itemForm.productId} onChange={event => setItemForm({ productId: event.target.value, quantity: "1", unitSellPriceCad: "", discountType: "amount", discountValue: "0", notes: "" })}><option value="">Select product</option>{data.products.map(product => <option key={product.id} value={product.id}>{product.sku_id} - {product.name} - {stock.available.get(product.id) || 0} available</option>)}</select></Field>
           <div className="cg-mobile-field-grid">
             <Field label="Qty"><input disabled={form.status !== "Draft"} type="number" min="1" value={itemForm.quantity} onChange={event => setItemForm(current => ({ ...current, quantity: event.target.value }))} /></Field>
-            <Field label="Unit Sell CAD"><input disabled={form.status !== "Draft"} type="number" min="0" step=".01" value={itemForm.unitSellPriceCad} onChange={event => setItemForm(current => ({ ...current, unitSellPriceCad: event.target.value }))} /></Field>
+            <Field label="Unit Sell CAD"><CurrencyInput label="Sell Price CAD" disabled={form.status !== "Draft"} min="0" value={itemForm.unitSellPriceCad} onChange={amount=> setItemForm(current => ({ ...current, unitSellPriceCad: amount }))} /></Field>
           </div>
           <div className="cg-mobile-field-grid">
             <Field label="Line Discount"><select disabled={form.status !== "Draft"} value={itemForm.discountType} onChange={event => setItemForm(current => ({ ...current, discountType: event.target.value, discountValue: "0" }))}><option value="amount">CAD</option><option value="percentage">%</option></select></Field>
-            <Field label="Value"><input disabled={form.status !== "Draft"} type="number" min="0" max={itemForm.discountType === "percentage" ? "100" : undefined} step={itemForm.discountType === "percentage" ? ".1" : ".01"} value={itemForm.discountValue} onChange={event => setItemForm(current => ({ ...current, discountValue: event.target.value }))} /></Field>
+            <Field label="Value">{itemForm.discountType === "percentage" ? <input disabled={form.status !== "Draft"} type="number" min="0" max={itemForm.discountType === "percentage" ? "100" : undefined} step={itemForm.discountType === "percentage" ? ".1" : ".01"} value={itemForm.discountValue} onChange={event => setItemForm(current => ({ ...current, discountValue: event.target.value }))} /> : <CurrencyInput label="Discount CAD" disabled={form.status !== "Draft"} min="0" value={itemForm.discountValue} onChange={amount=> setItemForm(current => ({ ...current, discountValue: amount }))} />}</Field>
           </div>
           {selectedProduct ? <div className="cg-mobile-card-note">Available now: <strong>{stock.available.get(selectedProduct.id) || 0}</strong> - Weighted landed cost: <strong>{money(stock.cost.get(selectedProduct.id))}</strong></div> : null}
           <div className="cg-mobile-action-row single"><button className="cg-mobile-primary" disabled={form.status !== "Draft"} onClick={addItem}>Add Product</button></div>

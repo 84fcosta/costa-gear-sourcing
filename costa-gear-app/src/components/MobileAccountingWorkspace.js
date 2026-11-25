@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -137,7 +138,7 @@ function OwnerForm({ year, saving, onSave }) {
       <label><span>Date</span><input type="date" value={form.transaction_date} onChange={event => setForm(current => ({ ...current, transaction_date: event.target.value }))} required/></label>
       <label><span>Type</span><select value={form.transaction_type} onChange={event => setForm(current => ({ ...current, transaction_type: event.target.value }))}><option>Contribution</option><option>Draw</option></select></label>
     </div>
-    <label><span>Amount CAD</span><input type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount_cad} onChange={event => setForm(current => ({ ...current, amount_cad: event.target.value }))} required/></label>
+    <label><span>Amount CAD</span><CurrencyInput label="Owner Adjustment CAD" min="0.01" value={form.amount_cad} onChange={amount=> setForm(current => ({ ...current, amount_cad: amount }))} required/></label>
     <label><span>Description</span><input value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="e.g. Cash injected for supplier payment" required/></label>
     <label><span>Notes</span><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="Optional"/></label>
     <button type="submit" className="cg-ma-primary" disabled={saving || !form.amount_cad || !form.description.trim()}><PlusCircle size={16}/>{saving ? "Saving..." : "Add Owner Adjustment"}</button>
@@ -362,7 +363,7 @@ export default function MobileAccountingWorkspace({ onNavigate }) {
               const monthData = row?.months?.[month - 1];
               return <label key={line.code} className="cg-ma-forecast-line">
                 <div><strong>{line.label}</strong><span>Actual {money0(monthData?.actual)} · {monthData?.inActualPeriod ? `Variance ${signedMoney(monthData?.variance)}` : "Future month"}</span></div>
-                <span className="cg-ma-currency-input"><b>$</b><input type="number" min="0" step="0.01" inputMode="decimal" value={forecastDraft?.[line.code]?.[month] ?? ""} onChange={event => updateForecastValue(line.code, event.target.value)} aria-label={`${line.label} ${MONTHS[month - 1].label} baseline`}/></span>
+                <span className="cg-ma-currency-input"><b>$</b><CurrencyInput label="Baseline Amount CAD" min="0" value={forecastDraft?.[line.code]?.[month] ?? ""} onChange={amount=> updateForecastValue(line.code, amount)} aria-label={`${line.label} ${MONTHS[month - 1].label} baseline`}/></span>
               </label>;
             })}
           </div>)}

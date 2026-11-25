@@ -1,3 +1,4 @@
+import CurrencyInput from "./components/CurrencyInput";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./supabase";
@@ -324,8 +325,10 @@ const Input = ({ label, value, onChange, type = "text", placeholder, options, re
         <option value="">— select —</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
+    ) : type === "currency" ? (
+      <CurrencyInput label={label} value={value} onChange={onChange} placeholder={placeholder} style={inputStyle} />
     ) : (
-      <input type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
+      <input type={type} step={type === "number" ? "any" : undefined} value={value ?? ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
     )}
   </div>
 );
@@ -1800,8 +1803,8 @@ function ProductModal({ onSave, onClose, editing, productTypes = [], categories 
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 12 }}>
-            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="number" placeholder="e.g. 299.99" />
-            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={updateTargetSellPrice} type="number" placeholder="e.g. 249.99" />
+            <Input label="Market Reference CAD" value={form.marketReferenceCad} onChange={set("marketReferenceCad")} type="currency" placeholder="e.g. 299.99" />
+            <Input label="Target Sell Price CAD" value={form.targetSellPriceCad} onChange={updateTargetSellPrice} type="currency" placeholder="e.g. 249.99" />
             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 140 }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: C.dgray }}>Gross Margin %</label>
               <input

@@ -34,11 +34,11 @@ function skuFromRow(row) {
 }
 
 function rowValues(row) {
-  const inputs = [...row.querySelectorAll('input[type="number"]')];
+  const field = name => row.querySelector('input[data-pricing-input="' + name + '"]')?.value ?? "";
   return {
-    targetSellPriceCad: inputs[0]?.value ?? "",
-    targetMarginPct: inputs[1]?.value ?? "",
-    marketReferenceCad: inputs[2]?.value ?? "",
+    targetSellPriceCad: field("target-price"),
+    targetMarginPct: field("target-margin"),
+    marketReferenceCad: field("market-reference"),
   };
 }
 
@@ -128,7 +128,7 @@ export default function PricingMatrixBulkSaveControls() {
 
     const onInput = event => {
       const input = event.target;
-      if (!(input instanceof HTMLInputElement) || input.type !== "number") return;
+      if (!(input instanceof HTMLInputElement) || !input.dataset.pricingInput) return;
       const row = input.closest("tbody tr");
       if (!row || !card.contains(row)) return;
       dirtyRows.current.add(row);
@@ -147,9 +147,11 @@ export default function PricingMatrixBulkSaveControls() {
     };
 
     card.addEventListener("input", onInput, true);
+    card.addEventListener("cg:currency-edit", onInput, true);
     card.addEventListener("click", onClickCapture, true);
     return () => {
       card.removeEventListener("input", onInput, true);
+      card.removeEventListener("cg:currency-edit", onInput, true);
       card.removeEventListener("click", onClickCapture, true);
     };
   }, [refreshCount, saveAll, target]);

@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -172,12 +173,10 @@ function ForecastEditor({ draft, setDraft, forecast, saving, onSave }) {
               const row = forecast.rowByCode.get(line.code);
               return <tr key={line.code}>
                 <td><strong>{line.label}</strong></td>
-                {MONTHS.map(month => <td key={month.number}><input
-                  type="number"
+                {MONTHS.map(month => <td key={month.number}><CurrencyInput label="Baseline Amount CAD"
                   min="0"
-                  step="0.01"
                   value={draft?.[line.code]?.[month.number] ?? ""}
-                  onChange={event => update(line.code, month.number, event.target.value)}
+                  onChange={amount=> update(line.code, month.number, amount)}
                   aria-label={`${line.label} ${month.label} baseline`}
                 /></td>)}
                 <td className="numeric strong">{money0(row?.annualForecast)}</td>
@@ -214,7 +213,7 @@ function OwnerTransactionForm({ year, saving, onSave }) {
   return <form className="cg-accounting-owner-form" onSubmit={submit}>
     <label><span>Date</span><input type="date" value={form.transaction_date} onChange={event => setForm(current => ({ ...current, transaction_date: event.target.value }))} required/></label>
     <label><span>Type</span><select value={form.transaction_type} onChange={event => setForm(current => ({ ...current, transaction_type: event.target.value }))}><option>Contribution</option><option>Draw</option></select></label>
-    <label><span>Amount CAD</span><input type="number" min="0.01" step="0.01" value={form.amount_cad} onChange={event => setForm(current => ({ ...current, amount_cad: event.target.value }))} required/></label>
+    <label><span>Amount CAD</span><CurrencyInput label="Owner Adjustment CAD" min="0.01" value={form.amount_cad} onChange={amount=> setForm(current => ({ ...current, amount_cad: amount }))} required/></label>
     <label className="wide"><span>Description</span><input value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="e.g. Cash injected for supplier payment" required/></label>
     <label className="wide"><span>Notes</span><input value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="Optional"/></label>
     <button className="primary" type="submit" disabled={saving || !form.amount_cad || !form.description.trim()}><PlusCircle size={16}/>{saving ? "Saving..." : "Add Owner Adjustment"}</button>

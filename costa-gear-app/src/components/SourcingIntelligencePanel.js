@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
@@ -305,7 +306,7 @@ export default function SourcingIntelligencePanel() {
                   <div style={{ color: palette.muted, fontSize: 12, marginBottom: 12 }}>Capture dated market observations instead of overwriting one static reference price.</div>
                   <div style={{ display: "grid", gap: 9 }}>
                     <Field label="Product"><select value={selectedProductId} onChange={e => setSelectedProductId(e.target.value)} style={inputStyle}><option value="">Select product</option>{products.map(p => <option key={p.id} value={p.id}>{p.sku_id} — {p.name}</option>)}</select></Field>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><Field label="Source"><input style={inputStyle} value={marketForm.sourceName} onChange={e => setMarketForm(f => ({ ...f, sourceName: e.target.value }))} placeholder="Amazon, competitor…" /></Field><Field label="Price CAD"><input style={inputStyle} type="number" value={marketForm.priceCad} onChange={e => setMarketForm(f => ({ ...f, priceCad: e.target.value }))} /></Field></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><Field label="Source"><input style={inputStyle} value={marketForm.sourceName} onChange={e => setMarketForm(f => ({ ...f, sourceName: e.target.value }))} placeholder="Amazon, competitor…" /></Field><Field label="Price CAD"><CurrencyInput label="Market Reference CAD" style={inputStyle} value={marketForm.priceCad} onChange={amount=> setMarketForm(f => ({ ...f, priceCad: amount }))} /></Field></div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><Field label="Observed date"><input style={inputStyle} type="date" value={marketForm.observedAt} onChange={e => setMarketForm(f => ({ ...f, observedAt: e.target.value }))} /></Field><Field label="Source URL"><input style={inputStyle} value={marketForm.sourceUrl} onChange={e => setMarketForm(f => ({ ...f, sourceUrl: e.target.value }))} /></Field></div>
                     <Field label="Notes"><input style={inputStyle} value={marketForm.notes} onChange={e => setMarketForm(f => ({ ...f, notes: e.target.value }))} /></Field>
                     <button onClick={saveMarket} disabled={!selectedProductId || !marketForm.sourceName || !marketForm.priceCad} style={{ ...buttonStyle(true), opacity: !selectedProductId || !marketForm.sourceName || !marketForm.priceCad ? .5 : 1 }}>Save market observation</button>

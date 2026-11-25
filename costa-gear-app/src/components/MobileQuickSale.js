@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import HistoryInput from "./HistoryInput";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Minus, Plus, RefreshCw, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react";
@@ -371,12 +372,12 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
 
         <div className="cg-mf-quantity-price">
           <label><span>Quantity</span><div className="cg-mf-stepper"><button type="button" onClick={() => setAddForm(current => ({ ...current, quantity: Math.max(1, Number(current.quantity) - 1) }))}><Minus size={17}/></button><strong>{addForm.quantity}</strong><button type="button" onClick={() => setAddForm(current => ({ ...current, quantity: Math.min(addPreview.available, Number(current.quantity) + 1) }))}><Plus size={17}/></button></div></label>
-          <label><span>Sell Price CAD</span><input type="number" min="0" step=".01" value={addForm.unitPrice} onChange={event => setAddForm(current => ({ ...current, unitPrice: event.target.value }))}/></label>
+          <label><span>Sell Price CAD</span><CurrencyInput label="Sell Price CAD" min="0" value={addForm.unitPrice} onChange={amount=> setAddForm(current => ({ ...current, unitPrice: amount }))}/></label>
         </div>
 
         <div className="cg-mf-two-col">
           <label><span>Item Discount</span><select value={addForm.discountType} onChange={event => setAddForm(current => ({ ...current, discountType: event.target.value, discountValue: "0" }))}><option value="amount">CAD</option><option value="percentage">%</option></select></label>
-          <label><span>{addForm.discountType === "percentage" ? "Discount %" : "Discount CAD"}</span><input type="number" min="0" max={addForm.discountType === "percentage" ? "100" : undefined} step={addForm.discountType === "percentage" ? ".1" : ".01"} value={addForm.discountValue} onChange={event => setAddForm(current => ({ ...current, discountValue: event.target.value }))}/></label>
+          <label><span>{addForm.discountType === "percentage" ? "Discount %" : "Discount CAD"}</span>{addForm.discountType === "percentage" ? <input type="number" min="0" max={addForm.discountType === "percentage" ? "100" : undefined} step={addForm.discountType === "percentage" ? ".1" : ".01"} value={addForm.discountValue} onChange={event => setAddForm(current => ({ ...current, discountValue: event.target.value }))}/> : <CurrencyInput label="Discount CAD" min="0" value={addForm.discountValue} onChange={amount=> setAddForm(current => ({ ...current, discountValue: amount }))}/>}</label>
         </div>
 
         <div className="cg-mf-sale-preview">
@@ -408,12 +409,12 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
 
           <div className="cg-mf-cart-line-grid">
             <label><span>Qty</span><div className="cg-mf-stepper"><button type="button" onClick={() => updateCartLine(line.productId, { quantity: Number(line.quantity) - 1 })}><Minus size={16}/></button><strong>{line.quantity}</strong><button type="button" onClick={() => updateCartLine(line.productId, { quantity: Number(line.quantity) + 1 })}><Plus size={16}/></button></div></label>
-            <label><span>Unit Price</span><input type="number" min="0" step=".01" value={line.unitSellPriceCad} onChange={event => updateCartLine(line.productId, { unitSellPriceCad: event.target.value })}/></label>
+            <label><span>Unit Price</span><CurrencyInput label="Sell Price CAD" min="0" value={line.unitSellPriceCad} onChange={amount=> updateCartLine(line.productId, { unitSellPriceCad: amount })}/></label>
           </div>
 
           <div className="cg-mf-cart-line-grid">
             <label><span>Discount</span><select value={line.discountType} onChange={event => updateCartLine(line.productId, { discountType: event.target.value })}><option value="amount">CAD</option><option value="percentage">%</option></select></label>
-            <label><span>Value</span><input type="number" min="0" max={line.discountType === "percentage" ? "100" : undefined} step={line.discountType === "percentage" ? ".1" : ".01"} value={line.discountValue} onChange={event => updateCartLine(line.productId, { discountValue: event.target.value })}/></label>
+            <label><span>Value</span>{line.discountType === "percentage" ? <input type="number" min="0" max={line.discountType === "percentage" ? "100" : undefined} step={line.discountType === "percentage" ? ".1" : ".01"} value={line.discountValue} onChange={event => updateCartLine(line.productId, { discountValue: event.target.value })}/> : <CurrencyInput label="Discount CAD" min="0" value={line.discountValue} onChange={amount=> updateCartLine(line.productId, { discountValue: amount })}/>}</label>
           </div>
 
           <div className="cg-mf-cart-line-summary">
@@ -438,16 +439,16 @@ export default function MobileQuickSale({ initialProductId = null, onNavigate })
         <div><strong>Order Discount</strong><small>Applied to the cart after all item discounts.</small></div>
         <div className="cg-mf-two-col">
           <label><span>Type</span><select value={orderDiscountType} onChange={event => { setOrderDiscountType(event.target.value); setOrderDiscountValue("0"); }}><option value="none">None</option><option value="amount">CAD</option><option value="percentage">%</option></select></label>
-          <label><span>{orderDiscountType === "percentage" ? "Discount %" : "Discount CAD"}</span><input disabled={orderDiscountType === "none"} type="number" min="0" max={orderDiscountType === "percentage" ? "100" : undefined} step={orderDiscountType === "percentage" ? ".1" : ".01"} value={orderDiscountValue} onChange={event => setOrderDiscountValue(event.target.value)}/></label>
+          <label><span>{orderDiscountType === "percentage" ? "Discount %" : "Discount CAD"}</span>{orderDiscountType === "percentage" ? <input disabled={orderDiscountType === "none"} type="number" min="0" max={orderDiscountType === "percentage" ? "100" : undefined} step={orderDiscountType === "percentage" ? ".1" : ".01"} value={orderDiscountValue} onChange={event => setOrderDiscountValue(event.target.value)}/> : <CurrencyInput label="Discount CAD" disabled={orderDiscountType === "none"} min="0" value={orderDiscountValue} onChange={amount=> setOrderDiscountValue(amount)}/>}</label>
         </div>
         {summary.orderDiscountCad > 0 ? <div className="cg-mf-order-discount-note">Order discount applied: <strong>{money(summary.orderDiscountCad)}</strong></div> : null}
       </div>
 
       <button type="button" className="cg-mf-disclosure" onClick={() => setShowCosts(value => !value)}>{showCosts ? "Hide" : "Add"} fees or outbound shipping</button>
       {showCosts ? <div className="cg-mf-extra-costs">
-        <label><span>Payment Fee</span><input type="number" min="0" step=".01" value={paymentFee} onChange={event => setPaymentFee(event.target.value)}/></label>
-        <label><span>Outbound Shipping</span><input type="number" min="0" step=".01" value={outboundShipping} onChange={event => setOutboundShipping(event.target.value)}/></label>
-        <label><span>Other Costs</span><input type="number" min="0" step=".01" value={otherCosts} onChange={event => setOtherCosts(event.target.value)}/></label>
+        <label><span>Payment Fee</span><CurrencyInput label="Payment Fee CAD" min="0" value={paymentFee} onChange={amount=> setPaymentFee(amount)}/></label>
+        <label><span>Outbound Shipping</span><CurrencyInput label="Outbound Shipping CAD" min="0" value={outboundShipping} onChange={amount=> setOutboundShipping(amount)}/></label>
+        <label><span>Other Costs</span><CurrencyInput label="Other Costs CAD" min="0" value={otherCosts} onChange={amount=> setOtherCosts(amount)}/></label>
       </div> : null}
     </section> : null}
 

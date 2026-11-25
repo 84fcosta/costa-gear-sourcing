@@ -21,8 +21,10 @@ export function amountFromEdit(value, deleting=false) {
   return centsToAmount(digits);
 }
 export function amountFromPaste(value) {
-  const raw=String(value).trim().replace(/^(?:CAD\s*|CA\$\s*|\$\s*)/i,"");
-  if(/^\d+$/.test(raw))return centsToAmount(raw);
+  const original=String(value).trim();
+  const prefix=/^(?:CAD\s*|USD\s*|EUR\s*|CNY\s*|CA\$\s*|US\$\s*|C\$\s*|\$\s*|€\s*|¥\s*)/i;
+  const raw=original.replace(prefix,"");
+  if(/^\d+$/.test(raw))return prefix.test(original)?displayAmount(raw):centsToAmount(raw);
   if(/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(raw))return displayAmount(raw.replace(/,/g,""));
   if(/^\d+,\d{1,2}$/.test(raw))return displayAmount(raw.replace(",","."));
   return null;

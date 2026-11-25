@@ -1,3 +1,4 @@
+import CurrencyInput from "./CurrencyInput";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
 import { allocateImportCosts } from "../domain/importCostAllocation";
@@ -8,7 +9,7 @@ const input={border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 10px",f
 const btn=(p=false)=>({border:p?0:`1px solid ${C.border}`,background:p?"linear-gradient(180deg,#929A44,#747B31)":"#fff",color:p?"#fff":C.ink,borderRadius:10,padding:"9px 12px",fontWeight:800,cursor:"pointer"});
 const cad=v=>Number(v||0).toLocaleString("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2});
 function F({label,children}){return <label style={{display:"grid",gap:5,fontSize:12,color:C.muted,fontWeight:750}}>{label}{children}</label>}
-const CurrencyAmountInput=({currency,value,onChange})=><div style={{position:"relative"}}><span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:12,fontWeight:800,color:C.muted,pointerEvents:"none"}}>{currency==="USD"?"US$":"C$"}</span><input type="number" min="0" step="0.01" inputMode="decimal" style={{...input,paddingLeft:42}} value={value} onChange={onChange}/></div>;
+const CurrencyAmountInput=({currency,value,onChange})=><div style={{position:"relative"}}><span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:12,fontWeight:800,color:C.muted,pointerEvents:"none"}}>{currency==="USD"?"US$":"C$"}</span><CurrencyInput label="Import Cost Amount" min="0" style={{...input,paddingLeft:42}} value={value} onChange={amount=>onChange({target:{value:amount}})}/></div>;
 
 export default function ImportCostWorkspace(){
  const[shipments,setShipments]=useState([]),[items,setItems]=useState([]),[products,setProducts]=useState([]),[quotes,setQuotes]=useState([]),[selectedId,setSelectedId]=useState(""),[error,setError]=useState(""),[message,setMessage]=useState("");
